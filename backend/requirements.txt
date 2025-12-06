@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pandas
+openpyxl
+python-multipart
+requests
+pulp>=2.8
+reportlab>=4.0

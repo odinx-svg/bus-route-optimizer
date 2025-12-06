@@ -1,0 +1,3 @@
+# backend/dependencies.txt
+pulp>=2.8
+reportlab>=4.0
