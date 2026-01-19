@@ -164,7 +164,8 @@ def optimize_routes(routes: List[Route]) -> List[BusSchedule]:
             new_bus.last_loc = job['end_loc'] # Monkey patch for algorithm
             buses.append(new_bus)
             
-    return buses
+    # Apply post-processing merging here as well
+    return emparejar_turnos_manana_tarde(buses)
 
 # ------------------------------------------------------------
 # Exact Optimizer (DAG Path Cover via Max Bipartite Matching)
@@ -446,6 +447,113 @@ def optimize_routes_lp(routes: List[Route]) -> List[BusSchedule]:
             ))
         
     print(f"DEBUG: Generated {len(bus_schedules)} bus schedules.")
-    return bus_schedules
+    
+    # 5. Post-Optimization: Merge Morning-Only and Afternoon-Only buses
+    # This addresses the issue where the optimizer might leave them separate due to large time gaps 
+    # or local optima.
+    print(f"DEBUG: Running post-optimization shift merging...")
+    final_buses = emparejar_turnos_manana_tarde(bus_schedules)
+    print(f"DEBUG: Final bus count after merging: {len(final_buses)}")
+
+    return final_buses
+
+def emparejar_turnos_manana_tarde(buses: List[BusSchedule], gap_minimo_minutos: int = 60) -> List[BusSchedule]:
+    """
+    Fusions buses that only have morning routes with buses that only have afternoon routes.
+    """
+    
+    def get_bus_type(bus: BusSchedule) -> str:
+        has_entry = any(item.type == 'entry' for item in bus.items)
+        has_exit = any(item.type == 'exit' for item in bus.items)
+        if has_entry and not has_exit:
+            return 'morning'
+        if has_exit and not has_entry:
+            return 'afternoon'
+        return 'mixed'
+
+    def get_bus_end_time(bus: BusSchedule) -> time:
+        # Assumes items are sorted by time (which they should be)
+        return bus.items[-1].end_time
+
+    def get_bus_start_time(bus: BusSchedule) -> time:
+        return bus.items[0].start_time
+
+    buses_solo_manana = []
+    buses_solo_tarde = []
+    buses_completos = []
+
+    for bus in buses:
+        b_type = get_bus_type(bus)
+        if b_type == 'morning':
+            buses_solo_manana.append(bus)
+        elif b_type == 'afternoon':
+            buses_solo_tarde.append(bus)
+        else:
+            buses_completos.append(bus)
+            
+    # Sort for optimal matching
+    # Morning: ends earliest? Or latest? user said "latest end time"? 
+    # Actually, to maximize compatibility with afternoon buses (which start late), 
+    # a morning bus that ends LATER is HARDER to match. 
+    # A morning bus that ends EARLIER is EASIER to match.
+    # User pseudo code: "buses_solo_manana.sort(key=lambda b: b.hora_fin_ultima_ruta())" (Ascending by default)
+    # If we process EARLIEST END first, we match them with EARLIEST START afternoon?
+    # Strategy: "menor_gap".
+    buses_solo_manana.sort(key=lambda b: get_bus_end_time(b))
+    buses_solo_tarde.sort(key=lambda b: get_bus_start_time(b))
+    
+    buses_fusionados = []
+    tarde_usados = set()
+    
+    for bus_m in buses_solo_manana:
+        end_time_m = get_bus_end_time(bus_m)
+        min_start_needed = add_minutes(end_time_m, gap_minimo_minutos)
+        
+        mejor_match = None
+        
+        for i, bus_t in enumerate(buses_solo_tarde):
+            if i in tarde_usados:
+                continue
+                
+            start_time_t = get_bus_start_time(bus_t)
+            
+            # Check feasibility: Start T >= End M + Gap
+            # using time_diff checks
+            # if time_diff_minutes(start_time_t, min_start_needed) >= 0:
+            
+            # To be safe with midnight crossing (unlikely for school bus but correct math needed):
+            # Convert to minutes from midnight
+            def to_mins(t): return t.hour * 60 + t.minute
+            
+            if to_mins(start_time_t) >= to_mins(min_start_needed):
+                # Found a candidate. Since list is sorted by start time, 
+                # this is the EARLIEST valid afternoon bus. 
+                # This minimizes the Gap (as long as it satisfies the constraint).
+                mejor_match = (i, bus_t)
+                break
+        
+        if mejor_match:
+            idx, bus_t = mejor_match
+            # Merge
+            # Modify bus_m to include items from bus_t
+            # We should probably update the ID to reflect modification or keep bus_m's ID
+            bus_m.items.extend(bus_t.items)
+            # Update last_loc
+            bus_m.last_loc = bus_t.last_loc
+            
+            buses_fusionados.append(bus_m)
+            tarde_usados.add(idx)
+        else:
+            buses_fusionados.append(bus_m)
+            
+    # Add remaining afternoon buses
+    for i, bus_t in enumerate(buses_solo_tarde):
+        if i not in tarde_usados:
+            buses_fusionados.append(bus_t)
+            
+    buses_fusionados.extend(buses_completos)
+    
+    return buses_fusionados
+
 
 
