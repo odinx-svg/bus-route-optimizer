@@ -21,6 +21,12 @@
 
 **Goal:** Establish TypeScript, dark theme, and reusable glass components
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md - TypeScript + deps + Tailwind theme + app shell
+- [ ] 01-02-PLAN.md - GlassCard and NeonButton components
+
 **Requirements:**
 - UI-01: Dark theme with green neon / cyan blue accents
 - UI-02: Glass morphism cards with backdrop-blur
@@ -190,3 +196,4 @@ Phase 2    Phase 3    Phase 6
 ---
 
 *Roadmap created: 2026-01-19*
+*Phase 1 planned: 2026-01-20*
