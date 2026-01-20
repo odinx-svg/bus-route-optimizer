@@ -1,8 +1,8 @@
 # Project State: Dashboard Tutti
 
-**Last Updated:** 2026-01-19
-**Current Phase:** Not started
-**Status:** Ready for Phase 1
+**Last Updated:** 2026-01-20
+**Current Phase:** 1 of 6 (Foundation)
+**Status:** In progress
 
 ## Project Reference
 
@@ -15,25 +15,40 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
-| 1 | Foundation | ○ Pending | 0/? |
-| 2 | Metrics & Charts | ○ Pending | 0/? |
-| 3 | Upload Flow | ○ Pending | 0/? |
-| 4 | Control Panel | ○ Pending | 0/? |
-| 5 | Playback | ○ Pending | 0/? |
-| 6 | 3D Globe | ○ Pending | 0/? |
+| 1 | Foundation | In progress | 1/4 |
+| 2 | Metrics & Charts | Pending | 0/? |
+| 3 | Upload Flow | Pending | 0/? |
+| 4 | Control Panel | Pending | 0/? |
+| 5 | Playback | Pending | 0/? |
+| 6 | 3D Globe | Pending | 0/? |
 
-Progress: ░░░░░░░░░░ 0%
+Progress: [====------] ~10%
 
 ## Recent Activity
 
-- 2026-01-19: Project initialized
-- 2026-01-19: Research completed (Stack, Features, Architecture, Pitfalls)
-- 2026-01-19: Requirements defined (22 v1 requirements)
+- 2026-01-20: Completed 01-01-PLAN (TypeScript + Tailwind dark theme foundation)
+- 2026-01-19: Phase 1 research completed (01-RESEARCH.md)
+- 2026-01-19: Phase 1 plan created (01-01-PLAN.md)
 - 2026-01-19: Roadmap created (6 phases)
+- 2026-01-19: Requirements defined (22 v1 requirements)
+
+## Accumulated Decisions
+
+| ID | Decision | Rationale | Made In |
+|----|----------|-----------|---------|
+| ts-mixed-mode | allowJs: true with strict: true | Incremental migration - new TS, existing JS untouched | 01-01 |
+| font-hosting | Fontsource self-hosted Inter | No third-party requests, no FOUT | 01-01 |
+| tailwind-extend | Use extend pattern, not replace | Preserve existing colors | 01-01 |
+
+## Session Continuity
+
+Last session: 2026-01-20
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
 
 ## Next Action
 
-Run `/gsd:discuss-phase 1` or `/gsd:plan-phase 1` to begin Foundation phase.
+Continue with Plan 01-02 (GlassCard component) or run `/gsd:execute-plan 01-02`.
 
 ## Context for Claude
 
@@ -52,6 +67,13 @@ Run `/gsd:discuss-phase 1` or `/gsd:plan-phase 1` to begin Foundation phase.
 - Framer Motion for animations
 - Watch for: backdrop-blur performance, WebGL context limits
 
+**Established in Phase 1:**
+- TypeScript configured with allowJs: true
+- Tailwind extended with neon-green, cyan-blue, dark-bg, glass colors
+- Inter font loaded via Fontsource
+- Dark background app shell active
+
 ---
 
 *State initialized: 2026-01-19*
+*Last updated: 2026-01-20*
