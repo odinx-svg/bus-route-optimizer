@@ -10,12 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "framer-motion": "^12.27.5",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.263.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-dropzone": "^14.2.3",
     "react-leaflet": "^4.2.1",
-    "react-dropzone": "^14.2.3"
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",
