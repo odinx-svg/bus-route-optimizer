@@ -15,20 +15,20 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
-| 1 | Foundation | In progress | 1/4 |
+| 1 | Foundation | In progress | 2/4 |
 | 2 | Metrics & Charts | Pending | 0/? |
 | 3 | Upload Flow | Pending | 0/? |
 | 4 | Control Panel | Pending | 0/? |
 | 5 | Playback | Pending | 0/? |
 | 6 | 3D Globe | Pending | 0/? |
 
-Progress: [====------] ~10%
+Progress: [=====-----] ~15%
 
 ## Recent Activity
 
+- 2026-01-20: Completed 01-02-PLAN (GlassCard + NeonButton components)
 - 2026-01-20: Completed 01-01-PLAN (TypeScript + Tailwind dark theme foundation)
 - 2026-01-19: Phase 1 research completed (01-RESEARCH.md)
-- 2026-01-19: Phase 1 plan created (01-01-PLAN.md)
 - 2026-01-19: Roadmap created (6 phases)
 - 2026-01-19: Requirements defined (22 v1 requirements)
 
@@ -39,16 +39,19 @@ Progress: [====------] ~10%
 | ts-mixed-mode | allowJs: true with strict: true | Incremental migration - new TS, existing JS untouched | 01-01 |
 | font-hosting | Fontsource self-hosted Inter | No third-party requests, no FOUT | 01-01 |
 | tailwind-extend | Use extend pattern, not replace | Preserve existing colors | 01-01 |
+| glass-no-text-color | GlassCard does not set text color | Container component - consumers control for WCAG | 01-02 |
+| button-type-prop | NeonButton has type prop (button/submit) | Required for forms, defaults to 'button' for safety | 01-02 |
+| framer-motion-import | Standard framer-motion import path | Works now, v11 migration path available later | 01-02 |
 
 ## Session Continuity
 
 Last session: 2026-01-20
-Stopped at: Completed 01-01-PLAN.md
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
 
 ## Next Action
 
-Continue with Plan 01-02 (GlassCard component) or run `/gsd:execute-plan 01-02`.
+Continue with Plan 01-03 (page layout skeleton) or run `/gsd:execute-plan 01-03`.
 
 ## Context for Claude
 
@@ -72,6 +75,9 @@ Continue with Plan 01-02 (GlassCard component) or run `/gsd:execute-plan 01-02`.
 - Tailwind extended with neon-green, cyan-blue, dark-bg, glass colors
 - Inter font loaded via Fontsource
 - Dark background app shell active
+- GlassCard component (glass morphism container)
+- NeonButton component (animated with green/cyan variants)
+- UI components barrel export at components/ui
 
 ---
 
