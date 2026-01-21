@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "framer-motion": "^12.27.5",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.263.1",
@@ -19,6 +21,7 @@
     "react-dropzone": "^14.2.3",
     "react-leaflet": "^4.2.1",
     "recharts": "^3.6.0",
+    "three": "^0.182.0",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
