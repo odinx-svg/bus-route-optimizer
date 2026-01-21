@@ -54,6 +54,14 @@ Plans:
 
 **Goal:** Build KPI sidebar and statistics visualization
 
+**Status:** Planned (2026-01-21)
+**Plans:** 3 plans in 3 waves
+
+Plans:
+- [ ] 02-01-PLAN.md - Install Recharts + types + useMetrics hook
+- [ ] 02-02-PLAN.md - AnimatedNumber + MetricCard + RoutesChart components
+- [ ] 02-03-PLAN.md - MetricsSidebar + barrel export + visual verification
+
 **Requirements:**
 - MET-01: Left sidebar with KPIs (routes, buses, km)
 - MET-02: Fleet efficiency percentage
@@ -198,3 +206,4 @@ Phase 2    Phase 3    Phase 6
 
 *Roadmap created: 2026-01-19*
 *Phase 1 planned: 2026-01-20*
+*Phase 2 planned: 2026-01-21*
