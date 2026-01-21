@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-19)
 | Phase | Name | Status | Plans |
 |-------|------|--------|-------|
 | 1 | Foundation | Complete | 2/2 |
-| 2 | Metrics & Charts | In Progress | 1/? |
+| 2 | Metrics & Charts | In Progress | 2/? |
 | 3 | Upload Flow | Pending | 0/? |
 | 4 | Control Panel | Pending | 0/? |
 | 5 | Playback | Pending | 0/? |
@@ -26,11 +26,11 @@ Progress: ███░░░░░░░ 25%
 
 ## Recent Activity
 
+- 2026-01-21: Completed 02-02-PLAN (AnimatedNumber + MetricCard + RoutesChart)
 - 2026-01-21: Completed 02-01-PLAN (Recharts + Types + useMetrics hook)
 - 2026-01-20: Phase 1 verified (7/7 success criteria passed)
 - 2026-01-20: Completed 01-02-PLAN (GlassCard + NeonButton components)
 - 2026-01-20: Completed 01-01-PLAN (TypeScript + Tailwind dark theme foundation)
-- 2026-01-19: Phase 1 research completed (01-RESEARCH.md)
 
 ## Accumulated Decisions
 
@@ -45,16 +45,18 @@ Progress: ███░░░░░░░ 25%
 | recharts-3x | Recharts 3.6.0 (latest 3.x) | Current stable, tree-shakable with named imports | 02-01 |
 | metric-types-separate | Types in dedicated file, not inline | Reusable across components, single source of truth | 02-01 |
 | efficiency-formula | efficiency = serviceTime / (serviceTime + deadhead) * 100 | Matches existing MapView.jsx calculation pattern | 02-01 |
+| spring-physics | mass: 0.8, stiffness: 75, damping: 15 | Responsive but not jarring for number animations | 02-02 |
+| trend-color-mapping | neon-green for up, red-400 for down | Up = good, down = bad, matches dashboard aesthetic | 02-02 |
 
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 02-01-PLAN.md
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
 
 ## Next Action
 
-Continue with Phase 2 plans (02-02 MetricCard, 02-03 Charts, etc.)
+Continue with Phase 2 plans (02-03 MetricsSidebar composition, etc.)
 
 ## Context for Claude
 
@@ -86,6 +88,9 @@ Continue with Phase 2 plans (02-02 MetricCard, 02-03 Charts, etc.)
 - Recharts 3.6.0 installed for charting
 - TypeScript types at types/metrics.ts (ScheduleItem, BusSchedule, Metrics, ChartDataPoint, TrendDirection)
 - useMetrics hook at hooks/useMetrics.ts for memoized metric computation
+- AnimatedNumber component (Framer Motion spring counter)
+- MetricCard component (KPI display with trend indicators)
+- RoutesChart component (dark-themed Recharts bar chart)
 
 ---
 
