@@ -1,0 +1,33 @@
+[run]
+source = .
+omit = 
+    tests/*
+    test_*.py
+    */venv/*
+    */.venv/*
+    */__pycache__/*
+    db/*
+    scripts/*
+    */migrations/*
+    main.py
+    optimizer_v2.py
+    optimizer_v4.py
+    optimizer_v5.py
+    pdf_service.py
+    type_defs.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+
+show_missing = True
+skip_covered = False
+fail_under = 80
+
+[html]
+directory = htmlcov

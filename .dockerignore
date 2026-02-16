@@ -1,0 +1,46 @@
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+!DOCKER.md
+
+# Scripts (se usan desde host)
+*.sh
+*.bat
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data volumes (se crean automáticamente)
+postgres_data/
+redis_data/
+backend_data/
+
+# Local environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OSRM data (muy grande)
+data/osrm/
+*.osrm*
+*.osm.pbf

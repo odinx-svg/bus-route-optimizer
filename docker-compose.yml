@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: tutti-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tutti
+      POSTGRES_USER: tutti
+      POSTGRES_PASSWORD: tutti
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tutti -d tutti"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tutti-network
+
+  # Redis for Celery
+  redis:
+    image: redis:7-alpine
+    container_name: tutti-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tutti-network
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: tutti-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://tutti:tutti@postgres:5432/tutti
+      - REDIS_URL=redis://redis:6379/0
+      - USE_DATABASE=true
+      - CELERY_ENABLED=true
+      - OSRM_URL=http://187.77.33.218:5000/route/v1/driving
+      - OSRM_TABLE_URL=http://187.77.33.218:5000/table/v1/driving
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - tutti-network
+
+  # Celery Worker
+  celery_worker:
+    build: ./backend
+    container_name: tutti-celery-worker
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://tutti:tutti@postgres:5432/tutti
+      - REDIS_URL=redis://redis:6379/0
+      - USE_DATABASE=true
+      - CELERY_ENABLED=true
+      - OSRM_URL=http://187.77.33.218:5000/route/v1/driving
+      - OSRM_TABLE_URL=http://187.77.33.218:5000/table/v1/driving
+      - PYTHONPATH=/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    command: celery -A celery_app worker --loglevel=info --pool=prefork --concurrency=4
+    networks:
+      - tutti-network
+
+  # Flower - Celery Dashboard
+  flower:
+    build: ./backend
+    container_name: tutti-flower
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://tutti:tutti@postgres:5432/tutti
+      - REDIS_URL=redis://redis:6379/0
+      - USE_DATABASE=true
+      - CELERY_ENABLED=true
+      - PYTHONPATH=/app
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    command: celery -A celery_app flower --port=5555 --host=0.0.0.0
+    networks:
+      - tutti-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  tutti-network:
+    driver: bridge

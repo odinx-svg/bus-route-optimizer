@@ -1,0 +1,184 @@
+# Docker Compose - Tutti Production Environment
+# Optimizado para rendimiento y estabilidad
+# Uso: docker-compose -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Frontend - Nginx sirviendo archivos estáticos
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    container_name: tutti-frontend-prod
+    ports:
+      - "80:80"
+    environment:
+      - NGINX_HOST=localhost
+      - NGINX_PORT=80
+    depends_on:
+      - backend
+    networks:
+      - tutti-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+
+  # ==========================================================================
+  # Backend - FastAPI con múltiples workers
+  # ==========================================================================
+  backend:
+    build:
+      context: ./backend
+    container_name: tutti-backend-prod
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://tutti:${POSTGRES_PASSWORD:-tutti}@postgres:5432/tutti
+      - USE_DATABASE=true
+      # OSRM (configurar según entorno)
+      - OSRM_URL=${OSRM_URL:-http://187.77.33.218:5000/route/v1/driving}
+      - OSRM_TABLE_URL=${OSRM_TABLE_URL:-http://187.77.33.218:5000/table/v1/driving}
+      # Redis
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-tutti}@redis:6379/0
+      # Use local async fallback unless a dedicated Celery worker is deployed
+      - CELERY_ENABLED=false
+      # Python
+      - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      # Production settings
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - APP_RUNTIME_MODE=stable
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+    # Usar Gunicorn con Uvicorn workers para producción
+    command: >
+      gunicorn main:app
+      --workers 4
+      --worker-class uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --access-logfile -
+      --error-logfile -
+      --capture-output
+      --enable-stdio-inheritance
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - tutti-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================================================
+  # PostgreSQL 15 - Producción
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: tutti-postgres-prod
+    environment:
+      POSTGRES_DB: tutti
+      POSTGRES_USER: tutti
+      # EN PRODUCCIÓN: Usar secretos o variables de entorno seguras
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tutti}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    ports:
+      # En producción, no exponer PostgreSQL al exterior
+      # o usar VPN/Security Groups
+      - "127.0.0.1:5432:5432"
+    networks:
+      - tutti-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tutti -d tutti"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================================
+  # Redis 7 - Producción
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: tutti-redis-prod
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-tutti}
+    volumes:
+      - redis_data_prod:/data
+    ports:
+      # En producción, no exponer Redis al exterior
+      - "127.0.0.1:6379:6379"
+    networks:
+      - tutti-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-tutti}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# =============================================================================
+# Volúmenes persistentes
+# =============================================================================
+volumes:
+  postgres_data_prod:
+    driver: local
+  redis_data_prod:
+    driver: local
+
+# =============================================================================
+# Redes
+# =============================================================================
+networks:
+  tutti-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

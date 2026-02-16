@@ -1,0 +1,115 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tutti-backend"
+version = "1.0.0"
+description = "Tutti Bus Route Optimizer API"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pandas",
+    "openpyxl",
+    "python-multipart",
+    "requests",
+    "pulp>=2.8",
+    "reportlab>=4.0",
+    "python-dotenv",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.0",
+    "pytest",
+    "pytest-asyncio",
+    "pre-commit",
+    "ruff",
+]
+
+# =============================================================================
+# MYPY CONFIGURATION - STRICT MODE
+# =============================================================================
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+show_column_numbers = true
+
+# Files to exclude
+exclude = [
+    "backend/db/migrations/",
+    "backend/tests/",
+    "backend/scripts/",
+    "backend/db/models.py",
+    "backend/db/database.py",
+    "backend/db/crud.py",
+    "backend/db/schemas.py",
+    "backend/db/__init__.py",
+]
+
+# Module specific settings
+[[tool.mypy.overrides]]
+module = [
+    "pulp.*",
+    "reportlab.*",
+    "reportlab.lib.*",
+    "reportlab.platypus.*",
+    "pandas.*",
+    "openpyxl.*",
+    "sqlalchemy.*",
+    "alembic.*",
+]
+ignore_missing_imports = true
+
+# =============================================================================
+# RUFF CONFIGURATION (Linter & Formatter)
+# =============================================================================
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# =============================================================================
+# PYTEST CONFIGURATION
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"

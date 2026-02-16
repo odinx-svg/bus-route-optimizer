@@ -1,0 +1,219 @@
+{
+  "generated_at": "2026-02-13T19:32:21.175728",
+  "input_dir": "C:\\Users\\Juanjo\\Desktop\\ODINX LABS\\bus-route-optimizer\\ejemplo excel rutas a optimizar",
+  "routes_count": 20,
+  "parse_report": {
+    "files_processed": 6,
+    "sheets_detected": [
+      "I. Rutas",
+      "II. Paradas",
+      "II. Paradas (2)",
+      "III. Expediciones E & S",
+      "III. Expedicións E & S",
+      "III. Expedicións Entradas",
+      "III. Expedicións Salidas"
+    ],
+    "rows_total": 783,
+    "rows_dropped_invalid": 188,
+    "invalid_reasons": [
+      {
+        "reason": "duplicate_route_id",
+        "count": 60
+      },
+      {
+        "reason": "missing_route_code",
+        "count": 128
+      }
+    ],
+    "warnings": [],
+    "unknown_fields_count": 46,
+    "files": [
+      {
+        "file_name": "UE3609 MOS.xlsx",
+        "rows_total": 177,
+        "rows_dropped_invalid": 60,
+        "unknown_fields_count": 0,
+        "invalid_reasons": [
+          {
+            "reason": "duplicate_route_id",
+            "count": 60
+          }
+        ],
+        "warnings": [],
+        "sheets_detected": [
+          "I. Rutas",
+          "II. Paradas",
+          "III. Expedicións Entradas",
+          "III. Expedicións Salidas"
+        ]
+      },
+      {
+        "file_name": "UE3617 VIGO (3).xlsx",
+        "rows_total": 131,
+        "rows_dropped_invalid": 18,
+        "unknown_fields_count": 0,
+        "invalid_reasons": [
+          {
+            "reason": "missing_route_code",
+            "count": 18
+          }
+        ],
+        "warnings": [],
+        "sheets_detected": [
+          "I. Rutas",
+          "II. Paradas",
+          "III. Expediciones E & S "
+        ]
+      },
+      {
+        "file_name": "UE3618 VIGO (1).xlsx",
+        "rows_total": 85,
+        "rows_dropped_invalid": 15,
+        "unknown_fields_count": 0,
+        "invalid_reasons": [
+          {
+            "reason": "missing_route_code",
+            "count": 15
+          }
+        ],
+        "warnings": [],
+        "sheets_detected": [
+          "I. Rutas",
+          "II. Paradas",
+          "III. Expedicións E & S"
+        ]
+      },
+      {
+        "file_name": "UE3619 VIGO (1).xlsx",
+        "rows_total": 101,
+        "rows_dropped_invalid": 14,
+        "unknown_fields_count": 0,
+        "invalid_reasons": [
+          {
+            "reason": "missing_route_code",
+            "count": 14
+          }
+        ],
+        "warnings": [],
+        "sheets_detected": [
+          "I. Rutas",
+          "II. Paradas",
+          "III. Expedicións E & S"
+        ]
+      },
+      {
+        "file_name": "UE3620 VIGO (1).xlsx",
+        "rows_total": 97,
+        "rows_dropped_invalid": 17,
+        "unknown_fields_count": 46,
+        "invalid_reasons": [
+          {
+            "reason": "missing_route_code",
+            "count": 17
+          }
+        ],
+        "warnings": [],
+        "sheets_detected": [
+          "II. Paradas",
+          "III. Expedicións E & S"
+        ]
+      },
+      {
+        "file_name": "UE3622 VIGO (1).xlsx",
+        "rows_total": 192,
+        "rows_dropped_invalid": 64,
+        "unknown_fields_count": 0,
+        "invalid_reasons": [
+          {
+            "reason": "missing_route_code",
+            "count": 64
+          }
+        ],
+        "warnings": [],
+        "sheets_detected": [
+          "I. Rutas",
+          "II. Paradas (2)",
+          "III. Expedicións E & S"
+        ]
+      }
+    ]
+  },
+  "baseline": {
+    "per_day": {
+      "L": {
+        "buses": 5,
+        "routes": 20,
+        "split_count": 0,
+        "solver_status": "optimal",
+        "lower_bound_buses": 5,
+        "optimality_gap": 0.0
+      },
+      "M": {
+        "buses": 5,
+        "routes": 10,
+        "split_count": 0,
+        "solver_status": "optimal",
+        "lower_bound_buses": 5,
+        "optimality_gap": 0.0
+      },
+      "Mc": {
+        "buses": 5,
+        "routes": 10,
+        "split_count": 0,
+        "solver_status": "optimal",
+        "lower_bound_buses": 5,
+        "optimality_gap": 0.0
+      },
+      "X": {
+        "buses": 5,
+        "routes": 10,
+        "split_count": 0,
+        "solver_status": "optimal",
+        "lower_bound_buses": 5,
+        "optimality_gap": 0.0
+      },
+      "V": {
+        "buses": 5,
+        "routes": 10,
+        "split_count": 0,
+        "solver_status": "optimal",
+        "lower_bound_buses": 5,
+        "optimality_gap": 0.0
+      }
+    },
+    "total_buses": 25,
+    "total_routes": 60,
+    "split_count": 0,
+    "runtime_sec": 0.63
+  },
+  "pipeline": {
+    "runtime_sec": 0.79,
+    "summary_metrics": {
+      "infeasible_buses": 0,
+      "error_issues": 0,
+      "warning_issues": 0,
+      "total_buses": 25,
+      "best_buses": 25,
+      "lower_bound_buses": 25,
+      "optimality_gap": 0.0,
+      "split_count": 0,
+      "solver_status": "optimal",
+      "invalid_rows_dropped": 188,
+      "avg_deadhead": 0.0,
+      "avg_efficiency": 6.95
+    },
+    "selected_candidate": "baseline",
+    "elapsed_sec": 0.79,
+    "infeasible_transitions": 0,
+    "pipeline_history_size": 8
+  },
+  "status": {
+    "checks": {
+      "buses_not_worse_than_baseline": true,
+      "split_count_zero": true,
+      "rows_invalid_reported": true,
+      "optimality_gap_reported": true
+    },
+    "passed": true
+  }
+}

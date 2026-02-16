@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python -m py_compile:*)",
+      "Skill(ralph-loop:ralph-loop)",
+      "Bash(python analyze_excel_structure.py:*)",
+      "Bash(python:*)",
+      "Bash(\"C:\\\\Users\\\\Juanjo\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\ralph-loop\\\\96276205880a/scripts/setup-ralph-loop.sh\" \"Eliminar buses infrautilizados implementando redistribucion forzada, intercambio de rutas, y fusiones agresivas segun el plan en .planning/OPTIMIZATION_PLAN.md\")",
+      "Bash(if [ -d .git ])",
+      "Bash([ -f .git ])",
+      "Bash(then echo \"GIT_EXISTS=yes\")",
+      "Bash(else git init)",
+      "Bash(fi)",
+      "Bash(if [ -f package.json ])",
+      "Bash([ -f requirements.txt ])",
+      "Bash([ -f Cargo.toml ])",
+      "Bash([ -f go.mod ])",
+      "Bash(then echo \"HAS_PACKAGE=yes\")",
+      "Bash(else echo \"HAS_PACKAGE=no\")",
+      "Bash(if [ -d .planning/codebase ])",
+      "Bash(then echo \"HAS_CODEBASE_MAP=yes\")",
+      "Bash(else echo \"HAS_CODEBASE_MAP=no\")",
+      "Skill(gsd:map-codebase)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\ndocs: initialize project\n\nVisual overhaul of bus-route-optimizer with Dark Command aesthetic dashboard.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "WebSearch",
+      "WebFetch(domain:recharts.org)",
+      "WebFetch(domain:buildui.com)",
+      "Bash(dir:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

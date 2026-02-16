@@ -1,258 +1,566 @@
-import React, { useState, lazy, Suspense } from 'react';
-import FileUpload from './components/FileUpload';
+import React, { useCallback, useState } from 'react';
+import Layout from './components/Layout';
+import Sidebar from './components/Sidebar';
+import BusListPanel from './components/BusListPanel';
 import MapView from './components/MapView';
-import DataPreviewModal from './components/DataPreviewModal';
-import { GlassCard, NeonButton } from './components/ui';
-import { MetricsSidebar } from './components/metrics';
+import { CompareView } from './components/CompareView';
+import { UnifiedWorkspace } from './components/workspace';
+import { MonteCarloPanel } from './components/MonteCarloPanel';
+import OptimizationProgress from './components/OptimizationProgress';
+import FleetPage from './pages/FleetPage';
+import { notifications } from './services/notifications';
+import { clearGeometryCache } from './services/RouteService';
+import { buildRouteCapacityMap, getItemCapacityNeeded } from './utils/capacity';
+import { PanelLeftClose, PanelLeft } from 'lucide-react';
 
-// Lazy load Globe for performance
-const Globe3D = lazy(() => import('./components/Globe3D'));
+const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
+const ALL_DAYS = ['L', 'M', 'Mc', 'X', 'V'];
 
 function App() {
   const [routes, setRoutes] = useState([]);
-  const [schedule, setSchedule] = useState([]);
+  const [parseReport, setParseReport] = useState(null);
+  const [scheduleByDay, setScheduleByDay] = useState(null);
+  const [previousScheduleByDay, setPreviousScheduleByDay] = useState(null);
+  const [validationReport, setValidationReport] = useState(null);
+  const [activeDay, setActiveDay] = useState('L');
   const [optimizing, setOptimizing] = useState(false);
-  const [viewMode, setViewMode] = useState('globe'); // 'globe' | 'map'
+  const [showComparison, setShowComparison] = useState(false);
 
-  // Preview State
-  const [previewRoutes, setPreviewRoutes] = useState([]);
-  const [showPreview, setShowPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState('upload');
+  const [viewMode, setViewMode] = useState('map'); // 'map' | 'workspace' | 'fleet' | 'montecarlo'
+  const [workspaceMode, setWorkspaceMode] = useState('create'); // 'create' | 'edit' | 'optimize'
+  const [selectedBusId, setSelectedBusId] = useState(null);
+  const [selectedRouteId, setSelectedRouteId] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const handleUploadSuccess = (data) => {
-    console.log("Routes loaded for preview:", data);
-    setPreviewRoutes(data);
-    setShowPreview(true);
+  const [pipelineJobId, setPipelineJobId] = useState(null);
+  const [pipelineStatus, setPipelineStatus] = useState('idle');
+  const [pipelineEvents, setPipelineEvents] = useState([]);
+  const [pipelineMetrics, setPipelineMetrics] = useState(null);
+
+  // Current day's data
+  const currentDayData = scheduleByDay?.[activeDay] || null;
+  const schedule = currentDayData?.schedule || [];
+  const optimizationStats = currentDayData?.stats || null;
+
+  const calculateStats = () => {
+    if (!routes.length && !schedule.length) return null;
+
+    let efficiency = 0;
+    if (schedule.length > 0) {
+      const totalItems = schedule.reduce((sum, bus) => sum + (bus.items?.length || 0), 0);
+      const avg = totalItems / schedule.length;
+      efficiency = Math.min(Math.round((avg / 7) * 100), 100);
+    }
+
+    return {
+      routes: routes.length,
+      buses: schedule.length,
+      efficiency,
+      ...optimizationStats,
+    };
   };
 
-  const handleConfirmPreview = () => {
-    setRoutes(previewRoutes);
-    setSchedule([]);
-    setShowPreview(false);
-  };
+  const applyPipelineResult = useCallback((pipelineResult) => {
+    const scheduleResult = pipelineResult?.schedule_by_day || null;
+    if (!scheduleResult) {
+      throw new Error('El resultado del pipeline no contiene schedule_by_day');
+    }
 
-  const handleCancelPreview = () => {
-    setPreviewRoutes([]);
-    setShowPreview(false);
-  };
+    if (scheduleByDay) {
+      setPreviousScheduleByDay(scheduleByDay);
+    }
 
-  const handleOptimize = async () => {
-    if (routes.length === 0) return;
+    setScheduleByDay(scheduleResult);
+    setValidationReport(pipelineResult?.validation_report || null);
+    setShowComparison(true);
+    setViewMode('workspace');
+    setWorkspaceMode('optimize');
+
+    let maxBuses = 0;
+    let maxDay = 'L';
+    for (const day of ALL_DAYS) {
+      const dayBuses = scheduleResult[day]?.stats?.total_buses || 0;
+      if (dayBuses > maxBuses) {
+        maxBuses = dayBuses;
+        maxDay = day;
+      }
+    }
+    setActiveDay(maxDay);
+  }, [scheduleByDay]);
+
+  const startAutoPipeline = async (routesInput = routes, parseReportInput = parseReport) => {
+    if (!routesInput || routesInput.length === 0) {
+      notifications.warning('No hay datos', 'Sube archivos Excel primero');
+      return;
+    }
+
     setOptimizing(true);
+    setPipelineStatus('starting');
+    setPipelineJobId(null);
+    setPipelineEvents([]);
+    setPipelineMetrics(null);
+    setViewMode('workspace');
+    setWorkspaceMode('optimize');
+
+    const loadingToast = notifications.loading('Iniciando pipeline automatico...');
+
     try {
-      const response = await fetch('http://localhost:8000/optimize_lp', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/optimize-pipeline-by-day-async`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(routes),
+        body: JSON.stringify({
+          routes: routesInput,
+          config: {
+            auto_start: true,
+            objective: 'min_buses_viability',
+            max_duration_sec: 300,
+            max_iterations: 2,
+            invalid_rows_dropped: Number(parseReportInput?.rows_dropped_invalid || 0),
+          },
+        }),
       });
 
-      if (!response.ok) throw new Error('Optimization failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Error del servidor: ${response.status}`);
+      }
 
       const data = await response.json();
-      setSchedule(data);
+      notifications.dismiss(loadingToast);
+
+      if (data.status === 'completed' && data.result) {
+        applyPipelineResult(data.result);
+        setPipelineStatus('completed');
+        setOptimizing(false);
+        notifications.success('Pipeline completado', 'Resultado final disponible en Workspace');
+      } else {
+        setPipelineJobId(data.job_id || null);
+        setPipelineStatus(data.status || 'queued');
+        notifications.info('Pipeline en ejecucion', 'Mostrando progreso en tiempo real');
+      }
     } catch (error) {
-      console.error("Error optimizing:", error);
-      alert("Failed to optimize routes");
-    } finally {
+      console.error('Error optimizing:', error);
+      notifications.dismiss(loadingToast);
+      notifications.error(
+        'Error al ejecutar pipeline',
+        error.message || 'Asegurate de que el backend este funcionando.'
+      );
       setOptimizing(false);
+      setPipelineStatus('error');
     }
   };
 
-  const handleExportPdf = async () => {
-    if (schedule.length === 0) return;
+  const handleUploadSuccess = (payload) => {
+    const uploadedRoutes = Array.isArray(payload) ? payload : (payload?.routes || []);
+    const uploadReport = Array.isArray(payload) ? null : (payload?.parse_report || null);
+
+    setRoutes(uploadedRoutes);
+    setParseReport(uploadReport);
+    setScheduleByDay(null);
+    setValidationReport(null);
+    setSelectedBusId(null);
+    setSelectedRouteId(null);
+
+    const droppedRows = Number(uploadReport?.rows_dropped_invalid || 0);
+    const rowsTotal = Number(uploadReport?.rows_total || 0);
+
+    notifications.success(
+      'Datos cargados correctamente',
+      `${uploadedRoutes.length} rutas importadas`
+    );
+
+    if (droppedRows > 0) {
+      const shouldContinue = window.confirm(
+        `Calidad de datos detectó ${droppedRows} filas inválidas descartadas de ${rowsTotal} filas.\n\n¿Quieres continuar igualmente con el pipeline automático?`
+      );
+      if (!shouldContinue) {
+        notifications.info(
+          'Pipeline pausado',
+          'Revisa el panel de calidad de datos antes de optimizar'
+        );
+        return;
+      }
+    }
+
+    startAutoPipeline(uploadedRoutes, uploadReport);
+  };
+
+  const handleOptimize = async () => {
+    await startAutoPipeline(routes, parseReport);
+  };
+
+  const handleReset = () => {
+    if (confirm('Borrar todos los datos?')) {
+      setRoutes([]);
+      setParseReport(null);
+      setScheduleByDay(null);
+      setPreviousScheduleByDay(null);
+      setValidationReport(null);
+      setShowComparison(false);
+      setSelectedBusId(null);
+      setSelectedRouteId(null);
+      setPipelineJobId(null);
+      setPipelineStatus('idle');
+      setPipelineEvents([]);
+      setPipelineMetrics(null);
+      setViewMode('map');
+      setWorkspaceMode('create');
+      clearGeometryCache();
+      notifications.info('Datos borrados', 'Puedes empezar de nuevo');
+    }
+  };
+
+  const handleExport = async () => {
+    if (schedule.length === 0) {
+      notifications.warning('No hay resultados', 'Optimiza las rutas primero');
+      return;
+    }
+
+    const loadingToast = notifications.loading('Generando PDF...');
+
     try {
-      const response = await fetch('http://localhost:8000/export_pdf', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const dayName = DAY_LABELS[activeDay] || activeDay;
+      const routeCapacityById = buildRouteCapacityMap(routes);
+      const scheduleForPdf = (schedule || []).map((bus) => ({
+        ...bus,
+        items: (bus.items || []).map((item) => ({
+          ...item,
+          capacity_needed: getItemCapacityNeeded(item, routeCapacityById),
+        })),
+      }));
+      const response = await fetch(`${apiUrl}/export_pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(schedule),
+        body: JSON.stringify({ schedule: scheduleForPdf, day_name: dayName }),
       });
 
-      if (!response.ok) throw new Error('Export failed');
+      if (!response.ok) {
+        throw new Error(`Error del servidor: ${response.status}`);
+      }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'tutti_schedule.pdf';
+      a.download = `tutti_schedule_${dayName.toLowerCase()}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+
+      notifications.dismiss(loadingToast);
+      notifications.success('PDF descargado', `Horario del ${dayName}`);
     } catch (error) {
-      console.error("Error exporting PDF:", error);
-      alert("Failed to export PDF");
+      console.error('Error exporting PDF:', error);
+      notifications.dismiss(loadingToast);
+      notifications.error('Error al exportar PDF', error.message);
     }
   };
 
-  const hasData = routes.length > 0;
+  const handleDayChange = (day) => {
+    setActiveDay(day);
+    setSelectedBusId(null);
+    setSelectedRouteId(null);
+  };
+
+  const handleBusSelect = (busId) => {
+    setSelectedBusId(busId);
+    setSelectedRouteId(null);
+  };
+
+  const handleRouteSelect = (routeId) => {
+    setSelectedRouteId(routeId);
+  };
+
+  const handleSaveManualSchedule = async (scheduleData) => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const payload = {
+      day: scheduleData?.day,
+      buses: scheduleData?.buses || [],
+      unassigned_routes: scheduleData?.unassigned_routes || [],
+      metadata: {
+        mode: scheduleData?.mode || 'draft',
+        ...(scheduleData?.stats || {}),
+      },
+    };
+
+    // Endpoint correcto actual del backend editor.
+    // Fallback legacy para compatibilidad con despliegues antiguos.
+    const endpoints = [
+      `${apiUrl}/api/schedules/update`,
+      `${apiUrl}/api/schedules/manual`,
+    ];
+
+    let lastError = null;
+
+    for (const url of endpoints) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        const message = error?.detail?.message || error?.detail || error?.message || `Error ${response.status}`;
+        // 404/405: probamos siguiente endpoint; otros errores sí son terminales.
+        if (response.status === 404 || response.status === 405) {
+          lastError = new Error(message);
+          continue;
+        }
+        throw new Error(message);
+      }
+
+      const data = await response.json();
+      if (data?.success === false) {
+        const conflictCount = Array.isArray(data?.conflicts) ? data.conflicts.length : 0;
+        const errorCount = Array.isArray(data?.errors) ? data.errors.length : 0;
+        throw new Error(
+          `Horario inválido (${conflictCount} conflictos, ${errorCount} errores).`
+        );
+      }
+      return data;
+    }
+
+    throw lastError || new Error('No se pudo guardar el horario manual');
+  };
+
+  const handlePipelineProgress = useCallback((progressState) => {
+    setPipelineStatus('running');
+
+    setPipelineMetrics((prev) => {
+      const next = progressState.metrics || null;
+      if (prev === next) return prev;
+      try {
+        const prevKey = prev ? JSON.stringify(prev) : '';
+        const nextKey = next ? JSON.stringify(next) : '';
+        return prevKey === nextKey ? prev : next;
+      } catch {
+        return next;
+      }
+    });
+
+    setPipelineEvents((prev) => {
+      const nextEvent = {
+        phase: progressState.phase,
+        stage: progressState.stage,
+        progress: progressState.progress,
+        message: progressState.message,
+        day: progressState.day,
+        iteration: progressState.iteration,
+        stream: progressState.stream,
+        engine: progressState.engine,
+        optimizerPhase: progressState.optimizerPhase,
+        localProgress: progressState.localProgress,
+      };
+
+      const last = prev[prev.length - 1];
+      if (
+        last &&
+        last.phase === nextEvent.phase &&
+        last.stage === nextEvent.stage &&
+        last.progress === nextEvent.progress &&
+        last.message === nextEvent.message &&
+        last.day === nextEvent.day &&
+        last.iteration === nextEvent.iteration &&
+        last.stream === nextEvent.stream &&
+        last.optimizerPhase === nextEvent.optimizerPhase
+      ) {
+        return prev;
+      }
+
+      const next = [...prev, nextEvent];
+      return next.length > 40 ? next.slice(next.length - 40) : next;
+    });
+  }, []);
+
+  const handlePipelineComplete = useCallback((result) => {
+    try {
+      applyPipelineResult(result);
+      setPipelineStatus('completed');
+      setPipelineJobId(null);
+      setOptimizing(false);
+      notifications.success('Pipeline completado', 'Resultado final cargado');
+    } catch (error) {
+      notifications.error('Resultado invalido', error.message);
+    }
+  }, [applyPipelineResult]);
+
+  const handlePipelineError = useCallback((errorCode) => {
+    const transientNetworkErrors = new Set(['NETWORK_UNSTABLE']);
+    if (transientNetworkErrors.has(String(errorCode || ''))) {
+      setPipelineStatus('running');
+      setOptimizing(true);
+      notifications.warning(
+        'Conexion inestable',
+        'El backend puede seguir trabajando. Esperando reconexion de progreso.'
+      );
+      return;
+    }
+
+    setPipelineStatus('error');
+    setPipelineJobId(null);
+    setOptimizing(false);
+    notifications.error('Pipeline fallido', errorCode || 'Revisa logs del backend');
+  }, []);
 
   return (
-    <div className="h-screen w-screen bg-dark-bg text-slate-100 font-sans overflow-hidden flex flex-col">
-      {/* Header */}
-      <header className="relative z-30 border-b border-glass-border bg-dark-bg/80 backdrop-blur-xl flex-none">
-        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
-          <div className="flex items-center space-x-3 group cursor-pointer">
-            <div className="bg-gradient-to-br from-neon-green/80 to-cyan-blue p-2 rounded-lg shadow-lg shadow-neon-green/20">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+    <Layout
+      stats={calculateStats()}
+      scheduleByDay={scheduleByDay}
+      activeDay={activeDay}
+      onDayChange={handleDayChange}
+      viewMode={viewMode}
+      setViewMode={setViewMode}
+    >
+      {/* Sidebar colapsable */}
+      <div className={`
+        transition-all duration-300 ease-in-out overflow-hidden m-3 h-full
+        ${sidebarCollapsed ? 'w-0 opacity-0' : 'w-80 opacity-100'}
+      `}>
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onUploadSuccess={handleUploadSuccess}
+          routes={routes}
+          parseReport={parseReport}
+          schedule={schedule}
+          onOptimize={handleOptimize}
+          isOptimizing={optimizing}
+          onReset={handleReset}
+          optimizationStats={optimizationStats}
+          scheduleByDay={scheduleByDay}
+        >
+          {pipelineJobId && (
+            <OptimizationProgress
+              jobId={pipelineJobId}
+              onProgress={handlePipelineProgress}
+              onComplete={handlePipelineComplete}
+              onError={handlePipelineError}
+            />
+          )}
+          {!pipelineJobId && pipelineStatus === 'running' && (
+            <div className="text-[10px] text-slate-500 data-mono px-1 uppercase tracking-[0.08em]">
+              Eventos: {pipelineEvents.length} | metricas: {pipelineMetrics ? 'ok' : 'n/a'}
             </div>
-            <h1 className="text-xl font-bold tracking-tight">
-              <span className="text-white">Tutti</span>
-              <span className="text-slate-500 mx-2">|</span>
-              <span className="text-sm font-medium text-neon-green uppercase tracking-wider">Cond'bus</span>
-            </h1>
-          </div>
+          )}
+        </Sidebar>
+      </div>
 
-          <div className="flex items-center gap-3">
-            {/* View toggle */}
-            {hasData && (
-              <div className="flex bg-glass-bg rounded-lg p-1 border border-glass-border">
-                <button
-                  onClick={() => setViewMode('globe')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    viewMode === 'globe'
-                      ? 'bg-neon-green/20 text-neon-green'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🌍 Globe
-                </button>
-                <button
-                  onClick={() => setViewMode('map')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    viewMode === 'map'
-                      ? 'bg-cyan-blue/20 text-cyan-blue'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🗺️ Map
-                </button>
-              </div>
-            )}
+      {/* Boton toggle sidebar */}
+      <button
+        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        className="
+          absolute left-0 top-1/2 -translate-y-1/2 z-50
+          p-2 bg-[#101a26] border border-[#2c4359] rounded-r-md
+          text-slate-400 hover:text-cyan-200 hover:border-cyan-500/40 hover:bg-[#162433]
+          transition-all duration-300
+          flex items-center justify-center
+        "
+        style={{
+          marginLeft: sidebarCollapsed ? '12px' : '332px',
+        }}
+        title={sidebarCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+      >
+        {sidebarCollapsed ? (
+          <PanelLeft className="w-4 h-4" />
+        ) : (
+          <PanelLeftClose className="w-4 h-4" />
+        )}
+      </button>
 
-            {hasData && !schedule.length && (
-              <NeonButton
-                onClick={handleOptimize}
-                disabled={optimizing}
-                variant="green"
-              >
-                {optimizing ? 'Optimizing...' : 'Run Optimization'}
-              </NeonButton>
-            )}
+      <section className="flex-1 relative m-3">
+        <div className="absolute inset-0 flex flex-col">
+          <div className="flex-1 relative overflow-auto">
+            {viewMode === 'map' && (
+              <>
+                <MapView
+                  routes={routes}
+                  schedule={schedule}
+                  selectedBusId={selectedBusId}
+                  selectedRouteId={selectedRouteId}
+                  onBusSelect={handleBusSelect}
+                />
 
-            {schedule.length > 0 && (
-              <NeonButton onClick={handleExportPdf} variant="cyan">
-                Export PDF
-              </NeonButton>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content - Globe as primary view */}
-      <main className="flex-1 relative overflow-hidden">
-        {/* 3D Globe Background - Always visible */}
-        <div className="absolute inset-0 z-0">
-          <Suspense fallback={
-            <div className="w-full h-full flex items-center justify-center bg-dark-bg">
-              <div className="text-neon-green animate-pulse text-xl">Loading Globe...</div>
-            </div>
-          }>
-            <Globe3D routes={routes} />
-          </Suspense>
-        </div>
-
-        {/* Overlay UI */}
-        <div className="relative z-10 h-full flex">
-          {/* Left Panel - Upload or Metrics */}
-          <div className="w-96 h-full flex flex-col p-4 bg-gradient-to-r from-dark-bg via-dark-bg/95 to-transparent">
-            {!hasData ? (
-              /* Upload Panel */
-              <div className="flex flex-col h-full justify-center">
-                <div className="mb-8">
-                  <h2 className="text-3xl font-bold mb-2">
-                    <span className="bg-clip-text text-transparent bg-gradient-to-r from-neon-green to-cyan-blue">
-                      Fleet Optimizer
-                    </span>
-                  </h2>
-                  <p className="text-slate-400">
-                    Upload your route data to visualize on the globe
-                  </p>
-                </div>
-
-                <GlassCard className="p-6">
-                  <FileUpload onUploadSuccess={handleUploadSuccess} />
-                </GlassCard>
-              </div>
-            ) : (
-              /* Metrics Panel */
-              <div className="flex flex-col h-full">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-neon-green mb-1">
-                    {routes.length} Routes Loaded
-                  </h3>
-                  <p className="text-sm text-slate-400">
-                    {schedule.length > 0 ? 'Optimization complete' : 'Ready to optimize'}
-                  </p>
-                </div>
-
-                {schedule.length > 0 ? (
-                  <div className="flex-1 overflow-y-auto">
-                    <MetricsSidebar schedule={schedule} />
+                {routes.length === 0 && (
+                  <div className="absolute inset-0 bg-[#07101a]/86 backdrop-blur-sm flex items-center justify-center pointer-events-none rounded-[12px] border border-[#253a4f]">
+                    <div className="text-center p-6 control-card rounded-md">
+                      <p className="text-[14px] font-semibold text-slate-200 uppercase tracking-[0.12em] data-mono">Mapa Operativo</p>
+                      <p className="text-[11px] text-slate-500 mt-1.5 max-w-[220px] uppercase tracking-[0.08em]">
+                        Carga datasets para visualizar geometria y rutas
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  <GlassCard className="p-6 text-center">
-                    <p className="text-slate-300 mb-4">
-                      Click "Run Optimization" to process your routes
-                    </p>
-                    <NeonButton
-                      onClick={handleOptimize}
-                      disabled={optimizing}
-                      variant="green"
-                      size="lg"
-                    >
-                      {optimizing ? 'Processing...' : 'Run Optimization'}
-                    </NeonButton>
-                  </GlassCard>
                 )}
-
-                {/* New upload button */}
-                <div className="mt-4 pt-4 border-t border-glass-border">
-                  <button
-                    onClick={() => {
-                      setRoutes([]);
-                      setSchedule([]);
-                    }}
-                    className="text-sm text-slate-400 hover:text-neon-green transition-colors"
-                  >
-                    ← Upload different file
-                  </button>
-                </div>
-              </div>
+              </>
+            )}
+            {viewMode === 'workspace' && (
+              <UnifiedWorkspace
+                mode={workspaceMode}
+                routes={routes}
+                initialSchedule={workspaceMode === 'optimize' ? schedule : null}
+                scheduleByDay={scheduleByDay}
+                activeDay={activeDay}
+                validationReport={validationReport}
+                onValidationReportChange={setValidationReport}
+                onSave={handleSaveManualSchedule}
+                onPublish={async (data) => {
+                  await handleSaveManualSchedule(data);
+                  notifications.success('Horario publicado', 'Los cambios han sido guardados correctamente');
+                }}
+              />
+            )}
+            {viewMode === 'fleet' && (
+              <FleetPage />
+            )}
+            {viewMode === 'montecarlo' && (
+              <MonteCarloPanel
+                schedule={schedule}
+                hasOptimizedSchedule={schedule.length > 0 && scheduleByDay !== null}
+              />
             )}
           </div>
 
-          {/* Right side - Map view (only when toggled) */}
-          {hasData && viewMode === 'map' && (
-            <div className="flex-1 relative">
-              <GlassCard className="absolute inset-4 overflow-hidden">
-                <MapView routes={routes} schedule={schedule} />
-              </GlassCard>
+          {/* Comparacion de Optimizacion */}
+          {showComparison && previousScheduleByDay && scheduleByDay && (
+            <div className="p-4 bg-[#0b141f] border-t border-[#253a4f]">
+              <CompareView
+                before={previousScheduleByDay[activeDay]?.schedule || []}
+                after={scheduleByDay[activeDay]?.schedule || []}
+              />
+              <button
+                onClick={() => setShowComparison(false)}
+                className="mt-4 px-3 py-1.5 control-btn rounded-md text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors"
+              >
+                Ocultar comparativa
+              </button>
             </div>
           )}
         </div>
-      </main>
+      </section>
 
-      {/* Preview Modal */}
-      {showPreview && (
-        <DataPreviewModal
-          routes={previewRoutes}
-          onConfirm={handleConfirmPreview}
-          onCancel={handleCancelPreview}
-        />
+      {/* BusListPanel visible en mapa y montecarlo */}
+      {(viewMode === 'map' || viewMode === 'montecarlo') && (
+        <div className="my-3 mr-3 min-h-0 flex">
+          <BusListPanel
+            schedule={schedule}
+            routes={routes}
+            selectedBusId={selectedBusId}
+            selectedRouteId={selectedRouteId}
+            onBusSelect={handleBusSelect}
+            onRouteSelect={handleRouteSelect}
+            onExport={handleExport}
+            activeDay={activeDay}
+          />
+        </div>
       )}
-    </div>
+    </Layout>
   );
 }
 
 export default App;
+
+

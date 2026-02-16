@@ -1,0 +1,191 @@
+{
+  "routes": [
+    {
+      "id": "R001_E1_E",
+      "name": "Route 001 Entry",
+      "stops": [
+        {
+          "name": "Stop A",
+          "lat": 42.2406,
+          "lon": -8.7207,
+          "order": 1,
+          "time_from_start": 0,
+          "passengers": 5,
+          "is_school": false
+        },
+        {
+          "name": "Stop B",
+          "lat": 42.2416,
+          "lon": -8.7217,
+          "order": 2,
+          "time_from_start": 8,
+          "passengers": 8,
+          "is_school": false
+        },
+        {
+          "name": "Colexio Principal",
+          "lat": 42.2500,
+          "lon": -8.7300,
+          "order": 3,
+          "time_from_start": 25,
+          "passengers": 0,
+          "is_school": true
+        }
+      ],
+      "school_id": "SCH001",
+      "school_name": "Colexio Principal",
+      "arrival_time": "09:00:00",
+      "departure_time": null,
+      "capacity_needed": 13,
+      "contract_id": "UE3617",
+      "type": "entry",
+      "days": ["L", "M", "Mc", "X", "V"]
+    },
+    {
+      "id": "R001_E1_X",
+      "name": "Route 001 Exit",
+      "stops": [
+        {
+          "name": "Colexio Principal",
+          "lat": 42.2500,
+          "lon": -8.7300,
+          "order": 1,
+          "time_from_start": 0,
+          "passengers": 0,
+          "is_school": true
+        },
+        {
+          "name": "Stop B",
+          "lat": 42.2416,
+          "lon": -8.7217,
+          "order": 2,
+          "time_from_start": 12,
+          "passengers": 8,
+          "is_school": false
+        },
+        {
+          "name": "Stop A",
+          "lat": 42.2406,
+          "lon": -8.7207,
+          "order": 3,
+          "time_from_start": 20,
+          "passengers": 5,
+          "is_school": false
+        }
+      ],
+      "school_id": "SCH001",
+      "school_name": "Colexio Principal",
+      "arrival_time": null,
+      "departure_time": "14:30:00",
+      "capacity_needed": 13,
+      "contract_id": "UE3617",
+      "type": "exit",
+      "days": ["L", "M", "Mc", "X", "V"]
+    },
+    {
+      "id": "R002_E2_E",
+      "name": "Route 002 Entry",
+      "stops": [
+        {
+          "name": "Stop C",
+          "lat": 42.2350,
+          "lon": -8.7150,
+          "order": 1,
+          "time_from_start": 0,
+          "passengers": 6,
+          "is_school": false
+        },
+        {
+          "name": "Stop D",
+          "lat": 42.2360,
+          "lon": -8.7160,
+          "order": 2,
+          "time_from_start": 10,
+          "passengers": 4,
+          "is_school": false
+        },
+        {
+          "name": "Colexio Secundario",
+          "lat": 42.2450,
+          "lon": -8.7250,
+          "order": 3,
+          "time_from_start": 22,
+          "passengers": 0,
+          "is_school": true
+        }
+      ],
+      "school_id": "SCH002",
+      "school_name": "Colexio Secundario",
+      "arrival_time": "08:45:00",
+      "departure_time": null,
+      "capacity_needed": 10,
+      "contract_id": "UE3618",
+      "type": "entry",
+      "days": ["L", "M", "X", "V"]
+    },
+    {
+      "id": "R003_E3_E",
+      "name": "Route 003 Entry",
+      "stops": [
+        {
+          "name": "Stop E",
+          "lat": 42.2300,
+          "lon": -8.7100,
+          "order": 1,
+          "time_from_start": 0,
+          "passengers": 10,
+          "is_school": false
+        },
+        {
+          "name": "Colexio Principal",
+          "lat": 42.2500,
+          "lon": -8.7300,
+          "order": 2,
+          "time_from_start": 18,
+          "passengers": 0,
+          "is_school": true
+        }
+      ],
+      "school_id": "SCH001",
+      "school_name": "Colexio Principal",
+      "arrival_time": "16:30:00",
+      "departure_time": null,
+      "capacity_needed": 10,
+      "contract_id": "UE3617",
+      "type": "entry",
+      "days": ["L", "M", "Mc", "X", "V"]
+    },
+    {
+      "id": "R004_E4_X",
+      "name": "Route 004 Exit",
+      "stops": [
+        {
+          "name": "Colexio Secundario",
+          "lat": 42.2450,
+          "lon": -8.7250,
+          "order": 1,
+          "time_from_start": 0,
+          "passengers": 0,
+          "is_school": true
+        },
+        {
+          "name": "Stop F",
+          "lat": 42.2380,
+          "lon": -8.7180,
+          "order": 2,
+          "time_from_start": 15,
+          "passengers": 7,
+          "is_school": false
+        }
+      ],
+      "school_id": "SCH002",
+      "school_name": "Colexio Secundario",
+      "arrival_time": null,
+      "departure_time": "18:25:00",
+      "capacity_needed": 7,
+      "contract_id": "UE3618",
+      "type": "exit",
+      "days": ["L", "M", "Mc", "X", "V"]
+    }
+  ]
+}

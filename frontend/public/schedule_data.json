@@ -1,0 +1,8134 @@
+[
+  {
+    "bus": "B1",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362002_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:18",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 52
+      },
+      {
+        "codigo": "UE362009_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:20",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361713_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "09:01",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361812_01",
+        "tipo": "salida",
+        "centro": "36010459",
+        "inicio": "14:00",
+        "fin": "14:15",
+        "oficial": "14:00",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361703_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:48",
+        "oficial": "14:25",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361716_02",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:25",
+        "oficial": "15:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361806_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361914_01",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "16:00",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362213_01",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "16:30",
+        "fin": "16:40",
+        "oficial": "16:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361703_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "18:20",
+        "fin": "18:43",
+        "oficial": "18:20",
+        "duracion": 23
+      }
+    ],
+    "total": 10
+  },
+  {
+    "bus": "B2",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361706_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:43",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE361813_01",
+        "tipo": "entrada",
+        "centro": "36010150",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361803_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:27",
+        "oficial": "14:10",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362215_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361713_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:34",
+        "oficial": "15:15",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361903_01",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "15:46",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 34
+      },
+      {
+        "codigo": "UE362216_01",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "16:30",
+        "fin": "16:40",
+        "oficial": "16:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361706_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "18:20",
+        "fin": "18:57",
+        "oficial": "18:20",
+        "duracion": 37
+      }
+    ],
+    "total": 8
+  },
+  {
+    "bus": "B3",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362206_01",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "07:43",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE362012_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361813_02",
+        "tipo": "salida",
+        "centro": "36010150",
+        "inicio": "14:10",
+        "fin": "14:30",
+        "oficial": "14:10",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362216_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361714_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:42",
+        "oficial": "15:15",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE361708_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "15:52",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 28
+      },
+      {
+        "codigo": "UE362217_01",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "16:30",
+        "fin": "16:40",
+        "oficial": "16:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361707_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "18:20",
+        "fin": "18:43",
+        "oficial": "18:20",
+        "duracion": 23
+      }
+    ],
+    "total": 8
+  },
+  {
+    "bus": "B4",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362005_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:45",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362014_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:20",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361814_02",
+        "tipo": "salida",
+        "centro": "36010150",
+        "inicio": "14:10",
+        "fin": "14:21",
+        "oficial": "14:10",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362217_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361715_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:40",
+        "oficial": "15:15",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361705_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "15:50",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361708_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "18:20",
+        "fin": "18:48",
+        "oficial": "18:20",
+        "duracion": 28
+      }
+    ],
+    "total": 7
+  },
+  {
+    "bus": "B5",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362004_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:49",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361907_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:21",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE361711_02",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:45",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362205_02",
+        "tipo": "salida",
+        "centro": "36015241",
+        "inicio": "14:00",
+        "fin": "14:36",
+        "oficial": "14:00",
+        "duracion": 36
+      },
+      {
+        "codigo": "UE361912_01",
+        "tipo": "salida",
+        "centro": "36010691,36015044",
+        "inicio": "15:25",
+        "fin": "15:43",
+        "oficial": "15:25",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361902_01",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "15:54",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361709_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "18:20",
+        "fin": "18:39",
+        "oficial": "18:20",
+        "duracion": 19
+      }
+    ],
+    "total": 7
+  },
+  {
+    "bus": "B6",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361705_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:50",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE362202_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362001_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361913_02",
+        "tipo": "salida",
+        "centro": "36010691,36015044",
+        "inicio": "15:25",
+        "fin": "15:58",
+        "oficial": "15:25",
+        "duracion": 33
+      },
+      {
+        "codigo": "UE361719_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "16:09",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361719_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "18:20",
+        "fin": "18:31",
+        "oficial": "18:20",
+        "duracion": 11
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B7",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361708_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:52",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 28
+      },
+      {
+        "codigo": "UE361913_01",
+        "tipo": "entrada",
+        "centro": "36010691,36015044",
+        "inicio": "08:32",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 33
+      },
+      {
+        "codigo": "UE362002_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "15:02",
+        "oficial": "14:10",
+        "duracion": 52
+      },
+      {
+        "codigo": "UE361809_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361905_03",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "16:04",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 16
+      },
+      {
+        "codigo": "UE361901_02",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:38",
+        "oficial": "18:20",
+        "duracion": 18
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B8",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362008_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:52",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362010_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:24",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362003_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:25",
+        "oficial": "14:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361810_02",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361907_03",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "16:06",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE361902_03",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:46",
+        "oficial": "18:20",
+        "duracion": 26
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B9",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361704_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:55",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361803_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:33",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362004_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361811_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362220_03",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "16:09",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361903_03",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:54",
+        "oficial": "18:20",
+        "duracion": 34
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B10",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362003_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:55",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362218_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:24",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362005_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:37",
+        "oficial": "14:10",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE361706_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "15:43",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE361904_03",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:46",
+        "oficial": "18:20",
+        "duracion": 26
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B11",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362006_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:56",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE362220_01",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:24",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361718_02",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:47",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361801_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362213_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361717_02",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:25",
+        "oficial": "15:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361807_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361709_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "16:01",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE362214_01",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "16:30",
+        "fin": "16:40",
+        "oficial": "16:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361704_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "18:20",
+        "fin": "18:45",
+        "oficial": "18:20",
+        "duracion": 25
+      }
+    ],
+    "total": 10
+  },
+  {
+    "bus": "B12",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362207_01",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "07:56",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 24
+      },
+      {
+        "codigo": "UE362203_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:33",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362006_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:24",
+        "oficial": "14:10",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE362206_02",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "15:43",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE361905_02",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:36",
+        "oficial": "18:20",
+        "duracion": 16
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B13",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361703_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:57",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361802_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:38",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 12
+      },
+      {
+        "codigo": "UE362008_02",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:28",
+        "oficial": "14:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361906_03",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "15:50",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361906_02",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:50",
+        "oficial": "18:20",
+        "duracion": 30
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B14",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361707_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:57",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361702_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362011_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE362201_03",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "15:50",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361907_02",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:33",
+        "oficial": "18:20",
+        "duracion": 13
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B15",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362205_01",
+        "tipo": "entrada",
+        "centro": "36015241",
+        "inicio": "07:59",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 36
+      },
+      {
+        "codigo": "UE361912_02",
+        "tipo": "entrada",
+        "centro": "36010691,36015044",
+        "inicio": "08:47",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362013_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361904_01",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "15:54",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361908_03",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:41",
+        "oficial": "18:20",
+        "duracion": 21
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B16",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362001_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "08:00",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361812_02",
+        "tipo": "entrada",
+        "centro": "36010459",
+        "inicio": "08:25",
+        "fin": "08:40",
+        "oficial": "08:40",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361716_01",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:50",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361802_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:22",
+        "oficial": "14:10",
+        "duracion": 12
+      },
+      {
+        "codigo": "UE362214_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361718_01",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:28",
+        "oficial": "15:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361808_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361901_03",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "16:02",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362215_01",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "16:30",
+        "fin": "16:40",
+        "oficial": "16:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361705_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "18:20",
+        "fin": "18:50",
+        "oficial": "18:20",
+        "duracion": 30
+      }
+    ],
+    "total": 10
+  },
+  {
+    "bus": "B17",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361709_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "08:01",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361814_01",
+        "tipo": "entrada",
+        "centro": "36010150",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362015_01",
+        "tipo": "salida",
+        "centro": "36009974",
+        "inicio": "14:10",
+        "fin": "14:21",
+        "oficial": "14:10",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361701_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:06",
+        "oficial": "15:55",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361914_03",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "18:20",
+        "fin": "18:40",
+        "oficial": "18:20",
+        "duracion": 20
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B18",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361903_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:01",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 34
+      },
+      {
+        "codigo": "UE361701_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:49",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362016_02",
+        "tipo": "salida",
+        "centro": "36009962",
+        "inicio": "14:10",
+        "fin": "14:41",
+        "oficial": "14:10",
+        "duracion": 31
+      },
+      {
+        "codigo": "UE361702_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:06",
+        "oficial": "15:55",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362201_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "18:20",
+        "fin": "18:48",
+        "oficial": "18:20",
+        "duracion": 28
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B19",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361906_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:05",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361717_01",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:50",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362017_02",
+        "tipo": "salida",
+        "centro": "36009962",
+        "inicio": "14:10",
+        "fin": "14:33",
+        "oficial": "14:10",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361704_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "15:55",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362206_04",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "18:20",
+        "fin": "18:57",
+        "oficial": "18:20",
+        "duracion": 37
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B20",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362201_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:05",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361911_02",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:52",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 13
+      },
+      {
+        "codigo": "UE362202_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:30",
+        "oficial": "14:10",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361710_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:17",
+        "oficial": "15:55",
+        "duracion": 22
+      },
+      {
+        "codigo": "UE362207_04",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "18:20",
+        "fin": "18:44",
+        "oficial": "18:20",
+        "duracion": 24
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B21",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361719_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "08:09",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361909_01",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:39",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362203_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:27",
+        "oficial": "14:10",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE361711_01",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:12",
+        "oficial": "15:55",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362208_04",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "18:20",
+        "fin": "18:30",
+        "oficial": "18:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362213_03",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "18:40",
+        "fin": "18:50",
+        "oficial": "18:40",
+        "duracion": 10
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B22",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361902_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:09",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361714_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "08:53",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE362204_02",
+        "tipo": "salida",
+        "centro": "36016051",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361712_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:15",
+        "oficial": "15:55",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362209_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "18:20",
+        "fin": "18:30",
+        "oficial": "18:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362214_03",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "18:40",
+        "fin": "18:50",
+        "oficial": "18:40",
+        "duracion": 10
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B23",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361904_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:09",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361715_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "08:53",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE362218_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:36",
+        "oficial": "14:10",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362207_02",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "15:56",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 24
+      },
+      {
+        "codigo": "UE362210_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "18:20",
+        "fin": "18:30",
+        "oficial": "18:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362215_03",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "18:40",
+        "fin": "18:50",
+        "oficial": "18:40",
+        "duracion": 10
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B24",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362208_02",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "08:10",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362015_02",
+        "tipo": "entrada",
+        "centro": "36009974",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362219_02",
+        "tipo": "salida",
+        "centro": "36010009",
+        "inicio": "14:10",
+        "fin": "14:50",
+        "oficial": "14:10",
+        "duracion": 40
+      },
+      {
+        "codigo": "UE361703_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "15:57",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE362211_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "18:20",
+        "fin": "18:30",
+        "oficial": "18:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362216_03",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "18:40",
+        "fin": "18:50",
+        "oficial": "18:40",
+        "duracion": 10
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B25",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362219_01",
+        "tipo": "entrada",
+        "centro": "36010009",
+        "inicio": "08:11",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 39
+      },
+      {
+        "codigo": "UE361709_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:44",
+        "oficial": "14:25",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE362208_03",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "16:10",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B26",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361908_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:14",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361804_01",
+        "tipo": "entrada",
+        "centro": "36010587",
+        "inicio": "08:55",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362206_03",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:57",
+        "oficial": "14:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE361707_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "15:57",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE362212_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "18:20",
+        "fin": "18:30",
+        "oficial": "18:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362217_03",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "18:40",
+        "fin": "18:50",
+        "oficial": "18:40",
+        "duracion": 10
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B27",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361914_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:15",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361806_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362207_03",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:44",
+        "oficial": "14:20",
+        "duracion": 24
+      },
+      {
+        "codigo": "UE361908_01",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "15:59",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE362220_04",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "18:20",
+        "fin": "18:30",
+        "oficial": "18:20",
+        "duracion": 10
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B28",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361901_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:17",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361807_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362208_01",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:30",
+        "oficial": "14:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361804_02",
+        "tipo": "salida",
+        "centro": "36010587",
+        "inicio": "16:10",
+        "fin": "16:35",
+        "oficial": "16:10",
+        "duracion": 25
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B29",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361905_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:19",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 16
+      },
+      {
+        "codigo": "UE361808_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361704_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:50",
+        "oficial": "14:25",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361805_02",
+        "tipo": "salida",
+        "centro": "36010587",
+        "inicio": "16:10",
+        "fin": "16:30",
+        "oficial": "16:10",
+        "duracion": 20
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B30",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362016_01",
+        "tipo": "entrada",
+        "centro": "36009962",
+        "inicio": "08:19",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 31
+      },
+      {
+        "codigo": "UE361719_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:36",
+        "oficial": "14:25",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362209_03",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "16:10",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B31",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362209_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361809_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361705_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:55",
+        "oficial": "14:25",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE362009_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:41",
+        "oficial": "16:10",
+        "duracion": 31
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B32",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362210_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361810_01",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361706_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "15:02",
+        "oficial": "14:25",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE362010_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:36",
+        "oficial": "16:10",
+        "duracion": 26
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B33",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362211_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361811_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361707_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:48",
+        "oficial": "14:25",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE362012_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:30",
+        "oficial": "16:10",
+        "duracion": 20
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B34",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362212_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361805_01",
+        "tipo": "entrada",
+        "centro": "36010587",
+        "inicio": "08:57",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361708_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:53",
+        "oficial": "14:25",
+        "duracion": 28
+      },
+      {
+        "codigo": "UE362014_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:40",
+        "oficial": "16:10",
+        "duracion": 30
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B35",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362017_01",
+        "tipo": "entrada",
+        "centro": "36009962",
+        "inicio": "08:27",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361901_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:43",
+        "oficial": "14:25",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362210_03",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "16:10",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B36",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362011_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:29",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361902_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362211_03",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "16:10",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B37",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362013_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:29",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361903_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:59",
+        "oficial": "14:25",
+        "duracion": 34
+      },
+      {
+        "codigo": "UE362212_03",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "16:10",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B38",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361710_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:40",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361904_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B39",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361712_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:40",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361905_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:41",
+        "oficial": "14:25",
+        "duracion": 16
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B40",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361801_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361906_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:55",
+        "oficial": "14:25",
+        "duracion": 30
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B41",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362204_01",
+        "tipo": "entrada",
+        "centro": "36016051",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361907_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:38",
+        "oficial": "14:25",
+        "duracion": 13
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B42",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362213_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361908_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:46",
+        "oficial": "14:25",
+        "duracion": 21
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B43",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362214_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361909_02",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B44",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362215_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361910_02",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:46",
+        "oficial": "14:25",
+        "duracion": 21
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B45",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362216_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361911_01",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:38",
+        "oficial": "14:25",
+        "duracion": 13
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B46",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362217_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361914_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:45",
+        "oficial": "14:25",
+        "duracion": 20
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B47",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE361910_01",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:44",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE362201_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:53",
+        "oficial": "14:25",
+        "duracion": 28
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B48",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362209_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B49",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362210_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B50",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362211_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B51",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362212_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B52",
+    "dia": "L",
+    "rutas": [
+      {
+        "codigo": "UE362220_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B1",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362002_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:18",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 52
+      },
+      {
+        "codigo": "UE362009_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:20",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361713_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "09:01",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361812_01",
+        "tipo": "salida",
+        "centro": "36010459",
+        "inicio": "14:00",
+        "fin": "14:15",
+        "oficial": "14:00",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361703_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:48",
+        "oficial": "14:25",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361716_02",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:25",
+        "oficial": "15:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361806_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362007_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "16:02",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362001_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "18:20",
+        "fin": "18:30",
+        "oficial": "18:20",
+        "duracion": 10
+      }
+    ],
+    "total": 9
+  },
+  {
+    "bus": "B2",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361706_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:43",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE361813_01",
+        "tipo": "entrada",
+        "centro": "36010150",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361803_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:27",
+        "oficial": "14:10",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362215_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361713_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:34",
+        "oficial": "15:15",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361701_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:06",
+        "oficial": "15:55",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362004_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "18:20",
+        "fin": "18:41",
+        "oficial": "18:20",
+        "duracion": 21
+      }
+    ],
+    "total": 7
+  },
+  {
+    "bus": "B3",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362206_01",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "07:43",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE362012_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361813_02",
+        "tipo": "salida",
+        "centro": "36010150",
+        "inicio": "14:10",
+        "fin": "14:30",
+        "oficial": "14:10",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362216_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361714_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:42",
+        "oficial": "15:15",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE361702_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:06",
+        "oficial": "15:55",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362005_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "18:20",
+        "fin": "18:47",
+        "oficial": "18:20",
+        "duracion": 27
+      }
+    ],
+    "total": 7
+  },
+  {
+    "bus": "B4",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362005_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:45",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362014_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:20",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361814_02",
+        "tipo": "salida",
+        "centro": "36010150",
+        "inicio": "14:10",
+        "fin": "14:21",
+        "oficial": "14:10",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362217_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361715_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:40",
+        "oficial": "15:15",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361710_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:17",
+        "oficial": "15:55",
+        "duracion": 22
+      },
+      {
+        "codigo": "UE362006_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "18:20",
+        "fin": "18:34",
+        "oficial": "18:20",
+        "duracion": 14
+      }
+    ],
+    "total": 7
+  },
+  {
+    "bus": "B5",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362004_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:49",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361907_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:21",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE361711_02",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:45",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362205_02",
+        "tipo": "salida",
+        "centro": "36015241",
+        "inicio": "14:00",
+        "fin": "14:36",
+        "oficial": "14:00",
+        "duracion": 36
+      },
+      {
+        "codigo": "UE361912_01",
+        "tipo": "salida",
+        "centro": "36010691,36015044",
+        "inicio": "15:25",
+        "fin": "15:43",
+        "oficial": "15:25",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361711_01",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:12",
+        "oficial": "15:55",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362008_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "18:20",
+        "fin": "18:38",
+        "oficial": "18:20",
+        "duracion": 18
+      }
+    ],
+    "total": 7
+  },
+  {
+    "bus": "B6",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361705_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:50",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE362202_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362001_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361913_02",
+        "tipo": "salida",
+        "centro": "36010691,36015044",
+        "inicio": "15:25",
+        "fin": "15:58",
+        "oficial": "15:25",
+        "duracion": 33
+      },
+      {
+        "codigo": "UE361804_02",
+        "tipo": "salida",
+        "centro": "36010587",
+        "inicio": "16:10",
+        "fin": "16:35",
+        "oficial": "16:10",
+        "duracion": 25
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B7",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361708_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:52",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 28
+      },
+      {
+        "codigo": "UE361913_01",
+        "tipo": "entrada",
+        "centro": "36010691,36015044",
+        "inicio": "08:32",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 33
+      },
+      {
+        "codigo": "UE362002_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "15:02",
+        "oficial": "14:10",
+        "duracion": 52
+      },
+      {
+        "codigo": "UE362002_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "15:28",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 52
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B8",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362008_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:52",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362010_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:24",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362003_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:25",
+        "oficial": "14:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361809_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361805_02",
+        "tipo": "salida",
+        "centro": "36010587",
+        "inicio": "16:10",
+        "fin": "16:30",
+        "oficial": "16:10",
+        "duracion": 20
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B9",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361704_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:55",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361803_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:33",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362004_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361810_02",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362001_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "16:10",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 10
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B10",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362003_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:55",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362218_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:24",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362005_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:37",
+        "oficial": "14:10",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE361811_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362009_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:41",
+        "oficial": "16:10",
+        "duracion": 31
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B11",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362006_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:56",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE362220_01",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:24",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361718_02",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:47",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361801_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362213_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361717_02",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:25",
+        "oficial": "15:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361807_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362003_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "16:05",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362002_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "18:20",
+        "fin": "19:12",
+        "oficial": "18:20",
+        "duracion": 52
+      }
+    ],
+    "total": 9
+  },
+  {
+    "bus": "B12",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362207_01",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "07:56",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 24
+      },
+      {
+        "codigo": "UE362203_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:33",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362006_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:24",
+        "oficial": "14:10",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE361712_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:15",
+        "oficial": "15:55",
+        "duracion": 20
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B13",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361703_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:57",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361802_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:38",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 12
+      },
+      {
+        "codigo": "UE362007_02",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:28",
+        "oficial": "14:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362005_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "15:55",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 25
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B14",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361707_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:57",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361702_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362008_02",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:28",
+        "oficial": "14:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362004_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "15:59",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 21
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B15",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362205_01",
+        "tipo": "entrada",
+        "centro": "36015241",
+        "inicio": "07:59",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 36
+      },
+      {
+        "codigo": "UE361912_02",
+        "tipo": "entrada",
+        "centro": "36010691,36015044",
+        "inicio": "08:47",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362011_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE362010_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:36",
+        "oficial": "16:10",
+        "duracion": 26
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B16",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362001_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "08:00",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361812_02",
+        "tipo": "entrada",
+        "centro": "36010459",
+        "inicio": "08:25",
+        "fin": "08:40",
+        "oficial": "08:40",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361716_01",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:50",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361802_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:22",
+        "oficial": "14:10",
+        "duracion": 12
+      },
+      {
+        "codigo": "UE362214_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361718_01",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:28",
+        "oficial": "15:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361808_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362006_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "16:06",
+        "fin": "16:20",
+        "oficial": "16:20",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE362003_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "18:20",
+        "fin": "18:35",
+        "oficial": "18:20",
+        "duracion": 15
+      }
+    ],
+    "total": 9
+  },
+  {
+    "bus": "B17",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361709_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "08:01",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361814_01",
+        "tipo": "entrada",
+        "centro": "36010150",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362013_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE362012_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:30",
+        "oficial": "16:10",
+        "duracion": 20
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B18",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361903_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:01",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 34
+      },
+      {
+        "codigo": "UE361701_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:49",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362015_01",
+        "tipo": "salida",
+        "centro": "36009974",
+        "inicio": "14:10",
+        "fin": "14:21",
+        "oficial": "14:10",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362014_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:40",
+        "oficial": "16:10",
+        "duracion": 30
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B19",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361906_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:05",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361717_01",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:50",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362016_02",
+        "tipo": "salida",
+        "centro": "36009962",
+        "inicio": "14:10",
+        "fin": "14:41",
+        "oficial": "14:10",
+        "duracion": 31
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B20",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362201_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:05",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361911_02",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:52",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 13
+      },
+      {
+        "codigo": "UE362017_02",
+        "tipo": "salida",
+        "centro": "36009962",
+        "inicio": "14:10",
+        "fin": "14:33",
+        "oficial": "14:10",
+        "duracion": 23
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B21",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361719_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "08:09",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361909_01",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:39",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362202_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:30",
+        "oficial": "14:10",
+        "duracion": 20
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B22",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361902_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:09",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361714_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "08:53",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE362203_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:27",
+        "oficial": "14:10",
+        "duracion": 17
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B23",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361904_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:09",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361715_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "08:53",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE362204_02",
+        "tipo": "salida",
+        "centro": "36016051",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B24",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362208_02",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "08:10",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362015_02",
+        "tipo": "entrada",
+        "centro": "36009974",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362218_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:36",
+        "oficial": "14:10",
+        "duracion": 26
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B25",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362219_01",
+        "tipo": "entrada",
+        "centro": "36010009",
+        "inicio": "08:11",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 39
+      },
+      {
+        "codigo": "UE361708_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:53",
+        "oficial": "14:25",
+        "duracion": 28
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B26",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361908_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:14",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361804_01",
+        "tipo": "entrada",
+        "centro": "36010587",
+        "inicio": "08:55",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362219_02",
+        "tipo": "salida",
+        "centro": "36010009",
+        "inicio": "14:10",
+        "fin": "14:50",
+        "oficial": "14:10",
+        "duracion": 40
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B27",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361914_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:15",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361806_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362206_03",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:57",
+        "oficial": "14:20",
+        "duracion": 37
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B28",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361901_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:17",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361807_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362207_03",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:44",
+        "oficial": "14:20",
+        "duracion": 24
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B29",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361905_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:19",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 16
+      },
+      {
+        "codigo": "UE361808_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362208_01",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:30",
+        "oficial": "14:20",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B30",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362016_01",
+        "tipo": "entrada",
+        "centro": "36009962",
+        "inicio": "08:19",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 31
+      },
+      {
+        "codigo": "UE361709_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:44",
+        "oficial": "14:25",
+        "duracion": 19
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B31",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362209_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361809_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361704_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:50",
+        "oficial": "14:25",
+        "duracion": 25
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B32",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362210_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361810_01",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361705_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:55",
+        "oficial": "14:25",
+        "duracion": 30
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B33",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362211_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361811_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361706_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "15:02",
+        "oficial": "14:25",
+        "duracion": 37
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B34",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362212_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361805_01",
+        "tipo": "entrada",
+        "centro": "36010587",
+        "inicio": "08:57",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361707_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:48",
+        "oficial": "14:25",
+        "duracion": 23
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B35",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362017_01",
+        "tipo": "entrada",
+        "centro": "36009962",
+        "inicio": "08:27",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361719_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:36",
+        "oficial": "14:25",
+        "duracion": 11
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B36",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362011_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:29",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361901_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:43",
+        "oficial": "14:25",
+        "duracion": 18
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B37",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362013_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:29",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361902_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B38",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361710_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:40",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361903_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:59",
+        "oficial": "14:25",
+        "duracion": 34
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B39",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361712_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:40",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361904_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B40",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361801_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361905_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:41",
+        "oficial": "14:25",
+        "duracion": 16
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B41",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362204_01",
+        "tipo": "entrada",
+        "centro": "36016051",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361906_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:55",
+        "oficial": "14:25",
+        "duracion": 30
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B42",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362213_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361907_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:38",
+        "oficial": "14:25",
+        "duracion": 13
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B43",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362214_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361908_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:46",
+        "oficial": "14:25",
+        "duracion": 21
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B44",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362215_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361909_02",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B45",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362216_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361910_02",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:46",
+        "oficial": "14:25",
+        "duracion": 21
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B46",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362217_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361911_01",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:38",
+        "oficial": "14:25",
+        "duracion": 13
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B47",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE361910_01",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:44",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361914_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:45",
+        "oficial": "14:25",
+        "duracion": 20
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B48",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362201_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:53",
+        "oficial": "14:25",
+        "duracion": 28
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B49",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362209_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B50",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362210_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B51",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362211_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B52",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362212_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B53",
+    "dia": "M",
+    "rutas": [
+      {
+        "codigo": "UE362220_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B1",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362002_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:18",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 52
+      },
+      {
+        "codigo": "UE362009_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:20",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361713_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "09:01",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361812_01",
+        "tipo": "salida",
+        "centro": "36010459",
+        "inicio": "14:00",
+        "fin": "14:15",
+        "oficial": "14:00",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361703_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:48",
+        "oficial": "14:25",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361716_02",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:25",
+        "oficial": "15:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361806_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361804_02",
+        "tipo": "salida",
+        "centro": "36010587",
+        "inicio": "16:10",
+        "fin": "16:35",
+        "oficial": "16:10",
+        "duracion": 25
+      }
+    ],
+    "total": 8
+  },
+  {
+    "bus": "B2",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361706_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:43",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE361813_01",
+        "tipo": "entrada",
+        "centro": "36010150",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361803_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:27",
+        "oficial": "14:10",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362215_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361713_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:34",
+        "oficial": "15:15",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361701_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:06",
+        "oficial": "15:55",
+        "duracion": 11
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B3",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362206_01",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "07:43",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE362012_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361813_02",
+        "tipo": "salida",
+        "centro": "36010150",
+        "inicio": "14:10",
+        "fin": "14:30",
+        "oficial": "14:10",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362216_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361714_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:42",
+        "oficial": "15:15",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE361702_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:06",
+        "oficial": "15:55",
+        "duracion": 11
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B4",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362005_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:45",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362014_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:20",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361814_02",
+        "tipo": "salida",
+        "centro": "36010150",
+        "inicio": "14:10",
+        "fin": "14:21",
+        "oficial": "14:10",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362217_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361715_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:40",
+        "oficial": "15:15",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361710_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:17",
+        "oficial": "15:55",
+        "duracion": 22
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B5",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362004_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:49",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361907_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:21",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE361711_02",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:45",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362205_02",
+        "tipo": "salida",
+        "centro": "36015241",
+        "inicio": "14:00",
+        "fin": "14:36",
+        "oficial": "14:00",
+        "duracion": 36
+      },
+      {
+        "codigo": "UE361912_01",
+        "tipo": "salida",
+        "centro": "36010691,36015044",
+        "inicio": "15:25",
+        "fin": "15:43",
+        "oficial": "15:25",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361711_01",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:12",
+        "oficial": "15:55",
+        "duracion": 17
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B6",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361705_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:50",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE362202_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362001_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361913_02",
+        "tipo": "salida",
+        "centro": "36010691,36015044",
+        "inicio": "15:25",
+        "fin": "15:58",
+        "oficial": "15:25",
+        "duracion": 33
+      },
+      {
+        "codigo": "UE362010_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:36",
+        "oficial": "16:10",
+        "duracion": 26
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B7",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361708_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:52",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 28
+      },
+      {
+        "codigo": "UE361913_01",
+        "tipo": "entrada",
+        "centro": "36010691,36015044",
+        "inicio": "08:32",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 33
+      },
+      {
+        "codigo": "UE362002_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "15:02",
+        "oficial": "14:10",
+        "duracion": 52
+      },
+      {
+        "codigo": "UE361809_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362012_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:30",
+        "oficial": "16:10",
+        "duracion": 20
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B8",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362008_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:52",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362010_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:24",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362003_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:25",
+        "oficial": "14:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361810_02",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362014_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:40",
+        "oficial": "16:10",
+        "duracion": 30
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B9",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361704_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:55",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361803_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:33",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362004_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361811_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B10",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362003_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:55",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362218_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:24",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362005_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:37",
+        "oficial": "14:10",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE361712_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:15",
+        "oficial": "15:55",
+        "duracion": 20
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B11",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362006_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:56",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE362220_01",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:24",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361718_02",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:47",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361801_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362213_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361717_02",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:25",
+        "oficial": "15:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361807_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361805_02",
+        "tipo": "salida",
+        "centro": "36010587",
+        "inicio": "16:10",
+        "fin": "16:30",
+        "oficial": "16:10",
+        "duracion": 20
+      }
+    ],
+    "total": 8
+  },
+  {
+    "bus": "B12",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362207_01",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "07:56",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 24
+      },
+      {
+        "codigo": "UE362203_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:33",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362006_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:24",
+        "oficial": "14:10",
+        "duracion": 14
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B13",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361703_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:57",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361802_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:38",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 12
+      },
+      {
+        "codigo": "UE362008_02",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:28",
+        "oficial": "14:10",
+        "duracion": 18
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B14",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361707_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:57",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361702_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362011_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B15",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362205_01",
+        "tipo": "entrada",
+        "centro": "36015241",
+        "inicio": "07:59",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 36
+      },
+      {
+        "codigo": "UE361912_02",
+        "tipo": "entrada",
+        "centro": "36010691,36015044",
+        "inicio": "08:47",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362013_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B16",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362001_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "08:00",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361812_02",
+        "tipo": "entrada",
+        "centro": "36010459",
+        "inicio": "08:25",
+        "fin": "08:40",
+        "oficial": "08:40",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361716_01",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:50",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361802_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:22",
+        "oficial": "14:10",
+        "duracion": 12
+      },
+      {
+        "codigo": "UE362214_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361718_01",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:28",
+        "oficial": "15:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361808_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362009_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:41",
+        "oficial": "16:10",
+        "duracion": 31
+      }
+    ],
+    "total": 8
+  },
+  {
+    "bus": "B17",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361709_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "08:01",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361814_01",
+        "tipo": "entrada",
+        "centro": "36010150",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362015_01",
+        "tipo": "salida",
+        "centro": "36009974",
+        "inicio": "14:10",
+        "fin": "14:21",
+        "oficial": "14:10",
+        "duracion": 11
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B18",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361903_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:01",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 34
+      },
+      {
+        "codigo": "UE361701_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:49",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362016_02",
+        "tipo": "salida",
+        "centro": "36009962",
+        "inicio": "14:10",
+        "fin": "14:41",
+        "oficial": "14:10",
+        "duracion": 31
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B19",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361906_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:05",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361717_01",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:50",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362017_02",
+        "tipo": "salida",
+        "centro": "36009962",
+        "inicio": "14:10",
+        "fin": "14:33",
+        "oficial": "14:10",
+        "duracion": 23
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B20",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362201_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:05",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361911_02",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:52",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 13
+      },
+      {
+        "codigo": "UE362202_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:30",
+        "oficial": "14:10",
+        "duracion": 20
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B21",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361719_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "08:09",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361909_01",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:39",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362203_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:27",
+        "oficial": "14:10",
+        "duracion": 17
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B22",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361902_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:09",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361714_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "08:53",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE362204_02",
+        "tipo": "salida",
+        "centro": "36016051",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B23",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361904_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:09",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361715_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "08:53",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE362218_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:36",
+        "oficial": "14:10",
+        "duracion": 26
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B24",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362208_02",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "08:10",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362015_02",
+        "tipo": "entrada",
+        "centro": "36009974",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362219_02",
+        "tipo": "salida",
+        "centro": "36010009",
+        "inicio": "14:10",
+        "fin": "14:50",
+        "oficial": "14:10",
+        "duracion": 40
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B25",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362219_01",
+        "tipo": "entrada",
+        "centro": "36010009",
+        "inicio": "08:11",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 39
+      },
+      {
+        "codigo": "UE361709_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:44",
+        "oficial": "14:25",
+        "duracion": 19
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B26",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361908_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:14",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361804_01",
+        "tipo": "entrada",
+        "centro": "36010587",
+        "inicio": "08:55",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362206_03",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:57",
+        "oficial": "14:20",
+        "duracion": 37
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B27",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361914_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:15",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361806_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362207_03",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:44",
+        "oficial": "14:20",
+        "duracion": 24
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B28",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361901_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:17",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361807_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362208_01",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:30",
+        "oficial": "14:20",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B29",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361905_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:19",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 16
+      },
+      {
+        "codigo": "UE361808_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361704_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:50",
+        "oficial": "14:25",
+        "duracion": 25
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B30",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362016_01",
+        "tipo": "entrada",
+        "centro": "36009962",
+        "inicio": "08:19",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 31
+      },
+      {
+        "codigo": "UE361719_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:36",
+        "oficial": "14:25",
+        "duracion": 11
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B31",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362209_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361809_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361705_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:55",
+        "oficial": "14:25",
+        "duracion": 30
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B32",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362210_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361810_01",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361706_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "15:02",
+        "oficial": "14:25",
+        "duracion": 37
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B33",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362211_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361811_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361707_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:48",
+        "oficial": "14:25",
+        "duracion": 23
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B34",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362212_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361805_01",
+        "tipo": "entrada",
+        "centro": "36010587",
+        "inicio": "08:57",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361708_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:53",
+        "oficial": "14:25",
+        "duracion": 28
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B35",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362017_01",
+        "tipo": "entrada",
+        "centro": "36009962",
+        "inicio": "08:27",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361901_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:43",
+        "oficial": "14:25",
+        "duracion": 18
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B36",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362011_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:29",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361902_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B37",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362013_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:29",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361903_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:59",
+        "oficial": "14:25",
+        "duracion": 34
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B38",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361710_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:40",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361904_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B39",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361712_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:40",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361905_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:41",
+        "oficial": "14:25",
+        "duracion": 16
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B40",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361801_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361906_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:55",
+        "oficial": "14:25",
+        "duracion": 30
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B41",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362204_01",
+        "tipo": "entrada",
+        "centro": "36016051",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361907_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:38",
+        "oficial": "14:25",
+        "duracion": 13
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B42",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362213_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361908_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:46",
+        "oficial": "14:25",
+        "duracion": 21
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B43",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362214_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361909_02",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B44",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362215_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361910_02",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:46",
+        "oficial": "14:25",
+        "duracion": 21
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B45",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362216_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361911_01",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:38",
+        "oficial": "14:25",
+        "duracion": 13
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B46",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362217_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361914_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:45",
+        "oficial": "14:25",
+        "duracion": 20
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B47",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE361910_01",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:44",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE362201_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:53",
+        "oficial": "14:25",
+        "duracion": 28
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B48",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362209_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B49",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362210_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B50",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362211_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B51",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362212_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B52",
+    "dia": "Mc",
+    "rutas": [
+      {
+        "codigo": "UE362220_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B1",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362002_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:18",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 52
+      },
+      {
+        "codigo": "UE362009_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:20",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361713_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "09:01",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361812_01",
+        "tipo": "salida",
+        "centro": "36010459",
+        "inicio": "14:00",
+        "fin": "14:15",
+        "oficial": "14:00",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361703_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:48",
+        "oficial": "14:25",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361716_02",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:25",
+        "oficial": "15:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361806_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361804_02",
+        "tipo": "salida",
+        "centro": "36010587",
+        "inicio": "16:10",
+        "fin": "16:35",
+        "oficial": "16:10",
+        "duracion": 25
+      }
+    ],
+    "total": 8
+  },
+  {
+    "bus": "B2",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361706_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:43",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE361813_01",
+        "tipo": "entrada",
+        "centro": "36010150",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361803_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:27",
+        "oficial": "14:10",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362215_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361713_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:34",
+        "oficial": "15:15",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361701_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:06",
+        "oficial": "15:55",
+        "duracion": 11
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B3",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362206_01",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "07:43",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 37
+      },
+      {
+        "codigo": "UE362012_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361813_02",
+        "tipo": "salida",
+        "centro": "36010150",
+        "inicio": "14:10",
+        "fin": "14:30",
+        "oficial": "14:10",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362216_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361714_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:42",
+        "oficial": "15:15",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE361702_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:06",
+        "oficial": "15:55",
+        "duracion": 11
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B4",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362005_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:45",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362014_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:20",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361814_02",
+        "tipo": "salida",
+        "centro": "36010150",
+        "inicio": "14:10",
+        "fin": "14:21",
+        "oficial": "14:10",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362217_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361715_01",
+        "tipo": "salida",
+        "centro": "36010472",
+        "inicio": "15:15",
+        "fin": "15:40",
+        "oficial": "15:15",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361710_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:17",
+        "oficial": "15:55",
+        "duracion": 22
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B5",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362004_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:49",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361907_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:21",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE361711_02",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:45",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362205_02",
+        "tipo": "salida",
+        "centro": "36015241",
+        "inicio": "14:00",
+        "fin": "14:36",
+        "oficial": "14:00",
+        "duracion": 36
+      },
+      {
+        "codigo": "UE361912_01",
+        "tipo": "salida",
+        "centro": "36010691,36015044",
+        "inicio": "15:25",
+        "fin": "15:43",
+        "oficial": "15:25",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361711_01",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:12",
+        "oficial": "15:55",
+        "duracion": 17
+      }
+    ],
+    "total": 6
+  },
+  {
+    "bus": "B6",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361705_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:50",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE362202_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:30",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE362001_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361913_02",
+        "tipo": "salida",
+        "centro": "36010691,36015044",
+        "inicio": "15:25",
+        "fin": "15:58",
+        "oficial": "15:25",
+        "duracion": 33
+      },
+      {
+        "codigo": "UE362010_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:36",
+        "oficial": "16:10",
+        "duracion": 26
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B7",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361708_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:52",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 28
+      },
+      {
+        "codigo": "UE361913_01",
+        "tipo": "entrada",
+        "centro": "36010691,36015044",
+        "inicio": "08:32",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 33
+      },
+      {
+        "codigo": "UE362002_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "15:02",
+        "oficial": "14:10",
+        "duracion": 52
+      },
+      {
+        "codigo": "UE361809_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362012_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:30",
+        "oficial": "16:10",
+        "duracion": 20
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B8",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362008_01",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:52",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362010_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:24",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362003_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:25",
+        "oficial": "14:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361810_02",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362014_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:40",
+        "oficial": "16:10",
+        "duracion": 30
+      }
+    ],
+    "total": 5
+  },
+  {
+    "bus": "B9",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361704_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:55",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE361803_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:33",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362004_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361811_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B10",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362003_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:55",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362218_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:24",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362005_03",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:37",
+        "oficial": "14:10",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE361712_02",
+        "tipo": "salida",
+        "centro": "36015354",
+        "inicio": "15:55",
+        "fin": "16:15",
+        "oficial": "15:55",
+        "duracion": 20
+      }
+    ],
+    "total": 4
+  },
+  {
+    "bus": "B11",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362006_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "07:56",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 14
+      },
+      {
+        "codigo": "UE362220_01",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:24",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361718_02",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:47",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361801_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362213_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361717_02",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:25",
+        "oficial": "15:10",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361807_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361805_02",
+        "tipo": "salida",
+        "centro": "36010587",
+        "inicio": "16:10",
+        "fin": "16:30",
+        "oficial": "16:10",
+        "duracion": 20
+      }
+    ],
+    "total": 8
+  },
+  {
+    "bus": "B12",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362207_01",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "07:56",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 24
+      },
+      {
+        "codigo": "UE362203_02",
+        "tipo": "entrada",
+        "centro": "36017697",
+        "inicio": "08:33",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 17
+      },
+      {
+        "codigo": "UE362006_04",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:24",
+        "oficial": "14:10",
+        "duracion": 14
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B13",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361703_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:57",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361802_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:38",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 12
+      },
+      {
+        "codigo": "UE362008_02",
+        "tipo": "salida",
+        "centro": "36019050",
+        "inicio": "14:10",
+        "fin": "14:28",
+        "oficial": "14:10",
+        "duracion": 18
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B14",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361707_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "07:57",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361702_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362011_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B15",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362205_01",
+        "tipo": "entrada",
+        "centro": "36015241",
+        "inicio": "07:59",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 36
+      },
+      {
+        "codigo": "UE361912_02",
+        "tipo": "entrada",
+        "centro": "36010691,36015044",
+        "inicio": "08:47",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE362013_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "14:10",
+        "fin": "14:31",
+        "oficial": "14:10",
+        "duracion": 21
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B16",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362001_02",
+        "tipo": "entrada",
+        "centro": "36019050",
+        "inicio": "08:00",
+        "fin": "08:10",
+        "oficial": "08:10",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361812_02",
+        "tipo": "entrada",
+        "centro": "36010459",
+        "inicio": "08:25",
+        "fin": "08:40",
+        "oficial": "08:40",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361716_01",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:50",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE361802_01",
+        "tipo": "salida",
+        "centro": "36010204",
+        "inicio": "14:10",
+        "fin": "14:22",
+        "oficial": "14:10",
+        "duracion": 12
+      },
+      {
+        "codigo": "UE362214_04",
+        "tipo": "salida",
+        "centro": "36011580",
+        "inicio": "14:40",
+        "fin": "14:50",
+        "oficial": "14:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361718_01",
+        "tipo": "salida",
+        "centro": "36010228",
+        "inicio": "15:10",
+        "fin": "15:28",
+        "oficial": "15:10",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361808_01",
+        "tipo": "salida",
+        "centro": "36010538",
+        "inicio": "15:40",
+        "fin": "15:50",
+        "oficial": "15:40",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362009_02",
+        "tipo": "salida",
+        "centro": "36015032",
+        "inicio": "16:10",
+        "fin": "16:41",
+        "oficial": "16:10",
+        "duracion": 31
+      }
+    ],
+    "total": 8
+  },
+  {
+    "bus": "B17",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361709_02",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "08:01",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 19
+      },
+      {
+        "codigo": "UE361814_01",
+        "tipo": "entrada",
+        "centro": "36010150",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362015_01",
+        "tipo": "salida",
+        "centro": "36009974",
+        "inicio": "14:10",
+        "fin": "14:21",
+        "oficial": "14:10",
+        "duracion": 11
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B18",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361903_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:01",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 34
+      },
+      {
+        "codigo": "UE361701_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:49",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362016_02",
+        "tipo": "salida",
+        "centro": "36009962",
+        "inicio": "14:10",
+        "fin": "14:41",
+        "oficial": "14:10",
+        "duracion": 31
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B19",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361906_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:05",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361717_01",
+        "tipo": "entrada",
+        "centro": "36010228",
+        "inicio": "08:50",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 15
+      },
+      {
+        "codigo": "UE362017_02",
+        "tipo": "salida",
+        "centro": "36009962",
+        "inicio": "14:10",
+        "fin": "14:33",
+        "oficial": "14:10",
+        "duracion": 23
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B20",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362201_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:05",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 30
+      },
+      {
+        "codigo": "UE361911_02",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:52",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 13
+      },
+      {
+        "codigo": "UE362202_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:30",
+        "oficial": "14:10",
+        "duracion": 20
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B21",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361719_01",
+        "tipo": "entrada",
+        "centro": "36019426",
+        "inicio": "08:09",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE361909_01",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:39",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE362203_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:27",
+        "oficial": "14:10",
+        "duracion": 17
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B22",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361902_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:09",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361714_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "08:53",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE362204_02",
+        "tipo": "salida",
+        "centro": "36016051",
+        "inicio": "14:10",
+        "fin": "14:20",
+        "oficial": "14:10",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B23",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361904_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:09",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 26
+      },
+      {
+        "codigo": "UE361715_02",
+        "tipo": "entrada",
+        "centro": "36010472",
+        "inicio": "08:53",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 27
+      },
+      {
+        "codigo": "UE362218_01",
+        "tipo": "salida",
+        "centro": "36017697",
+        "inicio": "14:10",
+        "fin": "14:36",
+        "oficial": "14:10",
+        "duracion": 26
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B24",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362208_02",
+        "tipo": "entrada",
+        "centro": "36014601",
+        "inicio": "08:10",
+        "fin": "08:20",
+        "oficial": "08:20",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362015_02",
+        "tipo": "entrada",
+        "centro": "36009974",
+        "inicio": "08:39",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 11
+      },
+      {
+        "codigo": "UE362219_02",
+        "tipo": "salida",
+        "centro": "36010009",
+        "inicio": "14:10",
+        "fin": "14:50",
+        "oficial": "14:10",
+        "duracion": 40
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B25",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362219_01",
+        "tipo": "entrada",
+        "centro": "36010009",
+        "inicio": "08:11",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 39
+      },
+      {
+        "codigo": "UE361709_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:44",
+        "oficial": "14:25",
+        "duracion": 19
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B26",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361908_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:14",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361804_01",
+        "tipo": "entrada",
+        "centro": "36010587",
+        "inicio": "08:55",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 25
+      },
+      {
+        "codigo": "UE362206_03",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:57",
+        "oficial": "14:20",
+        "duracion": 37
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B27",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361914_02",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:15",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361806_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362207_03",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:44",
+        "oficial": "14:20",
+        "duracion": 24
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B28",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361901_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:17",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 18
+      },
+      {
+        "codigo": "UE361807_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE362208_01",
+        "tipo": "salida",
+        "centro": "36014601",
+        "inicio": "14:20",
+        "fin": "14:30",
+        "oficial": "14:20",
+        "duracion": 10
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B29",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361905_04",
+        "tipo": "entrada",
+        "centro": "36020374",
+        "inicio": "08:19",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 16
+      },
+      {
+        "codigo": "UE361808_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361704_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:50",
+        "oficial": "14:25",
+        "duracion": 25
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B30",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362016_01",
+        "tipo": "entrada",
+        "centro": "36009962",
+        "inicio": "08:19",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 31
+      },
+      {
+        "codigo": "UE361719_03",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:36",
+        "oficial": "14:25",
+        "duracion": 11
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B31",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362209_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361809_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361705_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:55",
+        "oficial": "14:25",
+        "duracion": 30
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B32",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362210_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361810_01",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361706_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "15:02",
+        "oficial": "14:25",
+        "duracion": 37
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B33",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362211_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361811_02",
+        "tipo": "entrada",
+        "centro": "36010538",
+        "inicio": "08:55",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361707_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:48",
+        "oficial": "14:25",
+        "duracion": 23
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B34",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362212_04",
+        "tipo": "entrada",
+        "centro": "36011798",
+        "inicio": "08:25",
+        "fin": "08:35",
+        "oficial": "08:35",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361805_01",
+        "tipo": "entrada",
+        "centro": "36010587",
+        "inicio": "08:57",
+        "fin": "09:20",
+        "oficial": "09:20",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361708_04",
+        "tipo": "salida",
+        "centro": "36019426",
+        "inicio": "14:25",
+        "fin": "14:53",
+        "oficial": "14:25",
+        "duracion": 28
+      }
+    ],
+    "total": 3
+  },
+  {
+    "bus": "B35",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362017_01",
+        "tipo": "entrada",
+        "centro": "36009962",
+        "inicio": "08:27",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 23
+      },
+      {
+        "codigo": "UE361901_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:43",
+        "oficial": "14:25",
+        "duracion": 18
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B36",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362011_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:29",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361902_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B37",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362013_01",
+        "tipo": "entrada",
+        "centro": "36015032",
+        "inicio": "08:29",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE361903_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:59",
+        "oficial": "14:25",
+        "duracion": 34
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B38",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361710_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:40",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361904_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B39",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361712_01",
+        "tipo": "entrada",
+        "centro": "36015354",
+        "inicio": "08:40",
+        "fin": "09:00",
+        "oficial": "09:00",
+        "duracion": 20
+      },
+      {
+        "codigo": "UE361905_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:41",
+        "oficial": "14:25",
+        "duracion": 16
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B40",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361801_02",
+        "tipo": "entrada",
+        "centro": "36010204",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361906_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:55",
+        "oficial": "14:25",
+        "duracion": 30
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B41",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362204_01",
+        "tipo": "entrada",
+        "centro": "36016051",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361907_01",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:38",
+        "oficial": "14:25",
+        "duracion": 13
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B42",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362213_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361908_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:46",
+        "oficial": "14:25",
+        "duracion": 21
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B43",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362214_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361909_02",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:51",
+        "oficial": "14:25",
+        "duracion": 26
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B44",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362215_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361910_02",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:46",
+        "oficial": "14:25",
+        "duracion": 21
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B45",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362216_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361911_01",
+        "tipo": "salida",
+        "centro": "36015810",
+        "inicio": "14:25",
+        "fin": "14:38",
+        "oficial": "14:25",
+        "duracion": 13
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B46",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362217_02",
+        "tipo": "entrada",
+        "centro": "36011580",
+        "inicio": "08:40",
+        "fin": "08:50",
+        "oficial": "08:50",
+        "duracion": 10
+      },
+      {
+        "codigo": "UE361914_04",
+        "tipo": "salida",
+        "centro": "36020374",
+        "inicio": "14:25",
+        "fin": "14:45",
+        "oficial": "14:25",
+        "duracion": 20
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B47",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE361910_01",
+        "tipo": "entrada",
+        "centro": "36015810",
+        "inicio": "08:44",
+        "fin": "09:05",
+        "oficial": "09:05",
+        "duracion": 21
+      },
+      {
+        "codigo": "UE362201_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:53",
+        "oficial": "14:25",
+        "duracion": 28
+      }
+    ],
+    "total": 2
+  },
+  {
+    "bus": "B48",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362209_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B49",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362210_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B50",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362211_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B51",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362212_01",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  },
+  {
+    "bus": "B52",
+    "dia": "V",
+    "rutas": [
+      {
+        "codigo": "UE362220_02",
+        "tipo": "salida",
+        "centro": "36011798",
+        "inicio": "14:25",
+        "fin": "14:35",
+        "oficial": "14:25",
+        "duracion": 10
+      }
+    ],
+    "total": 1
+  }
+]

@@ -6,3 +6,19 @@ python-multipart
 requests
 pulp>=2.8
 reportlab>=4.0
+python-dotenv
+
+# Database dependencies
+sqlalchemy>=2.0
+psycopg2-binary
+alembic
+
+# Cache & Message Queue
+redis>=4.0
+
+# Celery for async task processing
+celery[redis]>=5.3.0
+flower>=2.0.0  # Dashboard monitoreo
+
+# HTTP client for health checks
+httpx
