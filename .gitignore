@@ -7,6 +7,18 @@ __pycache__/
 env/
 venv/
 *.log
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+*.egg-info/
+backend/osrm_cache.json
+osrm_cache.json
 
 # Node.js
 node_modules/
@@ -15,7 +27,17 @@ yarn-error.log
 .env
 dist/
 build/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.vite/
+frontend/.cache/
 
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Local sample data (not required for runtime)
+ejemplo excel rutas a optimizar/
+*.xls
+*.xlsx
+*.xlsm
