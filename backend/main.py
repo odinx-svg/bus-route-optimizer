@@ -122,7 +122,7 @@ except ImportError:
     PROGRESS_LISTENER_AVAILABLE = False
 
 # Database imports
-from db.database import SessionLocal, is_database_available
+from db.database import SessionLocal, is_database_available, create_tables
 from db.models import OptimizationJob
 from datetime import datetime, timedelta
 from uuid import uuid4
@@ -2685,6 +2685,14 @@ async def websocket_timeline_validate(websocket: WebSocket):
 async def startup_event():
     """Initialize services on startup."""
     logger.info("[Startup] Tutti API starting...")
+
+    # Ensure core DB tables exist in production environments.
+    if is_database_available():
+        try:
+            create_tables()
+            logger.info("[Startup] Database tables ensured")
+        except Exception as e:
+            logger.warning(f"[Startup] Could not ensure database tables: {e}")
     
     # Start progress listener if available
     if PROGRESS_LISTENER_AVAILABLE and WEBSOCKET_AVAILABLE and manager:
