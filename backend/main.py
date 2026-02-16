@@ -24,6 +24,7 @@ import io
 import json
 import importlib.util
 import asyncio
+import re
 
 from parser import parse_routes, parse_routes_with_report, aggregate_parse_reports
 from models import Route, Bus, BusSchedule
@@ -560,21 +561,43 @@ except ImportError as e:
     logger.warning(f"[Startup] Could not register fleet router: {e}")
 
 # Enable CORS
+def _wildcard_origin_to_regex(origin_pattern: str) -> str:
+    """Convert wildcard origins (e.g. https://*.vercel.app) to regex."""
+    escaped = re.escape(origin_pattern.strip())
+    return "^" + escaped.replace(r"\*", ".*") + "$"
+
+
 default_origins = [
     "http://localhost:5173",  # Vite dev server
     "http://localhost:3000",  # React dev server
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
 ]
-extra_origins = [
+configured_origins = [
     origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",")
     if origin.strip()
 ]
-allowed_origins = list(dict.fromkeys(default_origins + extra_origins))
+explicit_extra_origins = [origin for origin in configured_origins if "*" not in origin]
+wildcard_origins = [origin for origin in configured_origins if "*" in origin]
+
+# Helpful default for Vercel previews in beta/production.
+if os.getenv("CORS_ALLOW_VERCEL_PREVIEWS", "true").lower() == "true":
+    wildcard_origins.append("https://*.vercel.app")
+
+allowed_origins = list(dict.fromkeys(default_origins + explicit_extra_origins))
+
+origin_regex_parts: List[str] = []
+raw_origin_regex = os.getenv("CORS_ORIGIN_REGEX", "").strip()
+if raw_origin_regex:
+    origin_regex_parts.append(raw_origin_regex)
+
+origin_regex_parts.extend(_wildcard_origin_to_regex(origin) for origin in wildcard_origins)
+allow_origin_regex = "|".join(dict.fromkeys(origin_regex_parts)) if origin_regex_parts else None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

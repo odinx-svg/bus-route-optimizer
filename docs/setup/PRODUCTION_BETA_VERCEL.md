@@ -66,6 +66,7 @@ REDIS_URL=PEGA_AQUI_REDIS_URL_DE_RENDER
 OSRM_URL=http://187.77.33.218:5000/route/v1/driving
 OSRM_TABLE_URL=http://187.77.33.218:5000/table/v1/driving
 CORS_ORIGINS=https://TU_APP.vercel.app
+CORS_ALLOW_VERCEL_PREVIEWS=true
 ```
 
 5. Pulsa `Create Web Service`.
@@ -116,6 +117,7 @@ Si abre `health` y `docs`, backend OK.
 
 ```env
 VITE_API_URL=https://TU_BACKEND.onrender.com
+VITE_WS_URL=wss://TU_BACKEND.onrender.com
 ```
 
 6. Pulsa `Deploy`.
@@ -188,4 +190,3 @@ Resultado esperado:
 - [ ] upload + optimize funciona
 - [ ] guardar/publicar funciona
 - [ ] reinicio backend no borra horarios guardados
-
