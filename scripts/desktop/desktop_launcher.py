@@ -86,6 +86,20 @@ def _sqlite_url_for_path(db_path: Path) -> str:
     return f"sqlite:///{absolute.as_posix()}"
 
 
+def _force_line_buffered_stdio() -> None:
+    """Make backend stdout/stderr flush line-by-line for live desktop logs."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream is None:
+            continue
+        try:
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(line_buffering=True, write_through=True)
+        except Exception:
+            # Best effort only.
+            pass
+
+
 def _log_update(message: str) -> None:
     try:
         log_path = _resolve_update_log_path()
@@ -449,6 +463,7 @@ def _run_backend_process_mode() -> int:
     os.environ.setdefault("USE_DATABASE", "true")
     os.environ.setdefault("DATABASE_URL", database_url)
     os.environ.setdefault("TUTTI_DATA_DIR", str(data_dir))
+    os.environ.setdefault("PYTHONUNBUFFERED", "1")
     os.environ.setdefault("CORS_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000")
 
     os.chdir(backend_dir)
@@ -457,6 +472,7 @@ def _run_backend_process_mode() -> int:
     # - package modules: from backend.services...
     sys.path.insert(0, str(backend_dir))
     sys.path.insert(0, str(runtime_root))
+    _force_line_buffered_stdio()
 
     try:
         from main import app  # local import to avoid loading backend in UI bootstrap
@@ -516,6 +532,7 @@ class DesktopRuntime:
         env["USE_DATABASE"] = "true"
         env["DATABASE_URL"] = database_url
         env["TUTTI_DATA_DIR"] = str(data_dir)
+        env["PYTHONUNBUFFERED"] = "1"
         env["CORS_ORIGINS"] = "http://127.0.0.1:8000,http://localhost:8000"
 
         logs_dir = Path.home() / "AppData" / "Local" / "Tutti" / "logs"

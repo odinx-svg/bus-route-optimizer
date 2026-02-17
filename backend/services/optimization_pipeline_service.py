@@ -13,6 +13,8 @@ Pipeline:
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from time import time as now_seconds
@@ -580,8 +582,15 @@ async def run_optimization_pipeline_by_day(
     """
     started_at = now_seconds()
     history: List[Dict[str, Any]] = []
+    event_loop = asyncio.get_running_loop()
+    event_loop_thread_id = threading.get_ident()
 
-    def add_history(stage: str, progress: int, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
+    def _append_history(
+        stage: str,
+        progress: int,
+        message: str,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> None:
         entry = {
             "timestamp": datetime.utcnow().isoformat(),
             "stage": stage,
@@ -592,6 +601,28 @@ async def run_optimization_pipeline_by_day(
             entry.update(extra)
         history.append(entry)
         _safe_emit_progress(progress_callback, stage, progress, message, extra=extra)
+
+    def add_history(stage: str, progress: int, message: str, extra: Optional[Dict[str, Any]] = None) -> None:
+        if threading.get_ident() == event_loop_thread_id:
+            _append_history(stage, progress, message, extra)
+            return
+
+        done = threading.Event()
+        error_holder: Dict[str, Exception] = {}
+
+        def _dispatch() -> None:
+            try:
+                _append_history(stage, progress, message, extra)
+            except Exception as exc:
+                error_holder["error"] = exc
+            finally:
+                done.set()
+
+        event_loop.call_soon_threadsafe(_dispatch)
+        done.wait()
+        error = error_holder.get("error")
+        if error:
+            raise error
 
     def emit_day_trace(
         *,
@@ -692,10 +723,11 @@ async def run_optimization_pipeline_by_day(
 
     add_history("ingest", 5, "Normalizando rutas por dia", {"stage": "ingest"})
 
-    baseline_by_day, baseline_diagnostics = _optimize_by_day_v6(
+    baseline_by_day, baseline_diagnostics = await asyncio.to_thread(
+        _optimize_by_day_v6,
         routes,
-        use_ml_assignment=config.use_ml_assignment,
-        trace_callback=lambda day, phase, progress, message, extra=None: emit_day_trace(
+        config.use_ml_assignment,
+        lambda day, phase, progress, message, extra=None: emit_day_trace(
             stage="baseline_trace",
             progress_window=(10, 34),
             day=day,
@@ -813,11 +845,11 @@ async def run_optimization_pipeline_by_day(
                 {"stage": "quantum_refine", "iteration": iteration, "metrics": {"hybrid": hybrid_meta}},
             )
         else:
-            candidate_by_day, candidate_diagnostics = _optimize_by_day_lns(
+            candidate_by_day, candidate_diagnostics = await asyncio.to_thread(
+                _optimize_by_day_lns,
                 routes,
                 config.objective,
                 use_ml_assignment=config.use_ml_assignment,
-                iteration=iteration,
                 trace_callback=lambda day, phase, progress, message, extra=None: emit_day_trace(
                     stage=f"reoptimize_trace_{iteration}",
                     progress_window=(base_progress, min(base_progress + 7, 90)),
@@ -828,6 +860,7 @@ async def run_optimization_pipeline_by_day(
                     iteration=iteration,
                     extra=extra,
                 ),
+                iteration=iteration,
             )
 
         validation_stage = f"osrm_validate_iter_{iteration}"
