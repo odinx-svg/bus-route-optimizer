@@ -149,7 +149,8 @@ export function useOptimizationProgress(jobId: string | null): ProgressState {
   const networkFailureConsecutive = useRef(0);
   const unstableWarnModulo = useRef(0);
   const maxReconnectAttempts = 5;
-  const maxNetworkFailureBeforeAbort = 200;
+  // Avoid "infinite" running states when backend is no longer reachable.
+  const maxNetworkFailureBeforeAbort = 24;
 
   const API_URL = resolveApiBaseUrl();
   const WS_URL = resolveWsBaseUrl();

@@ -2142,26 +2142,42 @@ async def get_job_status(job_id: str) -> Dict[str, Any]:
         dict: Estado del job
     """
     _cleanup_old_local_jobs()
+    local_job = _get_local_job_state(job_id)
+    local_payload = _serialize_local_job_status(local_job) if local_job else None
+
+    db_payload: Optional[Dict[str, Any]] = None
     if is_database_available():
         db = SessionLocal()
         try:
             job = db.query(OptimizationJob).filter(OptimizationJob.id == job_id).first()
             if job:
-                return {
+                db_payload = {
                     "job_id": str(job.id),
                     "status": job.status,
                     "algorithm": job.algorithm,
                     "created_at": job.created_at.isoformat() if job.created_at else None,
                     "started_at": job.started_at.isoformat() if job.started_at else None,
                     "completed_at": job.completed_at.isoformat() if job.completed_at else None,
-                    "error": job.error_message
+                    "error": job.error_message,
                 }
         finally:
             db.close()
 
-    local_job = _get_local_job_state(job_id)
-    if local_job:
-        return _serialize_local_job_status(local_job)
+    # If DB and runtime diverge, prefer whichever is terminal.
+    if local_payload and db_payload:
+        local_terminal = str(local_payload.get("status", "")).lower() in TERMINAL_STATUSES
+        db_terminal = str(db_payload.get("status", "")).lower() in TERMINAL_STATUSES
+        if local_terminal and not db_terminal:
+            return local_payload
+        if db_terminal and not local_terminal:
+            return db_payload
+        # While running, runtime snapshot has richer/stabler progress metadata.
+        return local_payload
+
+    if local_payload:
+        return local_payload
+    if db_payload:
+        return db_payload
 
     raise HTTPException(status_code=404, detail="Job no encontrado")
 
@@ -2178,33 +2194,54 @@ async def get_job_result(job_id: str) -> Dict[str, Any]:
         dict: Resultados de la optimizaciÃ³n
     """
     _cleanup_old_local_jobs()
+    local_job = _get_local_job_state(job_id)
+    local_payload = _serialize_local_job_result(local_job) if local_job else None
+
+    db_payload: Optional[Dict[str, Any]] = None
     if is_database_available():
         db = SessionLocal()
         try:
             job = db.query(OptimizationJob).filter(OptimizationJob.id == job_id).first()
             if job:
-                if job.status == "running":
-                    return {"job_id": job_id, "status": "running"}
                 if job.status == "failed":
-                    return {
+                    db_payload = {
                         "job_id": job_id,
                         "status": "failed",
-                        "error": job.error_message
+                        "error": job.error_message,
                     }
-                if job.status != "completed":
-                    return {"job_id": job_id, "status": job.status}
-                return {
-                    "job_id": job_id,
-                    "status": "completed",
-                    "result": job.result,
-                    "stats": job.stats
-                }
+                elif job.status == "completed":
+                    db_payload = {
+                        "job_id": job_id,
+                        "status": "completed",
+                        "result": job.result,
+                        "stats": job.stats,
+                    }
+                else:
+                    db_payload = {"job_id": job_id, "status": job.status}
         finally:
             db.close()
 
-    local_job = _get_local_job_state(job_id)
-    if local_job:
-        return _serialize_local_job_result(local_job)
+    # If DB and runtime diverge, prefer whichever reached a terminal state.
+    if local_payload and db_payload:
+        local_status = str(local_payload.get("status", "unknown")).lower()
+        db_status = str(db_payload.get("status", "unknown")).lower()
+        local_terminal = local_status in TERMINAL_STATUSES
+        db_terminal = db_status in TERMINAL_STATUSES
+
+        if local_terminal and not db_terminal:
+            return local_payload
+        if db_terminal and not local_terminal:
+            return db_payload
+        if local_status == "completed" and local_payload.get("result"):
+            return local_payload
+        if db_status == "completed" and db_payload.get("result"):
+            return db_payload
+        return local_payload
+
+    if local_payload:
+        return local_payload
+    if db_payload:
+        return db_payload
 
     raise HTTPException(status_code=404, detail="Job no encontrado")
 

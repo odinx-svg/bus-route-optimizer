@@ -502,20 +502,16 @@ function App() {
   }, [applyPipelineResult]);
 
   const handlePipelineError = useCallback((errorCode) => {
-    const transientNetworkErrors = new Set(['NETWORK_UNSTABLE']);
-    if (transientNetworkErrors.has(String(errorCode || ''))) {
-      setPipelineStatus('running');
-      setOptimizing(true);
-      notifications.warning(
-        'Conexion inestable',
-        'El backend puede seguir trabajando. Esperando reconexion de progreso.'
-      );
-      return;
-    }
-
     setPipelineStatus('error');
     setPipelineJobId(null);
     setOptimizing(false);
+    if (String(errorCode || '') === 'NETWORK_UNSTABLE') {
+      notifications.error(
+        'Conexion perdida con backend',
+        'No se pudo recuperar el estado de la optimizacion. Revisa logs y relanza.'
+      );
+      return;
+    }
     notifications.error('Pipeline fallido', errorCode || 'Revisa logs del backend');
   }, []);
 
