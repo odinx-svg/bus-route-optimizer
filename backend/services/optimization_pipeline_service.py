@@ -14,6 +14,8 @@ Pipeline:
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -35,6 +37,7 @@ DAY_NAMES: Dict[str, str] = {
 }
 ALL_DAYS: List[str] = ["L", "M", "Mc", "X", "V"]
 DayTraceCallback = Optional[Callable[[str, str, int, str, Optional[Dict[str, Any]]], None]]
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -169,54 +172,45 @@ async def _validate_schedule_by_day(schedule_by_day: Dict[str, List[BusSchedule]
     validator = ManualScheduleValidator(OSRMService())
     day_reports: List[Dict[str, Any]] = []
     incidents: List[Dict[str, Any]] = []
+    max_parallel = max(2, min(12, int(os.cpu_count() or 4)))
+    semaphore = asyncio.Semaphore(max_parallel)
 
     total_buses = 0
     feasible_buses = 0
     buses_with_issues = 0
 
-    for day in ALL_DAYS:
-        buses = schedule_by_day.get(day, [])
-        bus_reports: List[Dict[str, Any]] = []
-        day_feasible = 0
-        day_with_issues = 0
-
-        for bus in buses:
-            sorted_items = sorted(
-                bus.items,
-                key=lambda item: ((item.start_time.hour * 60) + item.start_time.minute),
-            )
-            assigned_routes: List[Any] = []
-            for item in sorted_items:
-                start_location, end_location = _extract_item_locations(item)
-                assigned_routes.append(
-                    AssignedRoute(
-                        id=item.route_id,
-                        route_id=item.route_id,
-                        start_time=item.start_time,
-                        end_time=item.end_time,
-                        start_location=start_location,
-                        end_location=end_location,
-                        type=item.type,
-                        school_name=item.school_name,
-                    )
+    async def _validate_bus(day: str, bus: BusSchedule) -> Dict[str, Any]:
+        async with semaphore:
+            try:
+                sorted_items = sorted(
+                    bus.items,
+                    key=lambda item: ((item.start_time.hour * 60) + item.start_time.minute),
                 )
+                assigned_routes: List[Any] = []
+                for item in sorted_items:
+                    start_location, end_location = _extract_item_locations(item)
+                    assigned_routes.append(
+                        AssignedRoute(
+                            id=item.route_id,
+                            route_id=item.route_id,
+                            start_time=item.start_time,
+                            end_time=item.end_time,
+                            start_location=start_location,
+                            end_location=end_location,
+                            type=item.type,
+                            school_name=item.school_name,
+                        )
+                    )
 
-            result = await validator.validate_bus_schedule(assigned_routes)
-            issue_dicts = []
-            for issue in result.issues:
-                issue_data = issue.dict()
-                issue_data["day"] = day
-                issue_data["bus_id"] = bus.bus_id
-                issue_dicts.append(issue_data)
-                incidents.append(issue_data)
+                result = await validator.validate_bus_schedule(assigned_routes)
+                issue_dicts = []
+                for issue in result.issues:
+                    issue_data = issue.dict()
+                    issue_data["day"] = day
+                    issue_data["bus_id"] = bus.bus_id
+                    issue_dicts.append(issue_data)
 
-            if result.is_valid:
-                day_feasible += 1
-            if issue_dicts:
-                day_with_issues += 1
-
-            bus_reports.append(
-                {
+                return {
                     "bus_id": bus.bus_id,
                     "is_valid": bool(result.is_valid),
                     "issues_count": len(issue_dicts),
@@ -225,7 +219,41 @@ async def _validate_schedule_by_day(schedule_by_day: Dict[str, List[BusSchedule]
                     "efficiency_score": round(result.efficiency_score, 1),
                     "buffer_stats": result.buffer_stats,
                 }
-            )
+            except Exception as exc:
+                logger.warning(f"[Validation] Error validating bus {getattr(bus, 'bus_id', 'unknown')}: {exc}")
+                fallback_issue = {
+                    "day": day,
+                    "bus_id": getattr(bus, "bus_id", "unknown"),
+                    "severity": "error",
+                    "issue_type": "validation_error",
+                    "message": f"Validation failed: {type(exc).__name__}",
+                }
+                return {
+                    "bus_id": getattr(bus, "bus_id", "unknown"),
+                    "is_valid": False,
+                    "issues_count": 1,
+                    "issues": [fallback_issue],
+                    "total_travel_time": 0.0,
+                    "efficiency_score": 0.0,
+                    "buffer_stats": {},
+                }
+
+    for day in ALL_DAYS:
+        buses = schedule_by_day.get(day, [])
+        validation_tasks = [asyncio.create_task(_validate_bus(day, bus)) for bus in buses]
+        bus_reports: List[Dict[str, Any]] = (
+            await asyncio.gather(*validation_tasks) if validation_tasks else []
+        )
+        day_feasible = 0
+        day_with_issues = 0
+
+        for bus_report in bus_reports:
+            issue_dicts = bus_report.get("issues", [])
+            incidents.extend(issue_dicts)
+            if bus_report.get("is_valid"):
+                day_feasible += 1
+            if issue_dicts:
+                day_with_issues += 1
 
         day_reports.append(
             {

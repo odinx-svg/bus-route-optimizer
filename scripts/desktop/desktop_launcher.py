@@ -100,6 +100,11 @@ def _force_line_buffered_stdio() -> None:
             pass
 
 
+def _env_flag(name: str, default: str = "0") -> bool:
+    value = os.environ.get(name, default)
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _log_update(message: str) -> None:
     try:
         log_path = _resolve_update_log_path()
@@ -621,13 +626,27 @@ def main() -> int:
         print("[Desktop] Backend did not become ready in time.")
         return 1
 
+    default_fullscreen = "1" if getattr(sys, "frozen", False) else "0"
+    start_fullscreen = _env_flag("TUTTI_DESKTOP_START_FULLSCREEN", default_fullscreen)
+    frameless_window = _env_flag("TUTTI_DESKTOP_FRAMELESS", "0")
+
+    window_options = {
+        "width": 1600,
+        "height": 1000,
+        "min_size": (1200, 760),
+        "background_color": "#0a1324",
+        "fullscreen": start_fullscreen,
+    }
+    if not start_fullscreen:
+        window_options["maximized"] = True
+    if frameless_window:
+        window_options["frameless"] = True
+        window_options["easy_drag"] = True
+
     window = webview.create_window(
         "TUTTI Fleet Control Center",
         APP_URL,
-        width=1600,
-        height=1000,
-        min_size=(1200, 760),
-        background_color="#0a1324",
+        **window_options,
     )
     window.events.closed += _safe_shutdown
     webview.start(debug=False)

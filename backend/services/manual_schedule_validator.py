@@ -5,6 +5,7 @@ Este modulo proporciona validacion instantanea de horarios manuales,
 verificando que las conexiones entre rutas sean viables usando OSRM.
 """
 
+import asyncio
 import time as time_module
 import logging
 from typing import List, Optional, Tuple, Dict, Any
@@ -66,7 +67,9 @@ class OSRMService:
             except ImportError:
                 from router_service import get_real_travel_time
             
-            travel_time = get_real_travel_time(
+            # Avoid blocking the event loop on network-bound OSRM calls.
+            travel_time = await asyncio.to_thread(
+                get_real_travel_time,
                 origin[0], origin[1],
                 destination[0], destination[1]
             )
