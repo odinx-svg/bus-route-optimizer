@@ -7,6 +7,8 @@ const releaseInfoEl = document.getElementById("releaseInfo");
 const releaseBtn = document.getElementById("releaseBtn");
 const downloadTop = document.getElementById("downloadBtn");
 const downloadBottom = document.getElementById("downloadBtnBottom");
+const changelogEl = document.getElementById("changelog");
+const checksumEl = document.getElementById("checksums");
 const yearEl = document.getElementById("year");
 
 const setDownloadHref = (href) => {
@@ -67,6 +69,95 @@ const pickPreferredAsset = (assets) => {
   return { asset: null, kind: "none" };
 };
 
+const renderChangelog = (body) => {
+  if (!changelogEl || !body) {
+    return;
+  }
+
+  const lines = body
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("**Full Changelog**"));
+
+  if (lines.length === 0) {
+    return;
+  }
+
+  const items = [];
+  for (const line of lines) {
+    if (line.startsWith("#")) {
+      continue;
+    }
+    const cleaned = line.replace(/^\*\s*/, "").replace(/^-\s*/, "");
+    if (cleaned) {
+      items.push(cleaned);
+    }
+    if (items.length >= 8) {
+      break;
+    }
+  }
+
+  if (items.length === 0) {
+    return;
+  }
+
+  const ul = document.createElement("ul");
+  for (const item of items) {
+    const li = document.createElement("li");
+    li.textContent = item;
+    ul.appendChild(li);
+  }
+
+  changelogEl.innerHTML = "";
+  const heading = document.createElement("h4");
+  heading.textContent = "Novedades";
+  changelogEl.appendChild(heading);
+  changelogEl.appendChild(ul);
+  changelogEl.style.display = "block";
+};
+
+const renderChecksums = async (assets) => {
+  if (!checksumEl) {
+    return;
+  }
+
+  const checksumAsset = assets.find(
+    (a) => (a.name || "").toLowerCase() === "checksums-sha256.txt"
+  );
+  if (!checksumAsset || !checksumAsset.browser_download_url) {
+    return;
+  }
+
+  try {
+    const res = await fetch(checksumAsset.browser_download_url);
+    if (!res.ok) {
+      return;
+    }
+
+    const text = await res.text();
+    const lines = text
+      .trim()
+      .split("\n")
+      .filter((l) => l.trim());
+
+    if (lines.length === 0) {
+      return;
+    }
+
+    checksumEl.innerHTML = "";
+    const heading = document.createElement("h4");
+    heading.textContent = "Verificacion de integridad (SHA-256)";
+    checksumEl.appendChild(heading);
+
+    const pre = document.createElement("pre");
+    pre.textContent = lines.join("\n");
+    checksumEl.appendChild(pre);
+    checksumEl.style.display = "block";
+  } catch {
+    // Best effort – if we can't fetch checksums, just skip.
+  }
+};
+
 const applyLatestRelease = async () => {
   try {
     const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`, {
@@ -98,14 +189,22 @@ const applyLatestRelease = async () => {
     }
 
     if (releaseInfoEl) {
+      const sizeMB = preferredAsset?.size
+        ? ` | ${(preferredAsset.size / (1024 * 1024)).toFixed(1)} MB`
+        : "";
+
       if (!preferredAsset) {
         releaseInfoEl.textContent = `Ultima version: ${versionLabel} | Descargar desde GitHub Releases`;
       } else if (kind === "installer") {
-        releaseInfoEl.textContent = `Ultima version: ${versionLabel} | Instalador: ${preferredAsset.name}`;
+        releaseInfoEl.textContent = `Ultima version: ${versionLabel} | Instalador: ${preferredAsset.name}${sizeMB}`;
       } else {
-        releaseInfoEl.textContent = `Ultima version: ${versionLabel} | Portable: ${preferredAsset.name}`;
+        releaseInfoEl.textContent = `Ultima version: ${versionLabel} | Portable: ${preferredAsset.name}${sizeMB}`;
       }
     }
+
+    // Render changelog and checksums.
+    renderChangelog(release.body);
+    renderChecksums(assets);
   } catch (error) {
     setDownloadHref(FALLBACK_DOWNLOAD);
     setDownloadLabel("Descargar TUTTI");

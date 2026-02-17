@@ -58,6 +58,26 @@ jobs:
           TUTTI_NON_INTERACTIVE: "1"
         run: scripts\desktop\build-desktop-installer.bat
 
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $checksumFile = "dist/desktop-app/checksums-sha256.txt"
+          $assets = @(
+            "dist/desktop-app/TuttiSetup.exe",
+            "dist/Tutti Desktop.exe",
+            "dist/desktop-app/TuttiDesktopApp.zip"
+          )
+          foreach ($asset in $assets) {
+            if (Test-Path $asset) {
+              $hash = (Get-FileHash -Path $asset -Algorithm SHA256).Hash.ToLower()
+              $name = Split-Path $asset -Leaf
+              "$hash  $name" | Out-File -Append -FilePath $checksumFile -Encoding utf8
+              Write-Host "SHA-256 $name = $hash"
+            }
+          }
+          Write-Host "Checksum file:"
+          Get-Content $checksumFile
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -66,6 +86,7 @@ jobs:
             dist/desktop-app/TuttiSetup.exe
             dist/Tutti Desktop.exe
             dist/desktop-app/TuttiDesktopApp.zip
+            dist/desktop-app/checksums-sha256.txt
 
       - name: Publish GitHub Release assets
         uses: softprops/action-gh-release@v2
@@ -74,6 +95,7 @@ jobs:
             dist/desktop-app/TuttiSetup.exe
             dist/Tutti Desktop.exe
             dist/desktop-app/TuttiDesktopApp.zip
+            dist/desktop-app/checksums-sha256.txt
           draft: false
           prerelease: false
           generate_release_notes: true

@@ -363,6 +363,64 @@ main {
   margin-top: 1.1rem;
 }
 
+.release-details {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.changelog-block,
+.checksums-block {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--card);
+  padding: 1.3rem;
+}
+
+.changelog-block h4,
+.checksums-block h4 {
+  margin: 0 0 0.8rem;
+  color: var(--aqua);
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.78rem;
+}
+
+.changelog-block ul {
+  margin: 0;
+  padding: 0 0 0 1.1rem;
+  list-style: disc;
+}
+
+.changelog-block li {
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  margin-bottom: 0.25rem;
+}
+
+.checksums-block pre {
+  margin: 0;
+  padding: 0.8rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 0.5rem;
+  color: var(--ink-soft);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  line-height: 1.8;
+  overflow-x: auto;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 920px) {
+  .release-details {
+    grid-template-columns: 1fr;
+  }
+}
+
 .footer {
   width: min(1120px, calc(100% - 2rem));
   margin: 0 auto 2rem;

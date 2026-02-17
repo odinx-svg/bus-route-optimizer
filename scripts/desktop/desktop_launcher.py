@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import atexit
 import ctypes
+import hashlib
 import json
 import os
 import re
@@ -18,13 +19,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import MutableMapping, Optional
+from typing import Callable, MutableMapping, Optional
 
 import webview
 
@@ -36,6 +38,7 @@ UPDATE_HTTP_TIMEOUT_SEC = 20
 DESKTOP_OSRM_BASE_URL = "http://187.77.33.218:5000"
 DESKTOP_OSRM_ROUTE_URL = f"{DESKTOP_OSRM_BASE_URL}/route/v1/driving"
 DESKTOP_OSRM_TABLE_URL = f"{DESKTOP_OSRM_BASE_URL}/table/v1/driving"
+CHECKSUM_ASSET_NAME = "checksums-sha256.txt"
 
 try:
     from desktop_version import (  # type: ignore
@@ -281,14 +284,82 @@ def _is_protected_install_path(exe_path: Path) -> bool:
         return True
 
 
-def _download_file(url: str, destination: Path) -> None:
+def _download_file(
+    url: str,
+    destination: Path,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> str:
+    """Download a file and return its SHA-256 hex digest.
+
+    *progress_callback(bytes_downloaded, total_bytes)* is called after every
+    chunk.  ``total_bytes`` is ``0`` when the server does not advertise
+    Content-Length.
+    """
     req = urllib.request.Request(url, headers={"User-Agent": "tutti-desktop-updater"})
-    with urllib.request.urlopen(req, timeout=60) as response, destination.open("wb") as output:
+    sha256 = hashlib.sha256()
+    downloaded = 0
+    with urllib.request.urlopen(req, timeout=120) as response, destination.open("wb") as output:
+        total = int(response.headers.get("Content-Length") or 0)
         while True:
             chunk = response.read(1024 * 1024)
             if not chunk:
                 break
             output.write(chunk)
+            sha256.update(chunk)
+            downloaded += len(chunk)
+            if progress_callback:
+                try:
+                    progress_callback(downloaded, total)
+                except Exception:
+                    pass
+    return sha256.hexdigest()
+
+
+def _fetch_expected_checksum(release_data: dict, asset_name: str) -> Optional[str]:
+    """Try to find the SHA-256 checksum for *asset_name* in the release.
+
+    Looks for a ``checksums-sha256.txt`` asset that contains lines in the
+    format ``<hex_hash>  <filename>`` (sha256sum style).
+    """
+    assets = release_data.get("assets", []) or []
+    checksum_asset = None
+    for asset in assets:
+        if (asset.get("name") or "").lower() == CHECKSUM_ASSET_NAME:
+            checksum_asset = asset
+            break
+    if not checksum_asset:
+        return None
+
+    download_url = checksum_asset.get("browser_download_url")
+    if not download_url:
+        return None
+
+    try:
+        req = urllib.request.Request(download_url, headers={"User-Agent": "tutti-desktop-updater"})
+        with urllib.request.urlopen(req, timeout=UPDATE_HTTP_TIMEOUT_SEC) as response:
+            content = response.read().decode("utf-8")
+        for line in content.strip().splitlines():
+            parts = line.strip().split(None, 1)
+            if len(parts) == 2 and parts[1].strip("* ") == asset_name:
+                return parts[0].lower()
+    except Exception as exc:
+        _log_update(f"Could not fetch checksum file ({exc})")
+    return None
+
+
+def _verify_checksum(file_path: Path, actual_hash: str, expected_hash: Optional[str]) -> bool:
+    """Return True if the download integrity is verified.
+
+    If no expected hash is available the check is skipped (best-effort).
+    """
+    if not expected_hash:
+        _log_update("Checksum verification skipped: no expected hash available")
+        return True
+    if actual_hash.lower() == expected_hash.lower():
+        _log_update(f"Checksum OK: {actual_hash}")
+        return True
+    _log_update(f"CHECKSUM MISMATCH: expected={expected_hash} actual={actual_hash}")
+    return False
 
 
 def _extract_exe_from_zip(zip_path: Path, work_dir: Path) -> Optional[Path]:
@@ -305,22 +376,92 @@ def _extract_exe_from_zip(zip_path: Path, work_dir: Path) -> Optional[Path]:
     return candidates[0] if candidates else None
 
 
-def _launch_updater_and_exit(current_exe: Path, new_exe: Path) -> bool:
-    auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "0")
-    if auto_restart:
-        start_cmd = f'start "" "{current_exe}"'
+def _resolve_backup_dir() -> Path:
+    """Return the directory where pre-update backups are kept."""
+    if os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
     else:
-        start_cmd = "echo Update applied. Launch manually."
+        base = Path.home() / ".tutti"
+    backup_dir = base / "Tutti" / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    return backup_dir
+
+
+def _create_backup(current_exe: Path) -> Optional[Path]:
+    """Copy the running executable to the backup directory.
+
+    Keeps only the two most recent backups to save disk space.
+    """
+    backup_dir = _resolve_backup_dir()
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    backup_path = backup_dir / f"Tutti Desktop {APP_VERSION} ({timestamp}).exe"
+    try:
+        shutil.copy2(current_exe, backup_path)
+        _log_update(f"Backup created: {backup_path}")
+    except Exception as exc:
+        _log_update(f"Backup failed ({exc})")
+        return None
+
+    # Prune old backups – keep the 2 most recent.
+    existing = sorted(backup_dir.glob("Tutti Desktop *.exe"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for old_backup in existing[2:]:
+        try:
+            old_backup.unlink()
+            _log_update(f"Pruned old backup: {old_backup.name}")
+        except Exception:
+            pass
+
+    return backup_path
+
+
+def _launch_updater_and_exit(current_exe: Path, new_exe: Path, backup_exe: Optional[Path]) -> bool:
+    """Replace the running exe with the new one via a helper batch script.
+
+    The batch script:
+    1. Waits for the main process to exit.
+    2. Retries the copy up to 5 times (handles file-lock races).
+    3. Verifies the new exe exists and has a non-zero size.
+    4. On failure, restores from backup if available.
+    5. Auto-restarts the app when TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE=1.
+    """
+    auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "0")
+    start_cmd = f'start "" "{current_exe}"' if auto_restart else 'echo Actualizacion aplicada. Abre TUTTI manualmente.'
+    backup_line = ""
+    if backup_exe and backup_exe.exists():
+        backup_line = f"""
+echo Restaurando backup...
+copy /Y "{backup_exe}" "{current_exe}" >nul
+if errorlevel 1 (
+    echo ERROR: No se pudo restaurar el backup.
+)
+"""
 
     updater_bat = Path(tempfile.gettempdir()) / "tutti_desktop_self_update.bat"
     script = f"""@echo off
-setlocal
+setlocal EnableDelayedExpansion
+set "RETRIES=0"
+:wait_exit
 timeout /t 2 /nobreak >nul
+
+:retry_copy
 copy /Y "{new_exe}" "{current_exe}" >nul
-if errorlevel 1 goto fail
+if errorlevel 1 (
+    set /a RETRIES+=1
+    if !RETRIES! GEQ 5 goto fail
+    timeout /t 2 /nobreak >nul
+    goto retry_copy
+)
+
+REM Verify the new exe is present and non-empty
+if not exist "{current_exe}" goto fail
+for %%A in ("{current_exe}") do if %%~zA==0 goto fail
+
 {start_cmd}
 exit /b 0
+
 :fail
+echo ERROR: La actualizacion fallo.
+{backup_line}
 {start_cmd}
 exit /b 1
 """
@@ -345,13 +486,90 @@ def _launch_installer_and_exit(installer_exe: Path) -> bool:
         return False
 
 
+def _build_changelog_summary(release_data: dict, max_lines: int = 12) -> str:
+    """Extract a human-readable changelog snippet from the release body."""
+    body = (release_data.get("body") or "").strip()
+    if not body:
+        return ""
+
+    lines: list[str] = []
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        # Skip markdown headings like "## What's Changed", keep content.
+        if line.startswith("#"):
+            continue
+        # Skip GitHub auto-generated boilerplate lines.
+        if line.startswith("**Full Changelog**"):
+            continue
+        lines.append(line)
+        if len(lines) >= max_lines:
+            lines.append("...")
+            break
+
+    return "\n".join(lines)
+
+
+def _make_progress_window_html() -> str:
+    """Return a small HTML page used as a download progress overlay."""
+    return """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;background:#0a1324;color:#e2e8f0;font-family:'Segoe UI',sans-serif;
+display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column}
+h2{font-size:18px;margin-bottom:16px;font-weight:500}
+.bar-outer{width:340px;height:18px;background:#1e293b;border-radius:9px;overflow:hidden}
+.bar-inner{height:100%;width:0%;background:linear-gradient(90deg,#3b82f6,#06b6d4);
+border-radius:9px;transition:width .3s}
+#pct{margin-top:10px;font-size:13px;color:#94a3b8}
+#status{margin-top:6px;font-size:12px;color:#64748b}
+</style></head><body>
+<h2>Descargando actualizacion...</h2>
+<div class="bar-outer"><div class="bar-inner" id="bar"></div></div>
+<div id="pct">0%</div>
+<div id="status">Conectando...</div>
+</body></html>"""
+
+
+class _ProgressReporter:
+    """Bridges download progress to the progress WebView window."""
+
+    def __init__(self, webview_window: Optional[object] = None) -> None:
+        self._window = webview_window
+        self._last_pct = -1
+
+    def __call__(self, downloaded: int, total: int) -> None:
+        if total > 0:
+            pct = min(int(downloaded * 100 / total), 100)
+            mb_done = downloaded / (1024 * 1024)
+            mb_total = total / (1024 * 1024)
+            status_text = f"{mb_done:.1f} MB / {mb_total:.1f} MB"
+        else:
+            pct = 0
+            mb_done = downloaded / (1024 * 1024)
+            status_text = f"{mb_done:.1f} MB descargados"
+
+        if pct == self._last_pct:
+            return
+        self._last_pct = pct
+
+        if self._window:
+            try:
+                self._window.evaluate_js(
+                    f"document.getElementById('bar').style.width='{pct}%';"
+                    f"document.getElementById('pct').textContent='{pct}%';"
+                    f"document.getElementById('status').textContent='{status_text}';"
+                )
+            except Exception:
+                pass
+
+
 def _check_and_apply_update_if_available() -> bool:
     if not AUTO_UPDATE_ENABLED:
         return False
     if os.environ.get("TUTTI_DESKTOP_DISABLE_AUTO_UPDATE") == "1":
         return False
     if not getattr(sys, "frozen", False):
-        # Auto-update is intended for distributed EXE builds.
         return False
 
     current_exe = Path(sys.executable).resolve()
@@ -407,16 +625,28 @@ def _check_and_apply_update_if_available() -> bool:
         )
         return False
 
+    # Build changelog for the confirmation dialog.
+    changelog = _build_changelog_summary(release)
+    changelog_block = ""
+    if changelog:
+        changelog_block = f"\n\nNovedades:\n{changelog}"
+
+    asset_size = asset.get("size") or 0
+    size_label = f" ({asset_size / (1024 * 1024):.1f} MB)" if asset_size else ""
+
     confirm = _message_box(
         (
-            f"Hay una nueva version disponible: {latest_tag}\\n"
-            f"Version actual: {APP_VERSION}\\n\\n"
+            f"Hay una nueva version disponible: {latest_tag}\n"
+            f"Version actual: {APP_VERSION}\n"
+            f"Descarga: {asset.get('name', '?')}{size_label}"
+            f"{changelog_block}\n\n"
             "Deseas actualizar ahora?"
         ),
         "TUTTI - Actualizacion disponible",
         kind="yesno",
     )
     if not confirm:
+        _log_update("User declined update")
         return False
 
     download_url = asset.get("browser_download_url")
@@ -426,14 +656,88 @@ def _check_and_apply_update_if_available() -> bool:
         _message_box("No se pudo obtener el enlace de descarga de la actualizacion.", "TUTTI", kind="warn")
         return False
 
+    # Fetch expected checksum before downloading.
+    expected_hash = _fetch_expected_checksum(release, asset_name)
+
     work_dir = Path(tempfile.mkdtemp(prefix="tutti_update_"))
     asset_path = work_dir / asset_name
 
+    # Show progress window while downloading.
+    progress_win: Optional[object] = None
     try:
-        _log_update(
-            f"Downloading update asset | tag={latest_tag} | asset={asset_name} | url={download_url}"
+        progress_win = webview.create_window(
+            "TUTTI - Descargando actualizacion",
+            html=_make_progress_window_html(),
+            width=460,
+            height=200,
+            resizable=False,
+            on_top=True,
         )
-        _download_file(download_url, asset_path)
+    except Exception:
+        pass
+
+    reporter = _ProgressReporter(progress_win)
+    download_hash: Optional[str] = None
+    download_error: Optional[Exception] = None
+
+    def _do_download() -> None:
+        nonlocal download_hash, download_error
+        try:
+            _log_update(
+                f"Downloading update asset | tag={latest_tag} | asset={asset_name} | url={download_url}"
+            )
+            download_hash = _download_file(download_url, asset_path, progress_callback=reporter)
+        except Exception as exc:
+            download_error = exc
+
+    download_thread = threading.Thread(target=_do_download, daemon=True)
+    download_thread.start()
+
+    if progress_win:
+        try:
+            # webview.start blocks until all windows close.  We poll the
+            # download thread and close the window when done.
+            def _poll_download(win: object) -> None:
+                while download_thread.is_alive():
+                    time.sleep(0.3)
+                time.sleep(0.3)
+                try:
+                    win.destroy()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
+            polling_thread = threading.Thread(target=_poll_download, args=(progress_win,), daemon=True)
+            polling_thread.start()
+            webview.start()
+        except Exception:
+            pass
+
+    download_thread.join(timeout=300)
+
+    if download_error:
+        _log_update(f"Update failed while downloading ({download_error})")
+        _message_box(
+            f"Error al descargar la actualizacion:\n{download_error}",
+            "TUTTI - Error de actualizacion",
+            kind="warn",
+        )
+        shutil.rmtree(work_dir, ignore_errors=True)
+        return False
+
+    # Verify integrity.
+    if not _verify_checksum(asset_path, download_hash or "", expected_hash):
+        _message_box(
+            (
+                "La verificacion de integridad de la descarga fallo.\n"
+                "El archivo puede estar corrupto. Intenta de nuevo mas tarde."
+            ),
+            "TUTTI - Error de integridad",
+            kind="warn",
+        )
+        shutil.rmtree(work_dir, ignore_errors=True)
+        return False
+
+    try:
         if update_mode == "installer":
             _log_update(
                 f"Installer update downloaded | tag={latest_tag} | asset={asset_name}"
@@ -457,25 +761,61 @@ def _check_and_apply_update_if_available() -> bool:
         else:
             updated_exe = asset_path
 
+        # Create backup before replacing.
+        backup_path = _create_backup(current_exe)
+
         _log_update(
             f"Update downloaded successfully | applying update to {current_exe} from {updated_exe}"
         )
         _message_box(
             (
-                "Actualizacion descargada. La app se cerrara para aplicar cambios.\n"
+                "Actualizacion descargada y verificada.\n"
+                "La app se cerrara para aplicar cambios.\n"
                 "Al terminar, abre TUTTI manualmente."
             ),
             "TUTTI - Actualizando",
             kind="info",
         )
-        return _launch_updater_and_exit(current_exe=current_exe, new_exe=updated_exe)
+        return _launch_updater_and_exit(current_exe=current_exe, new_exe=updated_exe, backup_exe=backup_path)
     except Exception as exc:
-        _log_update(f"Update failed while downloading/applying ({exc})")
-        try:
-            shutil.rmtree(work_dir, ignore_errors=True)
-        except Exception:
-            pass
+        _log_update(f"Update failed while applying ({exc})")
+        shutil.rmtree(work_dir, ignore_errors=True)
         return False
+
+
+def _check_update_background(callback: Callable[[Optional[dict], str], None]) -> None:
+    """Run the update check in a background thread (non-blocking).
+
+    Calls *callback(release_data, latest_tag)* on the main thread when an
+    update is available, or *callback(None, "")* when there is nothing to do.
+    """
+    def _worker() -> None:
+        if not AUTO_UPDATE_ENABLED:
+            callback(None, "")
+            return
+        if os.environ.get("TUTTI_DESKTOP_DISABLE_AUTO_UPDATE") == "1":
+            callback(None, "")
+            return
+        if not getattr(sys, "frozen", False):
+            callback(None, "")
+            return
+
+        _log_update(f"Background update check started | current_version={APP_VERSION}")
+        try:
+            release = _fetch_latest_release(GITHUB_REPO)
+        except Exception as exc:
+            _log_update(f"Background update check failed ({exc})")
+            callback(None, "")
+            return
+
+        latest_tag = str(release.get("tag_name") or "").strip()
+        if latest_tag and _is_newer_version(APP_VERSION, latest_tag):
+            callback(release, latest_tag)
+        else:
+            callback(None, "")
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
 
 
 def _run_backend_process_mode() -> int:
@@ -643,8 +983,22 @@ def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "--run-backend":
         return _run_backend_process_mode()
 
-    if _check_and_apply_update_if_available():
-        return 0
+    # Check for updates in the foreground only when TUTTI_DESKTOP_UPDATE_BLOCKING=1,
+    # otherwise the check runs in background while the app boots.
+    blocking_update = _env_flag("TUTTI_DESKTOP_UPDATE_BLOCKING", "0")
+    _pending_update: dict = {}
+
+    if blocking_update:
+        if _check_and_apply_update_if_available():
+            return 0
+    else:
+        # Non-blocking: fire the check and notify later if an update is found.
+        def _on_update_result(release: Optional[dict], tag: str) -> None:
+            if release and tag:
+                _pending_update["release"] = release
+                _pending_update["tag"] = tag
+
+        _check_update_background(_on_update_result)
 
     runtime_root = _resolve_runtime_root()
     runtime = DesktopRuntime(runtime_root)
@@ -665,6 +1019,15 @@ def main() -> int:
         runtime.stop_backend()
         print("[Desktop] Backend did not become ready in time.")
         return 1
+
+    # If the background check found an update, prompt the user now (app is
+    # already loaded so it feels snappier).
+    if not blocking_update and _pending_update.get("release"):
+        # Give the background thread a moment to finish writing.
+        time.sleep(0.5)
+        if _check_and_apply_update_if_available():
+            runtime.stop_backend()
+            return 0
 
     default_fullscreen = "1" if getattr(sys, "frozen", False) else "0"
     start_fullscreen = _env_flag("TUTTI_DESKTOP_START_FULLSCREEN", default_fullscreen)
