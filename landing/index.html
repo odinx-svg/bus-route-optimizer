@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TUTTI | Sistema de Optimizacion de Rutas</title>
+  <meta name="description" content="TUTTI optimiza rutas escolares con motor ILP, validacion anti-solape, mapa OSRM y exportacion operativa.">
+  <meta name="theme-color" content="#0c1a2a">
+  <meta property="og:title" content="TUTTI | Sistema de Optimizacion de Rutas">
+  <meta property="og:description" content="Planifica y opera rutas escolares con precision real.">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="texture" aria-hidden="true"></div>
+  <div class="blob blob-a" aria-hidden="true"></div>
+  <div class="blob blob-b" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Inicio">
+      <span class="brand-mark">TT</span>
+      <span class="brand-text">
+        <strong>TUTTI</strong>
+        <small>Fleet Optimizer</small>
+      </span>
+    </a>
+    <nav class="nav-actions">
+      <a class="btn ghost" href="https://github.com/odinx-svg/bus-route-optimizer" target="_blank" rel="noreferrer">GitHub</a>
+      <a id="releaseBtn" class="btn ghost" href="https://github.com/odinx-svg/bus-route-optimizer/releases" target="_blank" rel="noreferrer">Versiones</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy reveal">
+        <p class="eyebrow">Sistema operativo para transporte escolar</p>
+        <h1>Optimiza la flota, elimina solapes y publica horarios listos para operar.</h1>
+        <p>
+          TUTTI transforma tus Excel en un plan diario validado con reglas de negocio reales:
+          motor ILP, rutas OSRM, editor timeline y exportacion PDF.
+        </p>
+        <div class="hero-actions">
+          <a id="downloadBtn" class="btn primary" href="https://github.com/odinx-svg/bus-route-optimizer/releases/latest" target="_blank" rel="noreferrer">
+            Descargar Sistema
+          </a>
+          <a class="btn soft" href="#funciones">Ver funcionalidades</a>
+        </div>
+        <p class="release-line">
+          <span class="signal"></span>
+          <span id="releaseInfo">Cargando ultima version publicada...</span>
+        </p>
+      </div>
+
+      <aside class="hero-panel reveal reveal-delay">
+        <p class="panel-label">Flujo principal</p>
+        <ol>
+          <li><span>1</span>Subir Excel de rutas</li>
+          <li><span>2</span>Ejecutar optimizacion por dia</li>
+          <li><span>3</span>Editar en timeline y validar</li>
+          <li><span>4</span>Publicar y exportar PDF</li>
+        </ol>
+        <p class="panel-foot">Desktop y web listos para operaciones reales.</p>
+      </aside>
+    </section>
+
+    <section class="metrics reveal">
+      <article>
+        <p class="metric-value">ILP</p>
+        <p class="metric-label">Asignacion con restricciones operativas</p>
+      </article>
+      <article>
+        <p class="metric-value">OSRM</p>
+        <p class="metric-label">Geometria y tiempos de posicionamiento real</p>
+      </article>
+      <article>
+        <p class="metric-value">Anti-overlap</p>
+        <p class="metric-label">Control de solapes entre servicios</p>
+      </article>
+    </section>
+
+    <section id="funciones" class="features reveal">
+      <article class="feature-card">
+        <h2>Motor de Optimizacion</h2>
+        <p>Minimiza cantidad de buses manteniendo viabilidad temporal y capacidad.</p>
+      </article>
+      <article class="feature-card">
+        <h2>Workspace Editable</h2>
+        <p>Reasignacion manual por drag and drop con validacion de conflictos.</p>
+      </article>
+      <article class="feature-card">
+        <h2>Mapa Operativo</h2>
+        <p>Visualiza rutas, paradas y conexiones para revisar el plan completo.</p>
+      </article>
+      <article class="feature-card">
+        <h2>Exportacion Ejecutiva</h2>
+        <p>Genera reportes PDF para operacion diaria y comunicacion interna.</p>
+      </article>
+    </section>
+
+    <section class="download-cta reveal">
+      <h3>Instalalo y prueba en menos de 2 minutos</h3>
+      <p>Descarga la build mas reciente desde GitHub y ejecuta TUTTI en tu equipo.</p>
+      <a id="downloadBtnBottom" class="btn primary wide" href="https://github.com/odinx-svg/bus-route-optimizer/releases/latest" target="_blank" rel="noreferrer">
+        Descargar TUTTI
+      </a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>&copy; <span id="year"></span> TUTTI Fleet Optimizer</p>
+  </footer>
+
+  <script src="./main.js"></script>
+</body>
+</html>
