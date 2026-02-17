@@ -1,5 +1,5 @@
 import React from 'react';
-import { Map as MapIcon, LayoutGrid, Box, Activity, Bus } from 'lucide-react';
+import { Map as MapIcon, LayoutGrid, Box, Activity, Bus, Gauge } from 'lucide-react';
 
 const DAY_CONFIG = [
   { key: 'L', label: 'L', full: 'Lunes' },
@@ -52,6 +52,7 @@ const DaySelector = ({ scheduleByDay, activeDay, onDayChange }) => {
 
 const ViewTabs = ({ viewMode, setViewMode, hasSchedule }) => {
   const tabs = [
+    { id: 'dashboard', label: 'Control', icon: Gauge, requiresSchedule: false },
     { id: 'map', label: 'Mapa', icon: MapIcon, requiresSchedule: false },
     { id: 'workspace', label: 'Workspace', icon: LayoutGrid, requiresSchedule: true },
     { id: 'fleet', label: 'Flota', icon: Bus, requiresSchedule: false },

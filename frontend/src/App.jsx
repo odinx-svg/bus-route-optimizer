@@ -8,6 +8,7 @@ import { UnifiedWorkspace } from './components/workspace';
 import { MonteCarloPanel } from './components/MonteCarloPanel';
 import OptimizationProgress from './components/OptimizationProgress';
 import FleetPage from './pages/FleetPage';
+import OperationsDashboard from './pages/OperationsDashboard';
 import { notifications } from './services/notifications';
 import { clearGeometryCache } from './services/RouteService';
 import { buildRouteCapacityMap, getItemCapacityNeeded } from './utils/capacity';
@@ -27,7 +28,7 @@ function App() {
   const [showComparison, setShowComparison] = useState(false);
 
   const [activeTab, setActiveTab] = useState('upload');
-  const [viewMode, setViewMode] = useState('map'); // 'map' | 'workspace' | 'fleet' | 'montecarlo'
+  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'map' | 'workspace' | 'fleet' | 'montecarlo'
   const [workspaceMode, setWorkspaceMode] = useState('create'); // 'create' | 'edit' | 'optimize'
   const [selectedBusId, setSelectedBusId] = useState(null);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
@@ -205,7 +206,7 @@ function App() {
       setPipelineStatus('idle');
       setPipelineEvents([]);
       setPipelineMetrics(null);
-      setViewMode('map');
+      setViewMode('dashboard');
       setWorkspaceMode('create');
       clearGeometryCache();
       notifications.info('Datos borrados', 'Puedes empezar de nuevo');
@@ -496,6 +497,13 @@ function App() {
                   </div>
                 )}
               </>
+            )}
+            {viewMode === 'dashboard' && (
+              <OperationsDashboard
+                routes={routes}
+                scheduleByDay={scheduleByDay}
+                activeDay={activeDay}
+              />
             )}
             {viewMode === 'workspace' && (
               <UnifiedWorkspace
