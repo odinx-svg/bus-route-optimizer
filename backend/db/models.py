@@ -8,14 +8,20 @@ These models define the database schema for:
 
 from sqlalchemy import (
     Column, String, Integer, Float, DateTime,
-    Boolean, ForeignKey, JSON, Time, create_engine, Text
+    Boolean, ForeignKey, JSON, Time, Text
 )
 from sqlalchemy.orm import declarative_base, relationship
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, ARRAY as PGARRAY
 import uuid
 from datetime import datetime
 
 Base = declarative_base()
+
+
+# Cross-database compatible types.
+# PostgreSQL keeps native UUID/ARRAY, SQLite uses String/JSON fallback.
+UUIDType = PGUUID(as_uuid=False).with_variant(String(36), "sqlite")
+DaysArrayType = PGARRAY(String).with_variant(JSON, "sqlite")
 
 
 class RouteModel(Base):
@@ -31,7 +37,7 @@ class RouteModel(Base):
     departure_time = Column(Time, nullable=True)
     capacity_needed = Column(Integer, default=0)
     contract_id = Column(String, nullable=False)
-    days = Column(ARRAY(String), default=list)  # ['L', 'M', 'X']
+    days = Column(DaysArrayType, default=list)  # ['L', 'M', 'X']
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relaciones
@@ -46,7 +52,7 @@ class StopModel(Base):
     """Parada de una ruta"""
     __tablename__ = "stops"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
     route_id = Column(String, ForeignKey("routes.id", ondelete="CASCADE"))
     name = Column(String, nullable=False)
     lat = Column(Float, nullable=False)
@@ -66,7 +72,7 @@ class OptimizationJob(Base):
     """Job de optimización (para tracking async)"""
     __tablename__ = "optimization_jobs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
     status = Column(String, default="pending")  # pending, running, completed, failed
     algorithm = Column(String, default="v6")  # v2, v4, v5, v6
     input_data = Column(JSON)  # Rutas de entrada
@@ -87,8 +93,8 @@ class OptimizationResultModel(Base):
     """Resultado: qué ruta va en qué bus para un job"""
     __tablename__ = "optimization_results"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_id = Column(UUID(as_uuid=True), ForeignKey("optimization_jobs.id", ondelete="CASCADE"))
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id = Column(UUIDType, ForeignKey("optimization_jobs.id", ondelete="CASCADE"))
     route_id = Column(String, ForeignKey("routes.id", ondelete="SET NULL"))
     bus_id = Column(String, nullable=False)
     start_time = Column(Time, nullable=False)

@@ -40,15 +40,23 @@ def init_engine() -> Engine | None:
         return None
     
     try:
-        # Create engine with connection pooling
-        new_engine = create_engine(
-            DATABASE_URL,
-            pool_pre_ping=True,  # Verify connections before use
-            pool_size=5,
-            max_overflow=10,
-            pool_recycle=3600,  # Recycle connections after 1 hour
-            echo=os.getenv("SQLALCHEMY_ECHO", "false").lower() == "true"
-        )
+        is_sqlite = DATABASE_URL.startswith("sqlite")
+        engine_kwargs = {
+            "echo": os.getenv("SQLALCHEMY_ECHO", "false").lower() == "true",
+        }
+
+        if is_sqlite:
+            # SQLite local mode (desktop): thread-safe access for FastAPI workers.
+            engine_kwargs["connect_args"] = {"check_same_thread": False}
+            engine_kwargs["pool_pre_ping"] = True
+        else:
+            # PostgreSQL mode.
+            engine_kwargs["pool_pre_ping"] = True
+            engine_kwargs["pool_size"] = 5
+            engine_kwargs["max_overflow"] = 10
+            engine_kwargs["pool_recycle"] = 3600  # Recycle connections after 1 hour
+
+        new_engine = create_engine(DATABASE_URL, **engine_kwargs)
         
         # Test connection
         with new_engine.connect() as conn:

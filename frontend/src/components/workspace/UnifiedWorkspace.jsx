@@ -644,9 +644,9 @@ export function UnifiedWorkspace({
     setIsInitialized(false);
   }, [mode]);
 
-  // Re-sync buses when changing day while in optimize mode.
+  // Re-sync buses when changing day while working with persisted schedules.
   useEffect(() => {
-    if (mode === 'optimize') {
+    if (mode === 'optimize' || mode === 'edit') {
       setIsInitialized(false);
     }
   }, [mode, externalActiveDay, initialSchedule]);
@@ -1265,16 +1265,54 @@ export function UnifiedWorkspace({
     notifications.info('Horario limpiado');
   }, []);
 
-  const handleSaveDraft = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(buses));
-    localStorage.setItem(STORAGE_KEY_STATUS, JSON.stringify({ 
-      mode, 
-      activeDay, 
-      lastSaved: new Date().toISOString() 
-    }));
-    setHasUnsavedChanges(false);
-    notifications.success('Borrador guardado', 'El horario se ha guardado localmente');
-  }, [buses, mode, activeDay]);
+  const buildScheduleData = useCallback(() => ({
+    day: activeDay,
+    mode,
+    buses: buses.map((bus) => ({
+      bus_id: bus.id,
+      items: bus.routes.map((route, index) => ({
+        route_id: route.id,
+        route_code: route.code,
+        start_time: route.startTime,
+        end_time: route.endTime,
+        origin: route.origin,
+        destination: route.destination,
+        type: route.type,
+        order: index,
+      })),
+    })),
+    stats: {
+      total_buses: buses.length,
+      total_routes: buses.reduce((sum, b) => sum + b.routes.length, 0),
+    },
+  }), [activeDay, buses, mode]);
+
+  const handleSaveDraft = useCallback(async () => {
+    setIsSaving(true);
+    const loadingToast = notifications.loading('Guardando borrador...');
+    try {
+      localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(buses));
+      localStorage.setItem(STORAGE_KEY_STATUS, JSON.stringify({
+        mode,
+        activeDay,
+        lastSaved: new Date().toISOString(),
+      }));
+
+      if (onSave) {
+        await onSave(buildScheduleData());
+      }
+
+      setHasUnsavedChanges(false);
+      notifications.dismiss(loadingToast);
+      notifications.success('Borrador guardado', 'Cambios guardados localmente y en el sistema');
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      notifications.dismiss(loadingToast);
+      notifications.error('Error al guardar', error.message || 'No se pudo guardar el borrador');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [activeDay, buses, buildScheduleData, mode, onSave]);
 
   const handlePublish = useCallback(async () => {
     const hasErrors = Object.values(validationResults).some(v => v.errors?.length > 0);
@@ -1287,27 +1325,7 @@ export function UnifiedWorkspace({
     const loadingToast = notifications.loading('Publicando horario...');
 
     try {
-      const scheduleData = {
-        day: activeDay,
-        mode,
-        buses: buses.map(bus => ({
-          bus_id: bus.id,
-          items: bus.routes.map((route, index) => ({
-            route_id: route.id,
-            route_code: route.code,
-            start_time: route.startTime,
-            end_time: route.endTime,
-            origin: route.origin,
-            destination: route.destination,
-            type: route.type,
-            order: index,
-          })),
-        })),
-        stats: {
-          total_buses: buses.length,
-          total_routes: buses.reduce((sum, b) => sum + b.routes.length, 0),
-        },
-      };
+      const scheduleData = buildScheduleData();
 
       if (onPublish) {
         await onPublish(scheduleData);
@@ -1325,7 +1343,7 @@ export function UnifiedWorkspace({
     } finally {
       setIsPublishing(false);
     }
-  }, [buses, activeDay, mode, validationResults, onPublish, onSave]);
+  }, [buildScheduleData, onPublish, onSave, validationResults]);
 
   const hasErrors = Object.values(validationResults).some(v => v.errors?.length > 0);
 
@@ -1783,11 +1801,15 @@ export function UnifiedWorkspace({
             
             <button
               onClick={handleSaveDraft}
-              disabled={!hasUnsavedChanges}
+              disabled={isSaving || !hasUnsavedChanges}
               className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
             >
-              <Save className="w-3 h-3" />
-              Guardar
+              {isSaving ? (
+                <div className="w-3 h-3 border-2 border-[#9aa6b6]/35 border-t-[#9aa6b6] rounded-full animate-spin" />
+              ) : (
+                <Save className="w-3 h-3" />
+              )}
+              {isSaving ? 'Guardando...' : 'Guardar'}
             </button>
             
             <button

@@ -19,6 +19,8 @@ htmlcov/
 *.egg-info/
 backend/osrm_cache.json
 osrm_cache.json
+backend/data/
+*.db
 
 # Node.js
 node_modules/
@@ -27,6 +29,7 @@ yarn-error.log
 .env
 dist/
 build/
+*.spec
 frontend/playwright-report/
 frontend/test-results/
 frontend/.vite/

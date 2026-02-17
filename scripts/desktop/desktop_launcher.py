@@ -69,6 +69,23 @@ def _resolve_update_log_path() -> Path:
     return log_dir / "desktop-updater.log"
 
 
+def _resolve_persistent_data_dir() -> Path:
+    """Resolve a writable persistent data directory for desktop runtime."""
+    if os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        data_dir = base / "Tutti" / "data"
+    else:
+        data_dir = Path.home() / ".tutti" / "data"
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
+def _sqlite_url_for_path(db_path: Path) -> str:
+    absolute = db_path.resolve()
+    return f"sqlite:///{absolute.as_posix()}"
+
+
 def _log_update(message: str) -> None:
     try:
         log_path = _resolve_update_log_path()
@@ -159,9 +176,28 @@ def _fetch_latest_release(repo_slug: str) -> dict:
     raise RuntimeError("No suitable GitHub release with assets found")
 
 
-def _select_release_asset(release_data: dict) -> Optional[dict]:
+def _select_installer_asset(release_data: dict) -> Optional[dict]:
     assets = release_data.get("assets", []) or []
     by_name = {asset.get("name"): asset for asset in assets}
+
+    exact_candidates = ("TuttiSetup.exe", "Tutti Installer.exe")
+    for candidate in exact_candidates:
+        if candidate in by_name:
+            return by_name[candidate]
+
+    for asset in assets:
+        name = (asset.get("name") or "").lower()
+        if not name.endswith(".exe"):
+            continue
+        if "setup" in name or "installer" in name or "install" in name:
+            return asset
+    return None
+
+
+def _select_portable_asset(release_data: dict) -> Optional[dict]:
+    assets = release_data.get("assets", []) or []
+    by_name = {asset.get("name"): asset for asset in assets}
+    installer_keywords = ("setup", "installer", "install")
 
     if RELEASE_ASSET_ZIP in by_name:
         return by_name[RELEASE_ASSET_ZIP]
@@ -174,9 +210,40 @@ def _select_release_asset(release_data: dict) -> Optional[dict]:
             return asset
     for asset in assets:
         name = (asset.get("name") or "").lower()
+        if any(keyword in name for keyword in installer_keywords):
+            continue
         if name.endswith(".exe"):
             return asset
     return None
+
+
+def _is_protected_install_path(exe_path: Path) -> bool:
+    if os.name != "nt":
+        return False
+
+    install_dir = exe_path.resolve().parent
+    protected_roots: list[Path] = []
+    for env_name in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+        value = os.environ.get(env_name)
+        if value:
+            protected_roots.append(Path(value).resolve())
+
+    for root in protected_roots:
+        try:
+            if install_dir.is_relative_to(root):
+                return True
+        except Exception:
+            continue
+
+    probe = install_dir / f".tutti_write_probe_{int(time.time())}.tmp"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return True
 
 
 def _download_file(url: str, destination: Path) -> None:
@@ -225,6 +292,18 @@ exit /b 1
     return True
 
 
+def _launch_installer_and_exit(installer_exe: Path) -> bool:
+    try:
+        if os.name == "nt":
+            os.startfile(str(installer_exe))  # type: ignore[attr-defined]
+        else:
+            subprocess.Popen([str(installer_exe)])
+        return True
+    except Exception as exc:
+        _log_update(f"Installer launch failed ({exc})")
+        return False
+
+
 def _check_and_apply_update_if_available() -> bool:
     if not AUTO_UPDATE_ENABLED:
         return False
@@ -254,9 +333,37 @@ def _check_and_apply_update_if_available() -> bool:
         )
         return False
 
-    asset = _select_release_asset(release)
+    installer_asset = _select_installer_asset(release)
+    portable_asset = _select_portable_asset(release)
+    protected_install = _is_protected_install_path(current_exe)
+
+    asset: Optional[dict] = None
+    update_mode = "portable"
+    if protected_install and installer_asset:
+        asset = installer_asset
+        update_mode = "installer"
+    elif portable_asset:
+        asset = portable_asset
+        update_mode = "portable"
+    elif installer_asset:
+        asset = installer_asset
+        update_mode = "installer"
+
     if not asset:
         _log_update(f"Release {latest_tag} found but no compatible asset was found")
+        return False
+    if protected_install and update_mode != "installer":
+        _log_update(
+            "Update blocked: install path is protected and release has no installer asset"
+        )
+        _message_box(
+            (
+                "Hay una nueva version, pero esta instalacion requiere actualizacion con instalador.\n\n"
+                "Sube TuttiSetup.exe al release y vuelve a abrir TUTTI."
+            ),
+            "TUTTI - Actualizacion pendiente",
+            kind="warn",
+        )
         return False
 
     confirm = _message_box(
@@ -286,6 +393,20 @@ def _check_and_apply_update_if_available() -> bool:
             f"Downloading update asset | tag={latest_tag} | asset={asset_name} | url={download_url}"
         )
         _download_file(download_url, asset_path)
+        if update_mode == "installer":
+            _log_update(
+                f"Installer update downloaded | tag={latest_tag} | asset={asset_name}"
+            )
+            _message_box(
+                (
+                    "Se abrira el instalador de actualizacion.\n"
+                    "Sigue el asistente y al finalizar se abrira TUTTI."
+                ),
+                "TUTTI - Actualizando",
+                kind="info",
+            )
+            return _launch_installer_and_exit(asset_path)
+
         if str(asset_name).lower().endswith(".zip"):
             updated_exe = _extract_exe_from_zip(asset_path, work_dir)
             if not updated_exe:
@@ -317,8 +438,8 @@ def _run_backend_process_mode() -> int:
     runtime_root = _resolve_runtime_root()
     backend_dir = runtime_root / "backend"
     frontend_dist = runtime_root / "frontend" / "dist"
-    data_dir = backend_dir / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
+    data_dir = _resolve_persistent_data_dir()
+    database_url = _sqlite_url_for_path(data_dir / "tutti_desktop.db")
 
     os.environ.setdefault("SERVE_FRONTEND_DIST", "true")
     os.environ.setdefault("FRONTEND_DIST_DIR", str(frontend_dist))
@@ -326,7 +447,8 @@ def _run_backend_process_mode() -> int:
     os.environ.setdefault("CELERY_ENABLED", "false")
     os.environ.setdefault("WEBSOCKET_ENABLED", "true")
     os.environ.setdefault("USE_DATABASE", "true")
-    os.environ.setdefault("DATABASE_URL", "sqlite:///./data/tutti_desktop.db")
+    os.environ.setdefault("DATABASE_URL", database_url)
+    os.environ.setdefault("TUTTI_DATA_DIR", str(data_dir))
     os.environ.setdefault("CORS_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000")
 
     os.chdir(backend_dir)
@@ -382,8 +504,8 @@ class DesktopRuntime:
         return sys.executable
 
     def start_backend(self) -> None:
-        data_dir = self.backend_dir / "data"
-        data_dir.mkdir(parents=True, exist_ok=True)
+        data_dir = _resolve_persistent_data_dir()
+        database_url = _sqlite_url_for_path(data_dir / "tutti_desktop.db")
 
         env = os.environ.copy()
         env["SERVE_FRONTEND_DIST"] = "true"
@@ -392,7 +514,8 @@ class DesktopRuntime:
         env["CELERY_ENABLED"] = "false"
         env["WEBSOCKET_ENABLED"] = "true"
         env["USE_DATABASE"] = "true"
-        env["DATABASE_URL"] = "sqlite:///./data/tutti_desktop.db"
+        env["DATABASE_URL"] = database_url
+        env["TUTTI_DATA_DIR"] = str(data_dir)
         env["CORS_ORIGINS"] = "http://127.0.0.1:8000,http://localhost:8000"
 
         logs_dir = Path.home() / "AppData" / "Local" / "Tutti" / "logs"

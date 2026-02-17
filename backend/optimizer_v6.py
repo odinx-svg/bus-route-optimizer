@@ -25,6 +25,8 @@ Uses PuLP (CBC solver) for ILP optimization.
 import logging
 import math
 import time as time_module
+import os
+import sys
 from typing import List, Dict, Tuple, Optional, Set, Any
 from datetime import time
 from dataclasses import dataclass, field
@@ -69,6 +71,48 @@ ILP_TIME_LIMIT: int = 15        # seconds per ILP solve (exits/block4 only)
 LOCAL_SEARCH_TIME_LIMIT: int = 30  # seconds for local search phase
 ILP_ENTRY_TIME_LIMIT: int = 60  # more time for entries with time constraints
 MIN_START_HOUR: int = 6          # earliest bus can start (6:00 AM)
+
+
+def _resolve_cbc_executable() -> Optional[str]:
+    """Resolve CBC executable path for source and frozen desktop runtimes."""
+    env_path = os.getenv("PULP_CBC_PATH", "").strip()
+    candidates: List[str] = []
+    if env_path:
+        candidates.append(env_path)
+
+    base_dir = os.path.dirname(__file__)
+    candidates.extend(
+        [
+            os.path.join(base_dir, "bin", "cbc.exe"),
+            os.path.join(base_dir, "solverdir", "cbc", "win", "i64", "cbc.exe"),
+            os.path.join(base_dir, "..", "backend", "bin", "cbc.exe"),
+        ]
+    )
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.extend(
+            [
+                os.path.join(meipass, "backend", "bin", "cbc.exe"),
+                os.path.join(meipass, "pulp", "solverdir", "cbc", "win", "i64", "cbc.exe"),
+            ]
+        )
+
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            return os.path.abspath(candidate)
+    return None
+
+
+def _build_cbc_solver(time_limit_seconds: int):
+    """Build CBC solver with explicit path in desktop/frozen mode when available."""
+    cbc_path = _resolve_cbc_executable()
+    if cbc_path:
+        try:
+            return pulp.PULP_CBC_CMD(msg=0, timeLimit=int(time_limit_seconds), path=cbc_path)
+        except Exception:
+            pass
+    return pulp.PULP_CBC_CMD(msg=0, timeLimit=int(time_limit_seconds))
 
 # ============================================================
 # UTILITY FUNCTIONS
@@ -789,7 +833,7 @@ def build_chains_ilp(
             prob += pulp.lpSum(succs) <= 1
 
     # Solve
-    solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=ILP_TIME_LIMIT)
+    solver = _build_cbc_solver(ILP_TIME_LIMIT)
     prob.solve(solver)
 
     if prob.status != pulp.constants.LpStatusOptimal:
@@ -1178,7 +1222,7 @@ def match_blocks_ilp(
         if relevant:
             prob += pulp.lpSum(relevant) <= 1
 
-    solver = pulp.PULP_CBC_CMD(msg=0, timeLimit=10)
+    solver = _build_cbc_solver(10)
     prob.solve(solver)
 
     pairs: List[Tuple[int, int]] = []

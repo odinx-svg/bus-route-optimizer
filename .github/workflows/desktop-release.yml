@@ -48,11 +48,22 @@ jobs:
           TUTTI_NON_INTERACTIVE: "1"
         run: scripts\desktop\build-desktop-app-exe.bat
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build desktop installer
+        shell: cmd
+        env:
+          TUTTI_NON_INTERACTIVE: "1"
+        run: scripts\desktop\build-desktop-installer.bat
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: tutti-desktop-release
           path: |
+            dist/desktop-app/TuttiSetup.exe
             dist/Tutti Desktop.exe
             dist/desktop-app/TuttiDesktopApp.zip
 
@@ -60,6 +71,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            dist/desktop-app/TuttiSetup.exe
             dist/Tutti Desktop.exe
             dist/desktop-app/TuttiDesktopApp.zip
           draft: false

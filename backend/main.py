@@ -12,8 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Body, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from typing import List, Dict, Any, Optional, Union, Tuple
 from pydantic import BaseModel
 import shutil
@@ -25,6 +26,8 @@ import json
 import importlib.util
 import asyncio
 import re
+import traceback
+import sys
 
 from parser import parse_routes, parse_routes_with_report, aggregate_parse_reports
 from models import Route, Bus, BusSchedule
@@ -77,8 +80,44 @@ build_completed_message = _fallback_completed_message
 build_error_message = _fallback_error_message
 build_pong_message = _fallback_pong_message
 
+
+def _candidate_backend_roots() -> List[str]:
+    """Return backend root candidates for source and frozen runtimes."""
+    base_dir = os.path.dirname(__file__)
+    candidates: List[str] = [
+        base_dir,
+        os.path.join(base_dir, "backend"),
+    ]
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.extend(
+            [
+                meipass,
+                os.path.join(meipass, "backend"),
+            ]
+        )
+    # Preserve order and remove duplicates
+    unique: List[str] = []
+    for candidate in candidates:
+        resolved = os.path.abspath(candidate)
+        if resolved not in unique:
+            unique.append(resolved)
+    return unique
+
+
+def _resolve_backend_file(*parts: str) -> Optional[str]:
+    """Resolve a backend file path across source and PyInstaller layouts."""
+    for root in _candidate_backend_roots():
+        path = os.path.join(root, *parts)
+        if os.path.exists(path):
+            return path
+    return None
+
+
 try:
-    websocket_module_path = os.path.join(os.path.dirname(__file__), "websocket.py")
+    websocket_module_path = _resolve_backend_file("websocket.py")
+    if not websocket_module_path:
+        raise ImportError("websocket.py not found in runtime backend paths")
     ws_spec = importlib.util.spec_from_file_location("tutti_ws_core", websocket_module_path)
     if ws_spec is None or ws_spec.loader is None:
         raise ImportError(f"Could not load spec from {websocket_module_path}")
@@ -95,7 +134,14 @@ try:
 except Exception as e:
     _websocket_import_error = str(e)
     try:
-        from websocket import manager, build_status_message, build_progress_message, build_completed_message, build_error_message, build_pong_message
+        from backend.websocket import (
+            manager,
+            build_status_message,
+            build_progress_message,
+            build_completed_message,
+            build_error_message,
+            build_pong_message,
+        )
         WEBSOCKET_AVAILABLE = True
     except Exception as inner:
         _websocket_import_error = f"{_websocket_import_error}; fallback import failed: {inner}"
@@ -142,6 +188,14 @@ _LAST_RUNTIME_SNAPSHOT_PERSISTED_AT: Dict[str, datetime] = {}
 
 if not WEBSOCKET_AVAILABLE and _websocket_import_error:
     logger.warning(f"[Import] Core WebSocket module not available: {_websocket_import_error}")
+
+
+def _format_exception_message(exc: Exception) -> str:
+    exc_type = type(exc).__name__
+    exc_text = str(exc).strip()
+    if exc_text:
+        return f"{exc_type}: {exc_text}"
+    return exc_type
 
 
 def _apply_fleet_profiles(schedule: List[BusSchedule]) -> Tuple[List[BusSchedule], Dict[str, Any]]:
@@ -451,9 +505,10 @@ async def _run_local_pipeline_job(
         )
         raise
     except Exception as e:
-        error_message = str(e)
+        error_message = _format_exception_message(e)
         stage = current_stage.get("stage", "unknown")
         logger.error(f"[Pipeline] Local async job failed at stage {stage}: {error_message}")
+        logger.debug("[Pipeline] Local async traceback:\n%s", traceback.format_exc())
         _persist_job_update(
             job_id,
             status="failed",
@@ -496,9 +551,10 @@ def _load_ws_handler(module_filename: str, handler_name: str):
     - backend/websocket.py (module)
     - backend/websocket/ (package)
     """
-    module_path = os.path.join(os.path.dirname(__file__), "websocket", module_filename)
-    if not os.path.exists(module_path):
-        raise ImportError(f"WS module not found: {module_path}")
+    module_path = _resolve_backend_file("websocket", module_filename)
+    if not module_path:
+        searched = ", ".join(_candidate_backend_roots())
+        raise ImportError(f"WS module not found: {module_filename} (searched: {searched})")
 
     module_key = f"tutti_ws_{module_filename.replace('.', '_')}"
     spec = importlib.util.spec_from_file_location(module_key, module_path)
@@ -535,6 +591,26 @@ app = FastAPI(
     description="Bus route optimization API",
     version="1.0.0"
 )
+
+
+def _resolve_frontend_dist_dir() -> Optional[str]:
+    """Resolve frontend dist directory for desktop mode static hosting."""
+    candidates = [
+        os.getenv("FRONTEND_DIST_DIR", "").strip(),
+        os.path.join(os.path.dirname(__file__), "frontend_dist"),
+        os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        resolved = os.path.abspath(candidate)
+        if os.path.isdir(resolved) and os.path.isfile(os.path.join(resolved, "index.html")):
+            return resolved
+    return None
+
+
+FRONTEND_DIST_DIR = _resolve_frontend_dist_dir()
+SERVE_FRONTEND_DIST = os.getenv("SERVE_FRONTEND_DIST", "false").lower() in ("true", "1", "yes", "on")
 
 # Import and register validation router
 try:
@@ -605,8 +681,12 @@ app.add_middleware(
 
 
 @app.get("/")
-def read_root() -> Dict[str, str]:
+def read_root() -> Any:
     """Root endpoint returning welcome message."""
+    if SERVE_FRONTEND_DIST and FRONTEND_DIST_DIR:
+        index_file = os.path.join(FRONTEND_DIST_DIR, "index.html")
+        if os.path.isfile(index_file):
+            return FileResponse(index_file)
     return {"message": "Welcome to Tutti API"}
 
 
@@ -2675,6 +2755,18 @@ async def websocket_timeline_validate(websocket: WebSocket):
     session_id = str(uuid4())
     
     await handle_timeline_validation_websocket(websocket, session_id)
+
+
+# Serve compiled frontend assets in desktop mode.
+if SERVE_FRONTEND_DIST and FRONTEND_DIST_DIR:
+    app.mount(
+        "/",
+        StaticFiles(directory=FRONTEND_DIST_DIR, html=True),
+        name="frontend-static",
+    )
+    logger.info(f"[Desktop] Serving frontend dist from: {FRONTEND_DIST_DIR}")
+elif SERVE_FRONTEND_DIST:
+    logger.warning("[Desktop] SERVE_FRONTEND_DIST enabled but no valid dist folder found")
 
 
 # =============================================================================

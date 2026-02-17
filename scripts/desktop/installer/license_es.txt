@@ -1,0 +1,24 @@
+LICENCIA DE USO - TUTTI FLEET OPTIMIZER
+
+Al instalar y utilizar este software, aceptas las siguientes condiciones:
+
+1. Uso autorizado
+Este software se entrega para uso interno operativo de gestion y optimizacion de rutas.
+No esta permitido redistribuir, revender o sublicenciar sin autorizacion escrita.
+
+2. Datos y responsabilidad
+El usuario es responsable de la calidad de sus datos de entrada (Excel, configuraciones y parametros).
+Las decisiones operativas finales deben ser validadas por personal autorizado.
+
+3. Sin garantias absolutas
+El software se entrega "tal cual", sin garantia de funcionamiento ininterrumpido o ausencia total de errores.
+Se aplican mejores practicas de validacion, pero el usuario mantiene responsabilidad sobre su despliegue.
+
+4. Actualizaciones
+La aplicacion puede ofrecer actualizaciones desde GitHub Releases.
+El usuario decide si instala o no cada actualizacion.
+
+5. Privacidad y seguridad
+El uso local/desplegado del sistema y el resguardo de la informacion operativa son responsabilidad del cliente.
+
+Si no estas de acuerdo con estos terminos, cancela la instalacion.

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Layout from './components/Layout';
 import Sidebar from './components/Sidebar';
 import BusListPanel from './components/BusListPanel';
@@ -16,6 +16,43 @@ import { PanelLeftClose, PanelLeft } from 'lucide-react';
 
 const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
 const ALL_DAYS = ['L', 'M', 'Mc', 'X', 'V'];
+const createEmptyScheduleByDay = () => (
+  ALL_DAYS.reduce((acc, day) => {
+    acc[day] = { schedule: [], stats: null };
+    return acc;
+  }, {})
+);
+
+const getBusItems = (bus) => {
+  if (Array.isArray(bus?.items)) return bus.items;
+  if (Array.isArray(bus?.routes)) return bus.routes;
+  return [];
+};
+
+const buildScheduleStats = (buses = []) => {
+  const totalBuses = Array.isArray(buses) ? buses.length : 0;
+  const allItems = (buses || []).flatMap((bus) => getBusItems(bus));
+  const totalRoutes = allItems.length;
+  const totalEntries = allItems.filter((item) => item?.type === 'entry').length;
+  const totalExits = allItems.filter((item) => item?.type === 'exit').length;
+  const avgRoutesPerBus = totalBuses > 0
+    ? Math.round((totalRoutes / totalBuses) * 10) / 10
+    : 0;
+
+  return {
+    total_buses: totalBuses,
+    total_entries: totalEntries,
+    total_exits: totalExits,
+    avg_routes_per_bus: avgRoutesPerBus,
+  };
+};
+
+const buildDayScheduleData = ({ buses = [], metadata = null, unassignedRoutes = [] } = {}) => ({
+  schedule: Array.isArray(buses) ? buses : [],
+  stats: buildScheduleStats(buses),
+  metadata: metadata || {},
+  unassigned_routes: Array.isArray(unassignedRoutes) ? unassignedRoutes : [],
+});
 
 function App() {
   const [routes, setRoutes] = useState([]);
@@ -38,6 +75,68 @@ function App() {
   const [pipelineStatus, setPipelineStatus] = useState('idle');
   const [pipelineEvents, setPipelineEvents] = useState([]);
   const [pipelineMetrics, setPipelineMetrics] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPersistedSchedules = async () => {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const loadedByDay = {};
+
+      await Promise.all(ALL_DAYS.map(async (day) => {
+        try {
+          const response = await fetch(`${apiUrl}/api/schedules/${day}`);
+          if (response.status === 404) return;
+          if (!response.ok) {
+            throw new Error(`No se pudo cargar ${day} (${response.status})`);
+          }
+
+          const data = await response.json();
+          const persisted = data?.schedule || {};
+          const buses = Array.isArray(persisted?.buses)
+            ? persisted.buses
+            : (Array.isArray(persisted?.schedule) ? persisted.schedule : []);
+
+          if (!Array.isArray(buses) || buses.length === 0) return;
+
+          loadedByDay[day] = buildDayScheduleData({
+            buses,
+            metadata: persisted?.metadata || null,
+            unassignedRoutes: persisted?.unassigned_routes || [],
+          });
+        } catch (error) {
+          console.warn(`[persisted-schedule] ${day}:`, error);
+        }
+      }));
+
+      if (cancelled) return;
+
+      const loadedDays = ALL_DAYS.filter((day) => loadedByDay[day]?.schedule?.length > 0);
+      if (loadedDays.length === 0) return;
+
+      const hydratedSchedule = {
+        ...createEmptyScheduleByDay(),
+        ...loadedByDay,
+      };
+
+      setScheduleByDay((prev) => {
+        const alreadyLoaded = prev && ALL_DAYS.some((day) => (prev?.[day]?.schedule?.length || 0) > 0);
+        return alreadyLoaded ? prev : hydratedSchedule;
+      });
+
+      const defaultDay = loadedDays[0];
+      const persistedMode = hydratedSchedule?.[defaultDay]?.metadata?.mode;
+      const nextMode = persistedMode === 'optimize' ? 'optimize' : 'edit';
+      setActiveDay(defaultDay);
+      setWorkspaceMode(nextMode);
+      setViewMode('workspace');
+    };
+
+    loadPersistedSchedules();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Current day's data
   const currentDayData = scheduleByDay?.[activeDay] || null;
@@ -323,6 +422,18 @@ function App() {
           `Horario inválido (${conflictCount} conflictos, ${errorCount} errores).`
         );
       }
+      setScheduleByDay((prev) => ({
+        ...(prev && typeof prev === 'object' ? prev : createEmptyScheduleByDay()),
+        [payload.day]: buildDayScheduleData({
+          buses: payload.buses,
+          metadata: payload.metadata,
+          unassignedRoutes: payload.unassigned_routes,
+        }),
+      }));
+      setActiveDay(payload.day || 'L');
+      const requestedMode = payload?.metadata?.mode;
+      const nextMode = requestedMode === 'optimize' ? 'optimize' : 'edit';
+      setWorkspaceMode(nextMode);
       return data;
     }
 
@@ -509,7 +620,7 @@ function App() {
               <UnifiedWorkspace
                 mode={workspaceMode}
                 routes={routes}
-                initialSchedule={workspaceMode === 'optimize' ? schedule : null}
+                initialSchedule={Array.isArray(schedule) && schedule.length > 0 ? schedule : null}
                 scheduleByDay={scheduleByDay}
                 activeDay={activeDay}
                 validationReport={validationReport}
