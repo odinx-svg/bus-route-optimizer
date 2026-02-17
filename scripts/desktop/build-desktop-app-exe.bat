@@ -111,6 +111,8 @@ set "PYI=%VENV%\Scripts\pyinstaller.exe"
   --collect-submodules starlette ^
   --collect-submodules pydantic ^
   --collect-submodules uvicorn ^
+  --collect-submodules websockets ^
+  --collect-submodules wsproto ^
   --collect-submodules sqlalchemy ^
   --collect-submodules pandas ^
   --collect-submodules openpyxl ^

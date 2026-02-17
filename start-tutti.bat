@@ -52,7 +52,7 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-"%VENV_PYTHON%" -c "import reportlab, httpx, pulp; from PIL import Image" >nul 2>&1 || "%VENV_PYTHON%" -m pip install -q reportlab pillow httpx pulp
+"%VENV_PYTHON%" -c "import reportlab, httpx, pulp, websockets, wsproto; from PIL import Image" >nul 2>&1 || "%VENV_PYTHON%" -m pip install -q reportlab pillow httpx pulp websockets wsproto
 if %errorlevel% neq 0 (
     echo        ERROR: Critical Python dependencies check failed
     pause
