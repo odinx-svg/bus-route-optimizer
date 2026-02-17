@@ -1301,6 +1301,13 @@ class PipelineOptimizationRequest(BaseModel):
     config: Optional[PipelineConfigPayload] = None
 
 
+def _route_to_json_payload(route: Route) -> Dict[str, Any]:
+    """Serialize Route into JSON-safe payload (times/dates as strings)."""
+    if hasattr(route, "model_dump"):
+        return route.model_dump(mode="json")  # type: ignore[attr-defined]
+    return json.loads(json.dumps(route.dict(), default=str))
+
+
 @app.post("/optimize-v6-by-day")
 async def optimize_v6_by_day_endpoint(
     routes: List[Route],
@@ -1733,6 +1740,7 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
     optimización base + validación OSRM + reoptimización iterativa.
     """
     routes = request.routes
+    routes_payload = [_route_to_json_payload(route) for route in routes]
     _cleanup_old_local_jobs()
     config_payload = request.config.model_dump() if request.config else {
         "auto_start": True,
@@ -1763,7 +1771,7 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
                 id=job_id,
                 status="queued",
                 algorithm="pipeline-v6-osrm",
-                input_data=[route.dict() for route in routes],
+                input_data=routes_payload,
                 created_at=created_at
             )
             db.add(job)
@@ -1784,7 +1792,7 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
     if can_use_celery:
         try:
             task = optimize_pipeline_task.delay(
-                routes_data=[route.dict() for route in routes],
+                routes_data=routes_payload,
                 job_id=job_id,
                 pipeline_config=config_payload,
             )
@@ -1800,7 +1808,7 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
             logger.warning(f"[Pipeline] Celery failed, using sync fallback: {e}")
 
     try:
-        routes_data = [route.dict() for route in routes]
+        routes_data = routes_payload
         local_task = asyncio.create_task(
             _run_local_pipeline_job(
                 job_id=job_id,
