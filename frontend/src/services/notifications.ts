@@ -1,120 +1,86 @@
 ﻿/**
- * Servicio de Notificaciones - Toast Notifications con Sonner
- * 
- * Proporciona métodos tipados para mostrar notificaciones modernas
- * reemplazando los alert() nativos del navegador.
- * 
+ * Servicio de notificaciones con Sileo.
+ *
+ * Reemplaza alert() nativos por toasts modernos y no intrusivos.
  * @module services/notifications
- * @version 1.0.0
+ * @version 1.1.0
  */
 
-import { toast } from 'sonner';
+import type { ReactNode } from 'react';
+import { sileo } from 'sileo';
 
-/**
- * Opciones para las notificaciones
- */
 interface ToastOptions {
-  description?: string;
+  description?: string | ReactNode;
   duration?: number;
   id?: string;
 }
 
-/**
- * Servicio de notificaciones con Sonner
- * 
- * Reemplaza alert() nativos por notificaciones modernas y no intrusivas
- */
+type ToastKind = 'success' | 'error' | 'info' | 'warning';
+
+const DEFAULT_DURATION: Record<ToastKind, number> = {
+  success: 4000,
+  error: 6000,
+  info: 4000,
+  warning: 5000,
+};
+
+const showTypedToast = (
+  type: ToastKind,
+  message: string,
+  options: ToastOptions = {}
+): string => {
+  const method = sileo[type];
+  return method({
+    title: message,
+    description: options.description,
+    duration: options.duration ?? DEFAULT_DURATION[type],
+    id: options.id,
+  } as any);
+};
+
 export const notifications = {
-  /**
-   * Muestra una notificación de éxito
-   * @param message - Mensaje principal
-   * @param description - Descripción opcional
-   * @param duration - Duración en ms (default: 4000)
-   */
-  success: (message: string, description?: string, duration: number = 4000): string => {
-    return toast.success(message, { description, duration });
-  },
+  success: (message: string, description?: string, duration = DEFAULT_DURATION.success): string =>
+    showTypedToast('success', message, { description, duration }),
 
-  /**
-   * Muestra una notificación de error
-   * @param message - Mensaje principal
-   * @param description - Descripción opcional
-   * @param duration - Duración en ms (default: 6000)
-   */
-  error: (message: string, description?: string, duration: number = 6000): string => {
-    return toast.error(message, { description, duration });
-  },
+  error: (message: string, description?: string, duration = DEFAULT_DURATION.error): string =>
+    showTypedToast('error', message, { description, duration }),
 
-  /**
-   * Muestra una notificación informativa
-   * @param message - Mensaje principal
-   * @param description - Descripción opcional
-   * @param duration - Duración en ms (default: 4000)
-   */
-  info: (message: string, description?: string, duration: number = 4000): string => {
-    return toast.info(message, { description, duration });
-  },
+  info: (message: string, description?: string, duration = DEFAULT_DURATION.info): string =>
+    showTypedToast('info', message, { description, duration }),
 
-  /**
-   * Muestra una notificación de advertencia
-   * @param message - Mensaje principal
-   * @param description - Descripción opcional
-   * @param duration - Duración en ms (default: 5000)
-   */
-  warning: (message: string, description?: string, duration: number = 5000): string => {
-    return toast.warning(message, { description, duration });
-  },
+  warning: (message: string, description?: string, duration = DEFAULT_DURATION.warning): string =>
+    showTypedToast('warning', message, { description, duration }),
 
-  /**
-   * Muestra un toast de carga (loading)
-   * @param message - Mensaje de carga
-   * @returns ID del toast para poder cerrarlo después
-   */
   loading: (message: string): string => {
-    return toast.loading(message);
+    // `state` existe en runtime de sileo aunque no este tipado en SileoOptions.
+    return sileo.show({
+      title: message,
+      duration: null,
+      ...( { state: 'loading' } as any ),
+    } as any);
   },
 
-  /**
-   * Cierra una notificación específica por su ID
-   * @param toastId - ID del toast a cerrar
-   */
   dismiss: (toastId: string): void => {
-    toast.dismiss(toastId);
+    sileo.dismiss(toastId);
   },
 
-  /**
-   * Cierra todas las notificaciones
-   */
   dismissAll: (): void => {
-    toast.dismiss();
+    sileo.clear();
   },
 
-  /**
-   * Actualiza un toast de loading a success/error
-   * @param toastId - ID del toast a actualizar
-   * @param type - Tipo de notificación final
-   * @param message - Nuevo mensaje
-   * @param description - Nueva descripción
-   */
   update: (
     toastId: string,
-    type: 'success' | 'error' | 'info' | 'warning',
+    type: ToastKind,
     message: string,
     description?: string
   ): void => {
-    toast[type](message, { 
-      id: toastId, 
+    showTypedToast(type, message, {
+      id: toastId,
       description,
-      duration: type === 'error' ? 6000 : 4000 
+      duration: type === 'error' ? DEFAULT_DURATION.error : DEFAULT_DURATION.success,
     });
   },
 
-  /**
-   * Promise wrapper - Muestra loading hasta que la promesa se resuelva
-   * @param promise - Promesa a esperar
-   * @param messages - Mensajes para loading, success y error
-   * @returns Resultado de la promesa
-   */
   promise: <T>(
     promise: Promise<T>,
     messages: {
@@ -123,18 +89,20 @@ export const notifications = {
       error: string;
     }
   ): Promise<T> => {
-    return toast.promise(promise, {
-      loading: messages.loading,
-      success: messages.success,
-      error: messages.error,
+    return sileo.promise(promise, {
+      loading: {
+        title: messages.loading,
+      },
+      success: {
+        title: messages.success,
+      },
+      error: {
+        title: messages.error,
+      },
     });
   },
 };
 
-/**
- * Hook de conveniencia para usar en componentes React
- * Proporciona acceso directo a todas las funciones de notificación
- */
 export const useNotifications = () => notifications;
 
 export default notifications;

@@ -1,6 +1,6 @@
 ﻿import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { Toaster } from 'sonner'
+import { Toaster } from 'sileo'
 
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
@@ -13,17 +13,18 @@ import './index.css'
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <App />
-        <Toaster 
+        <Toaster
             position="top-right"
-            toastOptions={{
-                style: {
-                    background: '#1c1c1f',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    color: '#fff',
+            offset={{ top: 72, right: 16 }}
+            options={{
+                fill: '#0f1b2d',
+                roundness: 14,
+                duration: 4200,
+                autopilot: {
+                    expand: 1100,
+                    collapse: 3200,
                 },
             }}
-            richColors
-            closeButton
         />
     </React.StrictMode>,
 )
