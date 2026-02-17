@@ -35,7 +35,14 @@ from copy import deepcopy
 import pulp
 
 from models import Route, BusSchedule, ScheduleItem, Stop
-from router_service import get_real_travel_time, get_route_duration, get_travel_time_matrix, save_cache
+from router_service import (
+    get_real_travel_time,
+    get_route_duration,
+    get_router_metrics,
+    get_travel_time_matrix,
+    reset_router_metrics,
+    save_cache,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +175,7 @@ def _osrm_or_fallback_with_connection_buffer(
     """Return travel+buffer minutes using the same policy as final feasibility checks."""
     if osrm_minutes is not None:
         return int(math.ceil(float(osrm_minutes))) + MIN_CONNECTION_BUFFER_MINUTES
+    _RUNTIME_METRICS["osrm_fallback_count"] = int(_RUNTIME_METRICS.get("osrm_fallback_count", 0)) + 1
     return _fallback_travel_with_connection_buffer(src[0], src[1], dst[0], dst[1])
 
 
@@ -407,7 +415,57 @@ _LAST_OPTIMIZATION_DIAGNOSTICS: Dict[str, Any] = {
     "optimality_gap": 0.0,
     "avg_positioning_minutes": 0.0,
     "max_positioning_minutes": 0,
+    "phase_time_sec": {},
+    "pairs_total": 0,
+    "pairs_pruned": 0,
+    "osrm_cache_hits": 0,
+    "osrm_fallback_count": 0,
 }
+
+_RUNTIME_METRICS: Dict[str, Any] = {
+    "phase_time_sec": {},
+    "pairs_total": 0,
+    "pairs_pruned": 0,
+    "osrm_fallback_count": 0,
+}
+
+_CONNECTION_TIME_CACHE: Dict[str, int] = {}
+
+
+def _reset_runtime_metrics() -> None:
+    _RUNTIME_METRICS["phase_time_sec"] = {}
+    _RUNTIME_METRICS["pairs_total"] = 0
+    _RUNTIME_METRICS["pairs_pruned"] = 0
+    _RUNTIME_METRICS["osrm_fallback_count"] = 0
+    _CONNECTION_TIME_CACHE.clear()
+
+
+def _record_phase_time(phase_name: str, started_at: float) -> None:
+    elapsed = max(0.0, time_module.perf_counter() - started_at)
+    _RUNTIME_METRICS["phase_time_sec"][phase_name] = round(elapsed, 3)
+
+
+def _connection_cache_key(src: Tuple[float, float], dst: Tuple[float, float]) -> str:
+    return (
+        f"{round(float(src[0]), 5)},{round(float(src[1]), 5)}|"
+        f"{round(float(dst[0]), 5)},{round(float(dst[1]), 5)}"
+    )
+
+
+def _connection_minutes_cached(src: Tuple[float, float], dst: Tuple[float, float]) -> int:
+    key = _connection_cache_key(src, dst)
+    if key in _CONNECTION_TIME_CACHE:
+        return _CONNECTION_TIME_CACHE[key]
+
+    if not coords_valid(src[0], src[1]) or not coords_valid(dst[0], dst[1]):
+        value = _fallback_travel_with_connection_buffer(src[0], src[1], dst[0], dst[1])
+        _CONNECTION_TIME_CACHE[key] = value
+        return value
+
+    osrm_time = get_real_travel_time(src[0], src[1], dst[0], dst[1])
+    value = _osrm_or_fallback_with_connection_buffer(src, dst, osrm_time)
+    _CONNECTION_TIME_CACHE[key] = value
+    return value
 
 
 def get_last_optimization_diagnostics() -> Dict[str, Any]:
@@ -1167,37 +1225,88 @@ def match_blocks_ilp(
     source_meta = source_meta or [("", 0, False, 0, 0) for _ in range(na)]
     target_meta = target_meta or [("", 0, False, 0, 0) for _ in range(nb)]
 
-    feasible: Dict[Tuple[int, int], int] = {}
-    pair_value: Dict[Tuple[int, int], float] = {}
+    total_pairs = na * nb
+    candidate_pairs: List[Tuple[int, int]] = []
+    src_idx_for_matrix: Set[int] = set()
+    dst_idx_for_matrix: Set[int] = set()
+
     for i in range(na):
         end_t, end_loc = chains_a_ends[i]
-        src_school, src_capacity, src_small, src_low, src_high = source_meta[i]
+        _, src_capacity, _, src_low, src_high = source_meta[i]
         for j in range(nb):
             start_t, start_loc = chains_b_starts[j]
-            dst_school, dst_capacity, dst_small, dst_low, dst_high = target_meta[j]
+            _, dst_capacity, _, dst_low, dst_high = target_meta[j]
 
-            if not coords_valid(end_loc[0], end_loc[1]) or not coords_valid(start_loc[0], start_loc[1]):
-                tt = _fallback_travel_with_connection_buffer(end_loc[0], end_loc[1], start_loc[0], start_loc[1])
-            else:
-                osrm_time = get_real_travel_time(end_loc[0], end_loc[1], start_loc[0], start_loc[1])
-                tt = _osrm_or_fallback_with_connection_buffer(end_loc, start_loc, osrm_time)
+            if src_low <= 0 or src_high <= 0 or dst_low <= 0 or dst_high <= 0:
+                continue
+            if not _ranges_overlap(src_low, src_high, dst_low, dst_high):
+                continue
+            if not _capacity_pair_compatible(max(1, src_capacity), max(1, dst_capacity)):
+                continue
 
-            if end_t + tt <= start_t + CROSS_BLOCK_FLEX_MINUTES:
-                if src_low <= 0 or src_high <= 0 or dst_low <= 0 or dst_high <= 0:
-                    continue
-                if not _ranges_overlap(src_low, src_high, dst_low, dst_high):
-                    continue
-                if not _capacity_pair_compatible(max(1, src_capacity), max(1, dst_capacity)):
-                    continue
-                gap = start_t - (end_t + tt)
-                feasible[(i, j)] = gap
-                bonus = 0.0
-                if src_school and dst_school and src_school == dst_school:
-                    bonus += CROSS_BLOCK_SCHOOL_BONUS
-                bonus += CROSS_BLOCK_CAPACITY_BONUS
-                if src_small and dst_small:
-                    bonus += CROSS_BLOCK_SMALL_SERVICE_BONUS
-                pair_value[(i, j)] = bonus
+            # Fast timing prune: any movement requires at least connection buffer.
+            if end_t + MIN_CONNECTION_BUFFER_MINUTES > start_t + CROSS_BLOCK_FLEX_MINUTES:
+                continue
+
+            candidate_pairs.append((i, j))
+            if coords_valid(end_loc[0], end_loc[1]) and coords_valid(start_loc[0], start_loc[1]):
+                src_idx_for_matrix.add(i)
+                dst_idx_for_matrix.add(j)
+
+    if not candidate_pairs:
+        _RUNTIME_METRICS["pairs_total"] = int(_RUNTIME_METRICS.get("pairs_total", 0)) + total_pairs
+        _RUNTIME_METRICS["pairs_pruned"] = int(_RUNTIME_METRICS.get("pairs_pruned", 0)) + total_pairs
+        return []
+
+    matrix_lookup: Dict[Tuple[int, int], Optional[int]] = {}
+    if src_idx_for_matrix and dst_idx_for_matrix:
+        src_order = sorted(src_idx_for_matrix)
+        dst_order = sorted(dst_idx_for_matrix)
+        src_coords = [chains_a_ends[idx][1] for idx in src_order]
+        dst_coords = [chains_b_starts[idx][1] for idx in dst_order]
+        matrix = get_travel_time_matrix(src_coords, dst_coords)
+        for r, src_idx in enumerate(src_order):
+            for c, dst_idx in enumerate(dst_order):
+                matrix_lookup[(src_idx, dst_idx)] = matrix[r][c]
+
+    feasible: Dict[Tuple[int, int], int] = {}
+    pair_value: Dict[Tuple[int, int], float] = {}
+    for i, j in candidate_pairs:
+        end_t, end_loc = chains_a_ends[i]
+        src_school, src_capacity, src_small, src_low, src_high = source_meta[i]
+        start_t, start_loc = chains_b_starts[j]
+        dst_school, dst_capacity, dst_small, dst_low, dst_high = target_meta[j]
+
+        if not coords_valid(end_loc[0], end_loc[1]) or not coords_valid(start_loc[0], start_loc[1]):
+            tt = _fallback_travel_with_connection_buffer(end_loc[0], end_loc[1], start_loc[0], start_loc[1])
+        else:
+            osrm_time = matrix_lookup.get((i, j))
+            tt = _osrm_or_fallback_with_connection_buffer(end_loc, start_loc, osrm_time)
+
+        if end_t + tt > start_t + CROSS_BLOCK_FLEX_MINUTES:
+            continue
+
+        if src_low <= 0 or src_high <= 0 or dst_low <= 0 or dst_high <= 0:
+            continue
+        if not _ranges_overlap(src_low, src_high, dst_low, dst_high):
+            continue
+        if not _capacity_pair_compatible(max(1, src_capacity), max(1, dst_capacity)):
+            continue
+
+        gap = start_t - (end_t + tt)
+        feasible[(i, j)] = gap
+        bonus = 0.0
+        if src_school and dst_school and src_school == dst_school:
+            bonus += CROSS_BLOCK_SCHOOL_BONUS
+        bonus += CROSS_BLOCK_CAPACITY_BONUS
+        if src_small and dst_small:
+            bonus += CROSS_BLOCK_SMALL_SERVICE_BONUS
+        pair_value[(i, j)] = bonus
+
+    _RUNTIME_METRICS["pairs_total"] = int(_RUNTIME_METRICS.get("pairs_total", 0)) + total_pairs
+    _RUNTIME_METRICS["pairs_pruned"] = int(_RUNTIME_METRICS.get("pairs_pruned", 0)) + max(
+        0, total_pairs - len(feasible)
+    )
 
     if not feasible:
         return []
@@ -1455,13 +1564,7 @@ def _consolidate_buses(
                             continue
                         tgt_end_t, tgt_end_loc = _get_chain_end_info(tgt_chain, jobs, is_entry)
 
-                        if not coords_valid(tgt_end_loc[0], tgt_end_loc[1]) or not coords_valid(chain_start_loc[0], chain_start_loc[1]):
-                            tt = _fallback_travel_with_connection_buffer(
-                                tgt_end_loc[0], tgt_end_loc[1], chain_start_loc[0], chain_start_loc[1]
-                            )
-                        else:
-                            osrm = get_real_travel_time(tgt_end_loc[0], tgt_end_loc[1], chain_start_loc[0], chain_start_loc[1])
-                            tt = _osrm_or_fallback_with_connection_buffer(tgt_end_loc, chain_start_loc, osrm)
+                        tt = _connection_minutes_cached(tgt_end_loc, chain_start_loc)
 
                         if tgt_end_t + tt <= chain_start_t + CROSS_BLOCK_FLEX_MINUTES:
                             gap = chain_start_t - (tgt_end_t + tt)
@@ -1480,13 +1583,7 @@ def _consolidate_buses(
                         if tgt_latest[0] >= chain_start_t:
                             continue
 
-                        if not coords_valid(tgt_latest[1][0], tgt_latest[1][1]) or not coords_valid(chain_start_loc[0], chain_start_loc[1]):
-                            tt = _fallback_travel_with_connection_buffer(
-                                tgt_latest[1][0], tgt_latest[1][1], chain_start_loc[0], chain_start_loc[1]
-                            )
-                        else:
-                            osrm = get_real_travel_time(tgt_latest[1][0], tgt_latest[1][1], chain_start_loc[0], chain_start_loc[1])
-                            tt = _osrm_or_fallback_with_connection_buffer(tgt_latest[1], chain_start_loc, osrm)
+                        tt = _connection_minutes_cached(tgt_latest[1], chain_start_loc)
 
                         if tgt_latest[0] + tt <= chain_start_t + CROSS_BLOCK_FLEX_MINUTES:
                             gap = chain_start_t - (tgt_latest[0] + tt)
@@ -1913,14 +2010,7 @@ def _required_connection_minutes(current: ScheduleItem, next_item: ScheduleItem)
     if end_loc is None or start_loc is None:
         return 20 + MIN_CONNECTION_BUFFER_MINUTES
 
-    osrm_time = get_real_travel_time(end_loc[0], end_loc[1], start_loc[0], start_loc[1])
-    if osrm_time is not None:
-        return int(math.ceil(osrm_time)) + MIN_CONNECTION_BUFFER_MINUTES
-
-    required = haversine_travel_minutes(end_loc[0], end_loc[1], start_loc[0], start_loc[1])
-    if MIN_CONNECTION_BUFFER_MINUTES > DEADHEAD_BUFFER_MINUTES:
-        required += MIN_CONNECTION_BUFFER_MINUTES - DEADHEAD_BUFFER_MINUTES
-    return required
+    return _connection_minutes_cached(end_loc, start_loc)
 
 
 def _item_capacity_window(item: ScheduleItem) -> Tuple[int, int]:
@@ -2113,6 +2203,11 @@ def optimize_v6(
     """
     
     global _LAST_OPTIMIZATION_DIAGNOSTICS
+    _reset_runtime_metrics()
+    try:
+        reset_router_metrics()
+    except Exception:
+        pass
 
     def report_progress(phase: str, progress: int, message: str):
         """Helper to report progress via callback and/or print."""
@@ -2129,6 +2224,7 @@ def optimize_v6(
     print(f"ML assignment: {'enabled' if use_ml_assignment else 'disabled'}")
 
     # Phase 0: Prepare (0-10%)
+    phase_start = time_module.perf_counter()
     report_progress("preprocessing", 5, "Preprocesando y validando rutas...")
     print("\n[Phase 0] Preprocessing & validation...")
     blocks = prepare_jobs(routes)
@@ -2138,8 +2234,14 @@ def optimize_v6(
 
     total_routes = sum(len(blocks[b]) for b in [1, 2, 3, 4])
     print(f"  Total routes to optimize: {total_routes}")
+    _record_phase_time("preprocessing", phase_start)
     
     if total_routes == 0:
+        router_metrics = {}
+        try:
+            router_metrics = get_router_metrics()
+        except Exception:
+            router_metrics = {}
         _LAST_OPTIMIZATION_DIAGNOSTICS = {
             "total_routes": 0,
             "pre_split_buses": 0,
@@ -2150,11 +2252,17 @@ def optimize_v6(
             "optimality_gap": 0.0,
             "avg_positioning_minutes": 0.0,
             "max_positioning_minutes": 0,
+            "phase_time_sec": dict(_RUNTIME_METRICS.get("phase_time_sec", {})),
+            "pairs_total": int(_RUNTIME_METRICS.get("pairs_total", 0)),
+            "pairs_pruned": int(_RUNTIME_METRICS.get("pairs_pruned", 0)),
+            "osrm_cache_hits": int(router_metrics.get("cache_hits", 0) or 0),
+            "osrm_fallback_count": int(_RUNTIME_METRICS.get("osrm_fallback_count", 0)),
         }
         report_progress("completed", 100, "No hay rutas para optimizar")
         return []
 
     # Phase 1: Travel matrices (10-25%)
+    phase_start = time_module.perf_counter()
     report_progress("travel_matrix", 15, "Calculando matrices de tiempos de viaje...")
     print("\n[Phase 1] Computing travel time matrices...")
     block_tt: Dict[int, Dict[Tuple[int, int], int]] = {}
@@ -2162,8 +2270,10 @@ def optimize_v6(
         is_entry = b in (1, 3)
         block_tt[b] = precompute_block_travel_matrix(blocks[b], is_entry) if blocks[b] else {}
     save_cache()
+    _record_phase_time("travel_matrix", phase_start)
 
     # Phase 2: Build chains per block (25-50%)
+    phase_start = time_module.perf_counter()
     report_progress("building_chains", 35, "Construyendo cadenas óptimas por bloque...")
     print("\n[Phase 2] Building optimal chains per block (ILP)...")
     block_chains: Dict[int, List[List[int]]] = {}
@@ -2183,8 +2293,10 @@ def optimize_v6(
         if chains:
             sizes = [len(c) for c in chains]
             print(f"  Block {b} ({name}): {len(chains)} chains, sizes: {min(sizes)}-{max(sizes)}, avg={sum(sizes)/len(sizes):.1f}")
+    _record_phase_time("building_chains", phase_start)
 
     # Phase 3: Cross-block merging (50-70%)
+    phase_start = time_module.perf_counter()
     report_progress("matching_blocks", 60, "Emparejando bloques temporales...")
     print("\n[Phase 3] Cross-block merging (ILP matching)...")
     bus_list = merge_all_blocks(block_chains, blocks)
@@ -2199,8 +2311,10 @@ def optimize_v6(
         labels = {1: "B1", 2: "B2", 3: "B3", 4: "B4"}
         combo_str = "+".join(labels[b] for b in combo)
         print(f"    {combo_str}: {count} buses")
+    _record_phase_time("matching_blocks", phase_start)
 
     # Phase 4: Local search (70-85%)
+    phase_start = time_module.perf_counter()
     report_progress("local_search", 80, "Optimizando con búsqueda local...")
     print("\n[Phase 4] Local search improvement...")
     baseline_buses = deepcopy(bus_list)
@@ -2232,8 +2346,10 @@ def optimize_v6(
             f"    Local search reverted: split {baseline_split}->{candidate_split}, "
             f"buses {len(baseline_schedules)}->{len(candidate_schedules)}"
         )
+    _record_phase_time("local_search", phase_start)
 
     # Phase 5: Build schedules (85-95%)
+    phase_start = time_module.perf_counter()
     report_progress("finalizing", 90, "Construyendo horarios finales...")
     print("\n[Phase 5] Building final schedules...")
     pre_split_buses = len(bus_list)
@@ -2244,6 +2360,7 @@ def optimize_v6(
     schedules = [s for s in schedules if s.items]
     for i, s in enumerate(schedules):
         s.bus_id = f"B{i + 1:03d}"
+    _record_phase_time("finalizing", phase_start)
 
     # Statistics
     print("\n" + "=" * 60)
@@ -2257,6 +2374,12 @@ def optimize_v6(
     else:
         optimality_gap = round(max(0, best_buses - lower_bound_buses) / float(lower_bound_buses), 4)
 
+    router_metrics = {}
+    try:
+        router_metrics = get_router_metrics()
+    except Exception:
+        router_metrics = {}
+
     _LAST_OPTIMIZATION_DIAGNOSTICS = {
         "total_routes": total_routes,
         "pre_split_buses": pre_split_buses,
@@ -2267,6 +2390,11 @@ def optimize_v6(
         "optimality_gap": optimality_gap,
         "avg_positioning_minutes": 0.0,
         "max_positioning_minutes": 0,
+        "phase_time_sec": dict(_RUNTIME_METRICS.get("phase_time_sec", {})),
+        "pairs_total": int(_RUNTIME_METRICS.get("pairs_total", 0)),
+        "pairs_pruned": int(_RUNTIME_METRICS.get("pairs_pruned", 0)),
+        "osrm_cache_hits": int(router_metrics.get("cache_hits", 0) or 0),
+        "osrm_fallback_count": int(_RUNTIME_METRICS.get("osrm_fallback_count", 0)),
     }
     total_assigned = sum(len(s.items) for s in schedules)
     entry_count = sum(1 for s in schedules for item in s.items if item.type == "entry")
@@ -2288,6 +2416,17 @@ def optimize_v6(
         print(f"  Deadheads: min={min(deadheads)}m, max={max(deadheads)}m, avg={sum(deadheads)/len(deadheads):.1f}m")
         _LAST_OPTIMIZATION_DIAGNOSTICS["avg_positioning_minutes"] = round(sum(deadheads) / len(deadheads), 2)
         _LAST_OPTIMIZATION_DIAGNOSTICS["max_positioning_minutes"] = int(max(deadheads))
+
+    print(f"  Phase times (sec): {_LAST_OPTIMIZATION_DIAGNOSTICS['phase_time_sec']}")
+    print(
+        "  Pair pruning: "
+        f"{_LAST_OPTIMIZATION_DIAGNOSTICS['pairs_pruned']}/{_LAST_OPTIMIZATION_DIAGNOSTICS['pairs_total']}"
+    )
+    print(
+        "  OSRM metrics: "
+        f"cache_hits={_LAST_OPTIMIZATION_DIAGNOSTICS['osrm_cache_hits']}, "
+        f"fallbacks={_LAST_OPTIMIZATION_DIAGNOSTICS['osrm_fallback_count']}"
+    )
 
     for s in schedules:
         entries_in = [i for i in s.items if i.type == "entry"]

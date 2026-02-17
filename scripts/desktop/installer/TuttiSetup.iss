@@ -45,5 +45,6 @@ Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: igno
 Name: "{autoprograms}\TUTTI"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\TUTTI"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
-[Run]
-Filename: "{app}\{#AppExeName}"; Description: "Ejecutar TUTTI ahora"; Flags: nowait postinstall skipifsilent
+; Avoid launching immediately after install/update to prevent sporadic
+; PyInstaller onefile startup race ("Failed to load Python DLL ... _MEI...").
+; User starts TUTTI manually once setup completes.

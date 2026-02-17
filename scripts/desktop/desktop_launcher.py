@@ -24,7 +24,7 @@ import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import MutableMapping, Optional
 
 import webview
 
@@ -33,6 +33,9 @@ APP_URL = "http://127.0.0.1:8000"
 APP_HEALTH_URL = f"{APP_URL}/health"
 GITHUB_API_BASE = "https://api.github.com"
 UPDATE_HTTP_TIMEOUT_SEC = 20
+DESKTOP_OSRM_BASE_URL = "http://187.77.33.218:5000"
+DESKTOP_OSRM_ROUTE_URL = f"{DESKTOP_OSRM_BASE_URL}/route/v1/driving"
+DESKTOP_OSRM_TABLE_URL = f"{DESKTOP_OSRM_BASE_URL}/table/v1/driving"
 
 try:
     from desktop_version import (  # type: ignore
@@ -79,6 +82,19 @@ def _resolve_persistent_data_dir() -> Path:
 
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
+
+
+def _apply_desktop_osrm_defaults(env_map: MutableMapping[str, str]) -> str:
+    """
+    Ensure desktop runtime has a deterministic OSRM endpoint.
+
+    setdefault keeps manual overrides (system/user env) intact.
+    """
+    env_map.setdefault("OSRM_BASE_URL", DESKTOP_OSRM_BASE_URL)
+    env_map.setdefault("OSRM_ROUTE_URL", DESKTOP_OSRM_ROUTE_URL)
+    env_map.setdefault("OSRM_TABLE_URL", DESKTOP_OSRM_TABLE_URL)
+    env_map.setdefault("OSRM_URL", env_map.get("OSRM_ROUTE_URL", DESKTOP_OSRM_ROUTE_URL))
+    return str(env_map.get("OSRM_BASE_URL", DESKTOP_OSRM_BASE_URL))
 
 
 def _sqlite_url_for_path(db_path: Path) -> str:
@@ -290,16 +306,22 @@ def _extract_exe_from_zip(zip_path: Path, work_dir: Path) -> Optional[Path]:
 
 
 def _launch_updater_and_exit(current_exe: Path, new_exe: Path) -> bool:
+    auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "0")
+    if auto_restart:
+        start_cmd = f'start "" "{current_exe}"'
+    else:
+        start_cmd = "echo Update applied. Launch manually."
+
     updater_bat = Path(tempfile.gettempdir()) / "tutti_desktop_self_update.bat"
     script = f"""@echo off
 setlocal
 timeout /t 2 /nobreak >nul
 copy /Y "{new_exe}" "{current_exe}" >nul
 if errorlevel 1 goto fail
-start "" "{current_exe}"
+{start_cmd}
 exit /b 0
 :fail
-start "" "{current_exe}"
+{start_cmd}
 exit /b 1
 """
     updater_bat.write_text(script, encoding="utf-8")
@@ -419,7 +441,7 @@ def _check_and_apply_update_if_available() -> bool:
             _message_box(
                 (
                     "Se abrira el instalador de actualizacion.\n"
-                    "Sigue el asistente y al finalizar se abrira TUTTI."
+                    "Sigue el asistente y, al terminar, abre TUTTI manualmente."
                 ),
                 "TUTTI - Actualizando",
                 kind="info",
@@ -439,7 +461,10 @@ def _check_and_apply_update_if_available() -> bool:
             f"Update downloaded successfully | applying update to {current_exe} from {updated_exe}"
         )
         _message_box(
-            "Actualizacion descargada. La app se cerrara para aplicar cambios y volvera a abrirse.",
+            (
+                "Actualizacion descargada. La app se cerrara para aplicar cambios.\n"
+                "Al terminar, abre TUTTI manualmente."
+            ),
             "TUTTI - Actualizando",
             kind="info",
         )
@@ -470,6 +495,7 @@ def _run_backend_process_mode() -> int:
     os.environ.setdefault("TUTTI_DATA_DIR", str(data_dir))
     os.environ.setdefault("PYTHONUNBUFFERED", "1")
     os.environ.setdefault("CORS_ORIGINS", "http://127.0.0.1:8000,http://localhost:8000")
+    _apply_desktop_osrm_defaults(os.environ)
 
     os.chdir(backend_dir)
     # Support both import styles in runtime:
@@ -494,6 +520,13 @@ def _run_backend_process_mode() -> int:
         )
         return 1
 
+    print(
+        "[DesktopLauncher] OSRM effective endpoints | "
+        f"base={os.environ.get('OSRM_BASE_URL', '')} "
+        f"route={os.environ.get('OSRM_ROUTE_URL', os.environ.get('OSRM_URL', ''))} "
+        f"table={os.environ.get('OSRM_TABLE_URL', '')}",
+        flush=True,
+    )
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info")
     return 0
 
@@ -539,6 +572,7 @@ class DesktopRuntime:
         env["TUTTI_DATA_DIR"] = str(data_dir)
         env["PYTHONUNBUFFERED"] = "1"
         env["CORS_ORIGINS"] = "http://127.0.0.1:8000,http://localhost:8000"
+        _apply_desktop_osrm_defaults(env)
 
         logs_dir = Path.home() / "AppData" / "Local" / "Tutti" / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
@@ -565,6 +599,12 @@ class DesktopRuntime:
 
         self.log_handle = open(backend_log_path, "a", encoding="utf-8")
         self.log_handle.write("\n===== TUTTI DESKTOP BACKEND START =====\n")
+        self.log_handle.write(
+            "[DesktopLauncher] OSRM effective endpoints | "
+            f"base={env.get('OSRM_BASE_URL', '')} "
+            f"route={env.get('OSRM_ROUTE_URL', env.get('OSRM_URL', ''))} "
+            f"table={env.get('OSRM_TABLE_URL', '')}\n"
+        )
         self.log_handle.flush()
 
         self.backend_proc = subprocess.Popen(
