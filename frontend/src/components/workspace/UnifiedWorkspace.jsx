@@ -406,7 +406,8 @@ export function UnifiedWorkspace({
   validationReport = null,
   onValidationReportChange = null,
   onSave,
-  onPublish 
+  onPublish,
+  onLiveScheduleChange = null,
 }) {
   // Helper function to format time from backend (handles "HH:MM:SS" or time objects)
   function formatTimeFromBackend(timeValue) {
@@ -1286,6 +1287,15 @@ export function UnifiedWorkspace({
       total_routes: buses.reduce((sum, b) => sum + b.routes.length, 0),
     },
   }), [activeDay, buses, mode]);
+
+  useEffect(() => {
+    if (typeof onLiveScheduleChange !== 'function') return;
+    try {
+      onLiveScheduleChange(buildScheduleData().buses);
+    } catch {
+      // no-op: live map preview must not break workspace interactions
+    }
+  }, [buildScheduleData, onLiveScheduleChange]);
 
   const handleSaveDraft = useCallback(async () => {
     setIsSaving(true);

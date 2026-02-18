@@ -9,6 +9,7 @@ in background, and stops it automatically when the window is closed.
 from __future__ import annotations
 
 import atexit
+import base64
 import ctypes
 import hashlib
 import json
@@ -1060,6 +1061,52 @@ class DesktopRuntime:
             self._close_log_handle()
 
 
+class DesktopBridge:
+    """Functions exposed to the desktop frontend through pywebview."""
+
+    def __init__(self) -> None:
+        self._window: Optional[object] = None
+
+    def bind_window(self, window: object) -> None:
+        self._window = window
+
+    def save_pdf_file(self, pdf_base64: str, suggested_filename: str = "tutti_schedule.pdf") -> dict:
+        """
+        Open a native Save dialog and write the PDF bytes to the selected path.
+        Called from frontend via `window.pywebview.api.save_pdf_file(...)`.
+        """
+        if not self._window:
+            return {"success": False, "error": "Desktop window not ready"}
+        if not pdf_base64:
+            return {"success": False, "error": "Empty PDF payload"}
+
+        try:
+            filename = os.path.basename((suggested_filename or "tutti_schedule.pdf").strip()) or "tutti_schedule.pdf"
+            if not filename.lower().endswith(".pdf"):
+                filename += ".pdf"
+
+            selected = self._window.create_file_dialog(
+                webview.SAVE_DIALOG,  # type: ignore[attr-defined]
+                save_filename=filename,
+                file_types=("PDF files (*.pdf)", "All files (*.*)"),
+            )
+            if not selected:
+                return {"success": False, "cancelled": True}
+
+            target = selected[0] if isinstance(selected, (list, tuple)) else selected
+            target_path = Path(str(target))
+            if target_path.suffix.lower() != ".pdf":
+                target_path = target_path.with_suffix(".pdf")
+
+            data = base64.b64decode(pdf_base64)
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_bytes(data)
+            return {"success": True, "path": str(target_path)}
+        except Exception as exc:
+            _log_update(f"save_pdf_file failed ({exc})")
+            return {"success": False, "error": str(exc)}
+
+
 def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "--run-backend":
         return _run_backend_process_mode()
@@ -1144,11 +1191,14 @@ def main() -> int:
         window_options["frameless"] = True
         window_options["easy_drag"] = True
 
+    desktop_bridge = DesktopBridge()
     window = webview.create_window(
         "TUTTI Fleet Control Center",
         APP_URL,
+        js_api=desktop_bridge,
         **window_options,
     )
+    desktop_bridge.bind_window(window)
     window.events.closed += _safe_shutdown
     webview.start(debug=False)
     return 0

@@ -9,11 +9,11 @@ Provides functions to create, read, update, and delete:
 
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Tuple
 from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 from . import models, schemas
 
@@ -584,3 +584,493 @@ def get_manual_schedule(db: Session, day: str) -> Optional[models.ManualSchedule
     return db.query(models.ManualScheduleModel).filter(
         models.ManualScheduleModel.day == day
     ).first()
+
+
+# =============================================================================
+# App Meta CRUD
+# =============================================================================
+
+def get_app_meta(db: Session, key: str) -> Optional[models.AppMetaModel]:
+    """Get app metadata by key."""
+    return db.query(models.AppMetaModel).filter(models.AppMetaModel.key == key).first()
+
+
+def set_app_meta(db: Session, key: str, value: Any) -> models.AppMetaModel:
+    """Upsert app metadata key/value."""
+    row = get_app_meta(db, key)
+    if row is None:
+        row = models.AppMetaModel(key=key, value=value, updated_at=datetime.utcnow())
+        db.add(row)
+    else:
+        row.value = value
+        row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+# =============================================================================
+# Workspace CRUD
+# =============================================================================
+
+def _workspace_status(workspace: models.OptimizationWorkspaceModel) -> str:
+    """Derive workspace status from current pointers/flags."""
+    if bool(workspace.archived):
+        return "inactive"
+    if workspace.published_version_id:
+        if workspace.working_version_id and workspace.working_version_id != workspace.published_version_id:
+            return "draft"
+        return "active"
+    return "draft"
+
+
+def _safe_dict(value: Any, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    return default.copy() if default else {}
+
+
+def _safe_list(value: Any, default: Optional[List[Any]] = None) -> List[Any]:
+    if isinstance(value, list):
+        return value
+    return list(default or [])
+
+
+def _count_routes_in_buses(buses: Any) -> int:
+    if not isinstance(buses, list):
+        return 0
+    total = 0
+    for bus in buses:
+        if not isinstance(bus, dict):
+            continue
+        items = bus.get("items")
+        if not isinstance(items, list):
+            items = bus.get("routes") if isinstance(bus.get("routes"), list) else []
+        total += len(items)
+    return total
+
+
+def _build_day_stats_from_buses(buses: Any, existing_stats: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    stats = dict(existing_stats or {})
+    buses_list = buses if isinstance(buses, list) else []
+    total_buses = len(buses_list)
+    total_routes = _count_routes_in_buses(buses_list)
+    total_entries = 0
+    total_exits = 0
+    for bus in buses_list:
+        if not isinstance(bus, dict):
+            continue
+        items = bus.get("items")
+        if not isinstance(items, list):
+            items = bus.get("routes") if isinstance(bus.get("routes"), list) else []
+        for item in items:
+            item_type = str((item or {}).get("type", "")).lower()
+            if item_type == "entry":
+                total_entries += 1
+            elif item_type == "exit":
+                total_exits += 1
+
+    stats.setdefault("total_buses", total_buses)
+    stats.setdefault("total_routes", total_routes)
+    stats.setdefault("total_entries", total_entries)
+    stats.setdefault("total_exits", total_exits)
+    if total_buses > 0 and "avg_routes_per_bus" not in stats:
+        stats["avg_routes_per_bus"] = round(total_routes / total_buses, 2)
+    elif total_buses == 0:
+        stats.setdefault("avg_routes_per_bus", 0)
+    return stats
+
+
+def normalize_schedule_by_day(schedule_by_day: Any) -> Dict[str, Any]:
+    """
+    Normalize schedule payload into stable shape:
+    {day: {"schedule": [...], "stats": {...}, "metadata": {...}, "unassigned_routes": [...]}}
+    """
+    days = ("L", "M", "Mc", "X", "V")
+    normalized: Dict[str, Any] = {
+        day: {"schedule": [], "stats": {}, "metadata": {}, "unassigned_routes": []}
+        for day in days
+    }
+    if not isinstance(schedule_by_day, dict):
+        return normalized
+
+    for day in days:
+        raw = schedule_by_day.get(day)
+        if raw is None:
+            continue
+        if isinstance(raw, list):
+            buses = raw
+            metadata = {}
+            unassigned = []
+            stats = _build_day_stats_from_buses(buses)
+        elif isinstance(raw, dict):
+            buses = raw.get("schedule")
+            if not isinstance(buses, list):
+                buses = raw.get("buses") if isinstance(raw.get("buses"), list) else []
+            metadata = _safe_dict(raw.get("metadata"))
+            unassigned = _safe_list(raw.get("unassigned_routes"))
+            stats = _build_day_stats_from_buses(buses, _safe_dict(raw.get("stats")))
+        else:
+            continue
+
+        normalized[day] = {
+            "schedule": buses,
+            "stats": stats,
+            "metadata": metadata,
+            "unassigned_routes": unassigned,
+        }
+    return normalized
+
+
+def _create_workspace_version_record(
+    db: Session,
+    workspace: models.OptimizationWorkspaceModel,
+    version_payload: schemas.WorkspaceVersionCreate,
+) -> models.OptimizationWorkspaceVersionModel:
+    """Create immutable workspace version using explicit payload + working fallback."""
+    latest_version = db.query(func.max(models.OptimizationWorkspaceVersionModel.version_number)).filter(
+        models.OptimizationWorkspaceVersionModel.workspace_id == workspace.id
+    ).scalar()
+    next_version_number = int(latest_version or 0) + 1
+
+    base_version = None
+    if workspace.working_version_id:
+        base_version = db.query(models.OptimizationWorkspaceVersionModel).filter(
+            models.OptimizationWorkspaceVersionModel.id == workspace.working_version_id
+        ).first()
+
+    routes_payload = version_payload.routes_payload
+    if routes_payload is None and base_version is not None:
+        routes_payload = base_version.routes_payload
+    if routes_payload is None:
+        routes_payload = []
+
+    schedule_by_day = version_payload.schedule_by_day
+    if schedule_by_day is None and base_version is not None:
+        schedule_by_day = base_version.schedule_by_day
+    normalized_schedule = normalize_schedule_by_day(schedule_by_day or {})
+
+    parse_report = version_payload.parse_report
+    if parse_report is None and base_version is not None:
+        parse_report = base_version.parse_report
+
+    validation_report = version_payload.validation_report
+    if validation_report is None and base_version is not None:
+        validation_report = base_version.validation_report
+
+    fleet_snapshot = version_payload.fleet_snapshot
+    if fleet_snapshot is None and base_version is not None:
+        fleet_snapshot = base_version.fleet_snapshot
+
+    summary_metrics = version_payload.summary_metrics
+    if summary_metrics is None and base_version is not None:
+        summary_metrics = base_version.summary_metrics
+
+    record = models.OptimizationWorkspaceVersionModel(
+        workspace_id=workspace.id,
+        version_number=next_version_number,
+        save_kind=version_payload.save_kind,
+        checkpoint_name=version_payload.checkpoint_name,
+        routes_payload=routes_payload,
+        schedule_by_day=normalized_schedule,
+        parse_report=parse_report,
+        validation_report=validation_report,
+        fleet_snapshot=fleet_snapshot,
+        summary_metrics=summary_metrics,
+    )
+    db.add(record)
+    db.flush()
+    return record
+
+
+def _enforce_workspace_autosave_retention(db: Session, workspace_id: str, keep_last: int = 30) -> None:
+    """Keep only latest N autosave versions for a workspace."""
+    autosaves = db.query(models.OptimizationWorkspaceVersionModel).filter(
+        models.OptimizationWorkspaceVersionModel.workspace_id == workspace_id,
+        models.OptimizationWorkspaceVersionModel.save_kind == "autosave",
+    ).order_by(desc(models.OptimizationWorkspaceVersionModel.version_number)).all()
+    if len(autosaves) <= keep_last:
+        return
+    for old_version in autosaves[keep_last:]:
+        if old_version.id in {None}:
+            continue
+        # Never delete pointer targets.
+        workspace = db.query(models.OptimizationWorkspaceModel).filter(
+            models.OptimizationWorkspaceModel.id == workspace_id
+        ).first()
+        if workspace and old_version.id in {workspace.working_version_id, workspace.published_version_id}:
+            continue
+        db.delete(old_version)
+    db.flush()
+
+
+def create_workspace(
+    db: Session,
+    payload: schemas.WorkspaceCreateRequest,
+) -> models.OptimizationWorkspaceModel:
+    """Create new workspace and optional initial snapshot."""
+    workspace = models.OptimizationWorkspaceModel(
+        name=payload.name.strip(),
+        city_label=(payload.city_label or "").strip() or None,
+        archived=False,
+    )
+    db.add(workspace)
+    db.flush()
+
+    if (
+        payload.routes_payload is not None
+        or payload.parse_report is not None
+        or payload.schedule_by_day is not None
+        or payload.summary_metrics is not None
+    ):
+        initial = schemas.WorkspaceVersionCreate(
+            save_kind="save",
+            routes_payload=payload.routes_payload,
+            schedule_by_day=payload.schedule_by_day,
+            parse_report=payload.parse_report,
+            summary_metrics=payload.summary_metrics,
+        )
+        version = _create_workspace_version_record(db, workspace, initial)
+        workspace.working_version_id = version.id
+
+    workspace.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(workspace)
+    return workspace
+
+
+def get_workspace(db: Session, workspace_id: str) -> Optional[models.OptimizationWorkspaceModel]:
+    """Fetch workspace with versions/pointers."""
+    return db.query(models.OptimizationWorkspaceModel).options(
+        joinedload(models.OptimizationWorkspaceModel.versions),
+        joinedload(models.OptimizationWorkspaceModel.working_version),
+        joinedload(models.OptimizationWorkspaceModel.published_version),
+    ).filter(models.OptimizationWorkspaceModel.id == workspace_id).first()
+
+
+def list_workspaces(
+    db: Session,
+    *,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+    city: Optional[str] = None,
+    updated_from: Optional[datetime] = None,
+) -> List[models.OptimizationWorkspaceModel]:
+    """List workspaces with optional filters."""
+    query = db.query(models.OptimizationWorkspaceModel).options(
+        joinedload(models.OptimizationWorkspaceModel.versions),
+        joinedload(models.OptimizationWorkspaceModel.working_version),
+        joinedload(models.OptimizationWorkspaceModel.published_version),
+    )
+    if q:
+        like_pattern = f"%{q.strip()}%"
+        query = query.filter(models.OptimizationWorkspaceModel.name.ilike(like_pattern))
+    if city:
+        query = query.filter(models.OptimizationWorkspaceModel.city_label == city)
+    if updated_from:
+        query = query.filter(models.OptimizationWorkspaceModel.updated_at >= updated_from)
+
+    workspaces = query.order_by(desc(models.OptimizationWorkspaceModel.updated_at)).all()
+    if status:
+        normalized = status.strip().lower()
+        workspaces = [ws for ws in workspaces if _workspace_status(ws) == normalized]
+    return workspaces
+
+
+def create_workspace_version(
+    db: Session,
+    workspace_id: str,
+    payload: schemas.WorkspaceVersionCreate,
+) -> Optional[models.OptimizationWorkspaceVersionModel]:
+    """Create snapshot and move working/published pointers according to save kind."""
+    workspace = db.query(models.OptimizationWorkspaceModel).filter(
+        models.OptimizationWorkspaceModel.id == workspace_id
+    ).first()
+    if workspace is None:
+        return None
+
+    record = _create_workspace_version_record(db, workspace, payload)
+    workspace.working_version_id = record.id
+    if payload.save_kind == "publish":
+        workspace.published_version_id = record.id
+    workspace.updated_at = datetime.utcnow()
+    _enforce_workspace_autosave_retention(db, workspace.id, keep_last=30)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+def get_workspace_versions(db: Session, workspace_id: str) -> List[models.OptimizationWorkspaceVersionModel]:
+    """List workspace versions newest first."""
+    return db.query(models.OptimizationWorkspaceVersionModel).filter(
+        models.OptimizationWorkspaceVersionModel.workspace_id == workspace_id
+    ).order_by(desc(models.OptimizationWorkspaceVersionModel.version_number)).all()
+
+
+def get_workspace_version(
+    db: Session,
+    workspace_id: str,
+    version_id: str,
+) -> Optional[models.OptimizationWorkspaceVersionModel]:
+    """Get a specific version."""
+    return db.query(models.OptimizationWorkspaceVersionModel).filter(
+        models.OptimizationWorkspaceVersionModel.workspace_id == workspace_id,
+        models.OptimizationWorkspaceVersionModel.id == version_id,
+    ).first()
+
+
+def rename_workspace(db: Session, workspace_id: str, name: str) -> Optional[models.OptimizationWorkspaceModel]:
+    """Rename workspace."""
+    workspace = db.query(models.OptimizationWorkspaceModel).filter(
+        models.OptimizationWorkspaceModel.id == workspace_id
+    ).first()
+    if workspace is None:
+        return None
+    workspace.name = name.strip()
+    workspace.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(workspace)
+    return workspace
+
+
+def set_workspace_archived(
+    db: Session,
+    workspace_id: str,
+    archived: bool,
+) -> Optional[models.OptimizationWorkspaceModel]:
+    """Archive or restore workspace."""
+    workspace = db.query(models.OptimizationWorkspaceModel).filter(
+        models.OptimizationWorkspaceModel.id == workspace_id
+    ).first()
+    if workspace is None:
+        return None
+    workspace.archived = bool(archived)
+    workspace.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(workspace)
+    return workspace
+
+
+def _extract_latest_completed_job_seed(
+    db: Session,
+) -> Tuple[Optional[List[Dict[str, Any]]], Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Extract best-effort legacy seed from latest completed optimization job.
+    Returns (routes_payload, schedule_by_day, summary_metrics, source_job_id).
+    """
+    jobs = db.query(models.OptimizationJob).filter(
+        models.OptimizationJob.status == "completed"
+    ).order_by(
+        desc(models.OptimizationJob.completed_at),
+        desc(models.OptimizationJob.created_at),
+    ).all()
+
+    for job in jobs:
+        raw_input = job.input_data
+        routes_payload: Optional[List[Dict[str, Any]]] = None
+        if isinstance(raw_input, list):
+            routes_payload = raw_input
+        elif isinstance(raw_input, dict):
+            raw_routes = raw_input.get("routes")
+            if isinstance(raw_routes, list):
+                routes_payload = raw_routes
+
+        raw_result = job.result if isinstance(job.result, dict) else {}
+        schedule_by_day = raw_result.get("schedule_by_day") if isinstance(raw_result, dict) else None
+        if not isinstance(schedule_by_day, dict):
+            continue
+
+        summary_metrics = raw_result.get("summary_metrics") if isinstance(raw_result, dict) else None
+        return routes_payload, schedule_by_day, summary_metrics if isinstance(summary_metrics, dict) else None, str(job.id)
+
+    return None, None, None, None
+
+
+def migrate_legacy_workspace_bootstrap(
+    db: Session,
+) -> Tuple[bool, bool, Optional[models.OptimizationWorkspaceModel], Dict[str, Any]]:
+    """
+    Idempotent migration bootstrap.
+    Returns (success, migrated, workspace, details).
+    """
+    flag = get_app_meta(db, "workspace_migration_v1_done")
+    if flag and bool(flag.value):
+        details = {"reason": "already_migrated"}
+        return True, False, None, details
+
+    workspace_count = db.query(func.count(models.OptimizationWorkspaceModel.id)).scalar() or 0
+    if int(workspace_count) > 0:
+        set_app_meta(db, "workspace_migration_v1_done", True)
+        details = {"reason": "workspaces_already_exist", "workspace_count": int(workspace_count)}
+        return True, False, None, details
+
+    routes_payload, schedule_seed, summary_metrics, source_job_id = _extract_latest_completed_job_seed(db)
+    normalized_schedule = normalize_schedule_by_day(schedule_seed or {})
+    manual_rows = db.query(models.ManualScheduleModel).all()
+    manual_days_applied: List[str] = []
+    for row in manual_rows:
+        day = str(row.day)
+        if day not in normalized_schedule:
+            continue
+        payload = row.payload if isinstance(row.payload, dict) else {}
+        buses = payload.get("buses")
+        if not isinstance(buses, list):
+            buses = payload.get("schedule") if isinstance(payload.get("schedule"), list) else []
+        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        unassigned = payload.get("unassigned_routes") if isinstance(payload.get("unassigned_routes"), list) else []
+        normalized_schedule[day] = {
+            "schedule": buses,
+            "stats": _build_day_stats_from_buses(buses, normalized_schedule[day].get("stats")),
+            "metadata": metadata,
+            "unassigned_routes": unassigned,
+        }
+        manual_days_applied.append(day)
+
+    has_seed_data = bool(routes_payload) or any(
+        bool((normalized_schedule.get(day) or {}).get("schedule"))
+        for day in ("L", "M", "Mc", "X", "V")
+    )
+    if not has_seed_data:
+        set_app_meta(db, "workspace_migration_v1_done", True)
+        details = {"reason": "no_legacy_data_found"}
+        return True, False, None, details
+
+    migration_name = f"Migrado - {datetime.utcnow().strftime('%Y-%m-%d')}"
+    workspace = models.OptimizationWorkspaceModel(
+        name=migration_name,
+        city_label=None,
+        archived=False,
+    )
+    db.add(workspace)
+    db.flush()
+
+    version = _create_workspace_version_record(
+        db,
+        workspace,
+        schemas.WorkspaceVersionCreate(
+            save_kind="migration",
+            checkpoint_name="legacy-bootstrap",
+            routes_payload=routes_payload or [],
+            schedule_by_day=normalized_schedule,
+            summary_metrics=summary_metrics,
+        ),
+    )
+    workspace.working_version_id = version.id
+    workspace.published_version_id = version.id
+    workspace.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(workspace)
+
+    set_app_meta(db, "workspace_migration_v1_done", True)
+    set_app_meta(db, "last_open_workspace_id", workspace.id)
+
+    details = {
+        "source_job_id": source_job_id,
+        "manual_days_applied": manual_days_applied,
+        "routes_count": len(routes_payload or []),
+        "has_schedule_seed": any(
+            bool((normalized_schedule.get(day) or {}).get("schedule"))
+            for day in ("L", "M", "Mc", "X", "V")
+        ),
+    }
+    return True, True, workspace, details

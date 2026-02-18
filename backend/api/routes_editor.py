@@ -16,7 +16,7 @@ from datetime import datetime, time
 from typing import Dict, List, Optional, Any, Tuple
 import logging
 
-from fastapi import APIRouter, HTTPException, Body, status
+from fastapi import APIRouter, HTTPException, Body, Query, status
 from pydantic import BaseModel, Field
 
 from db import schemas, crud as db_crud
@@ -550,6 +550,12 @@ async def update_schedule(
     # Generate warnings for tight schedules
     warnings = list(validation_result.warnings)
 
+    workspace_id = (
+        (schedule.workspace_id or "").strip()
+        or str((schedule.metadata or {}).get("workspace_id", "")).strip()
+        or None
+    )
+
     # Persist to DB when available (production-safe persistence).
     if is_database_available() and SessionLocal is not None:
         db = SessionLocal()
@@ -559,6 +565,55 @@ async def update_schedule(
                 day=schedule.day,
                 payload=persisted_payload,
             )
+            if workspace_id:
+                workspace = db_crud.get_workspace(db, workspace_id)
+                if workspace:
+                    base_schedule = {}
+                    if workspace.working_version and isinstance(workspace.working_version.schedule_by_day, dict):
+                        base_schedule = workspace.working_version.schedule_by_day
+                    normalized = db_crud.normalize_schedule_by_day(base_schedule)
+                    total_entries = 0
+                    total_exits = 0
+                    for bus_payload in persisted_payload.get("buses", []):
+                        bus_items = bus_payload.get("items", []) if isinstance(bus_payload, dict) else []
+                        for item_payload in bus_items:
+                            item_type = str((item_payload or {}).get("type", "")).lower()
+                            if item_type == "entry":
+                                total_entries += 1
+                            elif item_type == "exit":
+                                total_exits += 1
+                    normalized[schedule.day] = {
+                        "schedule": persisted_payload.get("buses", []),
+                        "stats": {
+                            "total_buses": len(schedule.buses),
+                            "total_routes": total_routes,
+                            "total_entries": total_entries,
+                            "total_exits": total_exits,
+                            "avg_routes_per_bus": round(total_routes / len(schedule.buses), 2) if schedule.buses else 0,
+                        },
+                        "metadata": persisted_payload.get("metadata", {}) or {},
+                        "unassigned_routes": persisted_payload.get("unassigned_routes", []) or [],
+                    }
+                    db_crud.create_workspace_version(
+                        db,
+                        workspace_id=workspace_id,
+                        payload=schemas.WorkspaceVersionCreate(
+                            save_kind="save",
+                            schedule_by_day=normalized,
+                            summary_metrics={
+                                "total_buses": len(schedule.buses),
+                                "total_routes": total_routes,
+                            },
+                            checkpoint_name=f"manual-{schedule.day.lower()}",
+                        ),
+                    )
+                    db_crud.set_app_meta(db, "last_open_workspace_id", workspace_id)
+                else:
+                    warnings.append(schemas.ValidationError(
+                        field="workspace_id",
+                        message=f"Workspace {workspace_id} no encontrado; guardado solo en legacy",
+                        code="workspace_not_found",
+                    ))
         except Exception as e:
             logger.warning(f"[Schedule Update] Could not persist schedule in DB for {schedule.day}: {e}")
             warnings.append(schemas.ValidationError(
@@ -612,7 +667,10 @@ async def update_schedule_legacy(
     summary="Get saved schedule",
     description="Retrieve a previously saved schedule for a specific day"
 )
-async def get_schedule(day: str) -> Dict[str, Any]:
+async def get_schedule(
+    day: str,
+    workspace_id: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
     """
     Get a saved schedule for the specified day.
     
@@ -626,15 +684,43 @@ async def get_schedule(day: str) -> Dict[str, Any]:
                 "message": f"Invalid day code '{day}'. Must be one of: {', '.join(VALID_DAYS)}"
             }
         )
-    
-    cache_key = f"schedule_{day}"
+    workspace_id = (workspace_id or "").strip() or None
+
+    cache_key = f"schedule_{workspace_id or 'legacy'}_{day}"
     cached_schedule = edited_schedules_cache.get(cache_key)
 
-    if cached_schedule is None and is_database_available() and SessionLocal is not None:
+    if is_database_available() and SessionLocal is not None:
         db = SessionLocal()
         try:
+            # Prefer workspace snapshot when requested.
+            if workspace_id:
+                workspace = db_crud.get_workspace(db, workspace_id)
+                if workspace and workspace.working_version and isinstance(workspace.working_version.schedule_by_day, dict):
+                    by_day = db_crud.normalize_schedule_by_day(workspace.working_version.schedule_by_day)
+                    day_payload = by_day.get(day, {})
+                    schedule_payload = {
+                        "day": day,
+                        "buses": day_payload.get("schedule", []),
+                        "unassigned_routes": day_payload.get("unassigned_routes", []),
+                        "metadata": {
+                            **(day_payload.get("metadata", {}) or {}),
+                            "workspace_id": workspace_id,
+                            "version_id": str(workspace.working_version.id),
+                        },
+                        "updated_at": (workspace.working_version.created_at.isoformat() if workspace.working_version.created_at else datetime.utcnow().isoformat()),
+                    }
+                    edited_schedules_cache[cache_key] = schedule_payload
+                    return {
+                        "success": True,
+                        "day": day,
+                        "day_name": DAY_NAMES[day],
+                        "workspace_id": workspace_id,
+                        "version_id": str(workspace.working_version.id),
+                        "schedule": schedule_payload,
+                    }
+
             saved = db_crud.get_manual_schedule(db, day)
-            if saved and isinstance(saved.payload, dict):
+            if cached_schedule is None and saved and isinstance(saved.payload, dict):
                 cached_schedule = saved.payload
                 edited_schedules_cache[cache_key] = cached_schedule
         except Exception as e:
@@ -655,6 +741,7 @@ async def get_schedule(day: str) -> Dict[str, Any]:
         "success": True,
         "day": day,
         "day_name": DAY_NAMES[day],
+        "workspace_id": workspace_id,
         "schedule": cached_schedule
     }
 

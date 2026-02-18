@@ -10,7 +10,7 @@ Note: These are separate from the domain models in models.py (Route, Stop, etc.)
 """
 
 from datetime import datetime, time
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, computed_field
@@ -218,6 +218,7 @@ class ScheduleUpdateRequest(BaseModel):
     buses: List[BusEditorSchema]
     unassigned_routes: List[UnassignedRouteSchema] = Field(default_factory=list)
     metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata like optimizer version")
+    workspace_id: Optional[str] = Field(None, description="Optional workspace id for versioned persistence")
     
     class Config:
         json_schema_extra = {
@@ -278,6 +279,102 @@ class ValidationResult(BaseModel):
     conflicts: List[RouteConflict] = Field(default_factory=list)
     errors: List[ValidationError] = Field(default_factory=list)
     warnings: List[ValidationError] = Field(default_factory=list)
+
+
+# =============================================================================
+# Workspace Schemas
+# =============================================================================
+
+WorkspaceSaveKind = Literal["autosave", "save", "publish", "migration"]
+WorkspaceStatus = Literal["active", "draft", "inactive"]
+
+
+class WorkspaceVersionCreate(BaseModel):
+    """Snapshot payload used to create a workspace version."""
+    checkpoint_name: Optional[str] = None
+    save_kind: WorkspaceSaveKind = "save"
+    routes_payload: Optional[Any] = None
+    schedule_by_day: Optional[Dict[str, Any]] = None
+    parse_report: Optional[Dict[str, Any]] = None
+    validation_report: Optional[Dict[str, Any]] = None
+    fleet_snapshot: Optional[Dict[str, Any]] = None
+    summary_metrics: Optional[Dict[str, Any]] = None
+
+
+class WorkspaceCreateRequest(BaseModel):
+    """Request payload to create a new optimization workspace."""
+    name: str = Field(..., min_length=1, max_length=120)
+    city_label: Optional[str] = Field(default=None, max_length=120)
+    routes_payload: Optional[Any] = None
+    parse_report: Optional[Dict[str, Any]] = None
+    schedule_by_day: Optional[Dict[str, Any]] = None
+    summary_metrics: Optional[Dict[str, Any]] = None
+
+
+class WorkspaceRenameRequest(BaseModel):
+    """Rename workspace request."""
+    name: str = Field(..., min_length=1, max_length=120)
+
+
+class WorkspaceVersionResponse(BaseModel):
+    """Workspace snapshot metadata."""
+    id: str
+    workspace_id: str
+    version_number: int
+    save_kind: WorkspaceSaveKind
+    checkpoint_name: Optional[str] = None
+    created_at: datetime
+    summary_metrics: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
+
+class WorkspaceVersionDetailResponse(WorkspaceVersionResponse):
+    """Full workspace version payload."""
+    routes_payload: Any = None
+    schedule_by_day: Dict[str, Any] = Field(default_factory=dict)
+    parse_report: Optional[Dict[str, Any]] = None
+    validation_report: Optional[Dict[str, Any]] = None
+    fleet_snapshot: Optional[Dict[str, Any]] = None
+
+
+class WorkspaceResponse(BaseModel):
+    """Workspace list/detail shared metadata."""
+    id: str
+    name: str
+    city_label: Optional[str] = None
+    archived: bool = False
+    status: WorkspaceStatus = "draft"
+    published_version_id: Optional[str] = None
+    working_version_id: Optional[str] = None
+    published_version_number: Optional[int] = None
+    working_version_number: Optional[int] = None
+    version_count: int = 0
+    summary_metrics: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class WorkspaceDetailResponse(WorkspaceResponse):
+    """Workspace with current snapshots references."""
+    working_version: Optional[WorkspaceVersionDetailResponse] = None
+    published_version: Optional[WorkspaceVersionDetailResponse] = None
+
+
+class WorkspaceListResponse(BaseModel):
+    """List of workspaces."""
+    items: List[WorkspaceResponse] = Field(default_factory=list)
+    total: int = 0
+
+
+class LegacyMigrationResponse(BaseModel):
+    """Legacy migration bootstrap result."""
+    success: bool
+    migrated: bool
+    workspace_id: Optional[str] = None
+    workspace_name: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 
 # =============================================================================

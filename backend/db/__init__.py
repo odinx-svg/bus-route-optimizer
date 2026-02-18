@@ -19,6 +19,9 @@ from .models import (
     OptimizationJob,
     OptimizationResultModel,
     ManualScheduleModel,
+    OptimizationWorkspaceModel,
+    OptimizationWorkspaceVersionModel,
+    AppMetaModel,
 )
 from . import crud, schemas
 
@@ -34,6 +37,9 @@ __all__ = [
     "OptimizationJob",
     "OptimizationResultModel",
     "ManualScheduleModel",
+    "OptimizationWorkspaceModel",
+    "OptimizationWorkspaceVersionModel",
+    "AppMetaModel",
     "crud",
     "schemas",
 ]

@@ -8,7 +8,7 @@ These models define the database schema for:
 
 from sqlalchemy import (
     Column, String, Integer, Float, DateTime,
-    Boolean, ForeignKey, JSON, Time, Text
+    Boolean, ForeignKey, JSON, Time, Text, UniqueConstraint
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, ARRAY as PGARRAY
@@ -120,3 +120,99 @@ class ManualScheduleModel(Base):
 
     def __repr__(self):
         return f"<ManualScheduleModel(day='{self.day}', updated_at='{self.updated_at}')>"
+
+
+class OptimizationWorkspaceModel(Base):
+    """Optimization workspace root entity (draft/active/archive)."""
+    __tablename__ = "optimization_workspaces"
+
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    city_label = Column(String, nullable=True)
+    archived = Column(Boolean, nullable=False, default=False)
+    published_version_id = Column(
+        UUIDType,
+        ForeignKey("optimization_workspace_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    working_version_id = Column(
+        UUIDType,
+        ForeignKey("optimization_workspace_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    versions = relationship(
+        "OptimizationWorkspaceVersionModel",
+        back_populates="workspace",
+        foreign_keys="OptimizationWorkspaceVersionModel.workspace_id",
+        cascade="all, delete-orphan",
+        order_by="OptimizationWorkspaceVersionModel.version_number",
+    )
+    published_version = relationship(
+        "OptimizationWorkspaceVersionModel",
+        foreign_keys=[published_version_id],
+        post_update=True,
+    )
+    working_version = relationship(
+        "OptimizationWorkspaceVersionModel",
+        foreign_keys=[working_version_id],
+        post_update=True,
+    )
+
+    def __repr__(self):
+        return (
+            f"<OptimizationWorkspaceModel(id='{self.id}', name='{self.name}', "
+            f"archived={self.archived})>"
+        )
+
+
+class OptimizationWorkspaceVersionModel(Base):
+    """Immutable version snapshot for workspace save/publish/autosave."""
+    __tablename__ = "optimization_workspace_versions"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "version_number", name="uq_workspace_version_number"),
+    )
+
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(
+        UUIDType,
+        ForeignKey("optimization_workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    version_number = Column(Integer, nullable=False)
+    save_kind = Column(String, nullable=False, default="autosave")  # autosave|save|publish|migration
+    checkpoint_name = Column(String, nullable=True)
+    routes_payload = Column(JSON, nullable=False, default=list)
+    schedule_by_day = Column(JSON, nullable=False, default=dict)
+    parse_report = Column(JSON, nullable=True)
+    validation_report = Column(JSON, nullable=True)
+    fleet_snapshot = Column(JSON, nullable=True)
+    summary_metrics = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    workspace = relationship(
+        "OptimizationWorkspaceModel",
+        back_populates="versions",
+        foreign_keys=[workspace_id],
+    )
+
+    def __repr__(self):
+        return (
+            f"<OptimizationWorkspaceVersionModel(id='{self.id}', workspace_id='{self.workspace_id}', "
+            f"version={self.version_number}, save_kind='{self.save_kind}')>"
+        )
+
+
+class AppMetaModel(Base):
+    """Generic key/value table for migration flags and app preferences."""
+    __tablename__ = "app_meta"
+
+    key = Column(String, primary_key=True)
+    value = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<AppMetaModel(key='{self.key}')>"

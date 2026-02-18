@@ -54,7 +54,7 @@ const ViewTabs = ({ viewMode, setViewMode, hasSchedule }) => {
   const tabs = [
     { id: 'dashboard', label: 'Control', icon: Gauge, requiresSchedule: false },
     { id: 'map', label: 'Mapa', icon: MapIcon, requiresSchedule: false },
-    { id: 'workspace', label: 'Workspace', icon: LayoutGrid, requiresSchedule: true },
+    { id: 'workspace', label: 'Workspace', icon: LayoutGrid, requiresSchedule: false },
     { id: 'fleet', label: 'Flota', icon: Bus, requiresSchedule: false },
     { id: 'montecarlo', label: 'Monte Carlo', icon: Box, requiresSchedule: true },
   ];

@@ -282,6 +282,53 @@ def _persist_runtime_snapshot(job_id: str, force: bool = False, throttle_seconds
         db.close()
 
 
+def _persist_workspace_pipeline_snapshot(
+    *,
+    workspace_id: Optional[str],
+    routes_payload: Optional[List[Dict[str, Any]]],
+    pipeline_result: Optional[Dict[str, Any]],
+    parse_report: Optional[Dict[str, Any]] = None,
+    save_kind: str = "autosave",
+    checkpoint_name: Optional[str] = None,
+) -> None:
+    """Persist pipeline output as workspace version snapshot."""
+    if not workspace_id or not is_database_available() or SessionLocal is None:
+        return
+    if not isinstance(pipeline_result, dict):
+        return
+
+    db = SessionLocal()
+    try:
+        from db import crud as db_crud
+        from db import schemas as db_schemas
+
+        version_payload = db_schemas.WorkspaceVersionCreate(
+            save_kind="save" if save_kind not in {"autosave", "save", "publish", "migration"} else save_kind,  # type: ignore[arg-type]
+            checkpoint_name=checkpoint_name,
+            routes_payload=routes_payload or [],
+            schedule_by_day=pipeline_result.get("schedule_by_day") if isinstance(pipeline_result.get("schedule_by_day"), dict) else {},
+            parse_report=parse_report if isinstance(parse_report, dict) else None,
+            validation_report=pipeline_result.get("validation_report") if isinstance(pipeline_result.get("validation_report"), dict) else None,
+            fleet_snapshot=pipeline_result.get("fleet_assignment") if isinstance(pipeline_result.get("fleet_assignment"), dict) else None,
+            summary_metrics=pipeline_result.get("summary_metrics") if isinstance(pipeline_result.get("summary_metrics"), dict) else None,
+        )
+        created = db_crud.create_workspace_version(db, workspace_id, version_payload)
+        if created:
+            db_crud.set_app_meta(db, "last_open_workspace_id", workspace_id)
+            logger.info(
+                "[Workspace] Pipeline snapshot persisted | workspace_id=%s version_id=%s save_kind=%s",
+                workspace_id,
+                created.id,
+                save_kind,
+            )
+        else:
+            logger.warning("[Workspace] Pipeline snapshot skipped: workspace not found (%s)", workspace_id)
+    except Exception as e:
+        logger.warning("[Workspace] Could not persist pipeline snapshot: %s", e)
+    finally:
+        db.close()
+
+
 def _update_local_job_state(job_id: str, **updates: Any) -> Dict[str, Any]:
     """Compatibility wrapper to update unified runtime snapshots."""
     status = str(updates.get("status", "running"))
@@ -469,6 +516,16 @@ async def _run_local_pipeline_job(
         )
         safe_result = jsonable_encoder(pipeline_result)
         safe_stats = jsonable_encoder(pipeline_result.get("summary_metrics"))
+        workspace_id = str(config_payload.get("workspace_id", "") or "").strip() or None
+        parse_report_payload = config_payload.get("parse_report")
+        _persist_workspace_pipeline_snapshot(
+            workspace_id=workspace_id,
+            routes_payload=routes_data,
+            pipeline_result=safe_result if isinstance(safe_result, dict) else None,
+            parse_report=parse_report_payload if isinstance(parse_report_payload, dict) else None,
+            save_kind="autosave",
+            checkpoint_name="pipeline-auto",
+        )
 
         _persist_job_update(
             job_id,
@@ -639,6 +696,14 @@ try:
 except ImportError as e:
     logger.warning(f"[Startup] Could not register fleet router: {e}")
 
+# Import and register workspaces router
+try:
+    from api.workspaces import router as workspaces_router
+    app.include_router(workspaces_router)
+    logger.info("[Startup] Workspaces router registered successfully")
+except ImportError as e:
+    logger.warning(f"[Startup] Could not register workspaces router: {e}")
+
 # Enable CORS
 def _wildcard_origin_to_regex(origin_pattern: str) -> str:
     """Convert wildcard origins (e.g. https://*.vercel.app) to regex."""
@@ -720,6 +785,37 @@ def health_check() -> Dict[str, Any]:
         except Exception:
             pass
 
+    workspace_stats: Dict[str, Any] = {
+        "total": 0,
+        "active": 0,
+        "draft": 0,
+        "inactive": 0,
+        "migration_done": False,
+        "last_migration_check": None,
+    }
+    if is_database_available() and SessionLocal is not None:
+        db = SessionLocal()
+        try:
+            from db import crud as db_crud
+            workspaces = db_crud.list_workspaces(db)
+            workspace_stats["total"] = len(workspaces)
+            for ws in workspaces:
+                if bool(ws.archived):
+                    workspace_stats["inactive"] += 1
+                elif ws.published_version_id and ws.published_version_id == ws.working_version_id:
+                    workspace_stats["active"] += 1
+                else:
+                    workspace_stats["draft"] += 1
+            migration_flag = db_crud.get_app_meta(db, "workspace_migration_v1_done")
+            workspace_stats["migration_done"] = bool(migration_flag.value) if migration_flag else False
+            workspace_stats["last_migration_check"] = (
+                migration_flag.updated_at.isoformat() if migration_flag and migration_flag.updated_at else None
+            )
+        except Exception as e:
+            logger.debug(f"[Health] Workspace stats unavailable: {e}")
+        finally:
+            db.close()
+
     return {
         "status": "ok",
         "service": "tutti-backend",
@@ -727,6 +823,7 @@ def health_check() -> Dict[str, Any]:
         "mode": runtime_mode,
         "ws_manager": ws_stats,
         "job_store": runtime_job_store.stats(),
+        "workspaces": workspace_stats,
     }
 
 
@@ -1302,6 +1399,8 @@ class PipelineConfigPayload(BaseModel):
 class PipelineOptimizationRequest(BaseModel):
     routes: List[Route]
     config: Optional[PipelineConfigPayload] = None
+    workspace_id: Optional[str] = None
+    parse_report: Optional[Dict[str, Any]] = None
 
 
 def _route_to_json_payload(route: Route) -> Dict[str, Any]:
@@ -1736,6 +1835,18 @@ async def export_pdf(data: Union[List[Dict[str, Any]], Dict[str, Any]] = Body(..
 # ASYNC OPTIMIZATION ENDPOINTS (Celery)
 # =============================================================================
 
+@app.post("/api/workspaces/{workspace_id}/optimize-pipeline")
+async def optimize_pipeline_for_workspace(
+    workspace_id: str,
+    request: PipelineOptimizationRequest,
+) -> Dict[str, Any]:
+    """Launch async pipeline bound to workspace context."""
+    payload = request.model_dump()
+    payload["workspace_id"] = workspace_id
+    bound_request = PipelineOptimizationRequest(**payload)
+    return await optimize_pipeline_by_day_async(bound_request)
+
+
 @app.post("/optimize-pipeline-by-day-async")
 async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -> Dict[str, Any]:
     """
@@ -1753,6 +1864,10 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
         "use_ml_assignment": True,
         "invalid_rows_dropped": 0,
     }
+    if request.workspace_id:
+        config_payload["workspace_id"] = request.workspace_id
+    if request.parse_report is not None:
+        config_payload["parse_report"] = request.parse_report
     job_id = str(uuid4())
     created_at = datetime.utcnow()
     _update_local_job_state(
@@ -1775,6 +1890,12 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
                 status="queued",
                 algorithm="pipeline-v6-osrm",
                 input_data=routes_payload,
+                stats={
+                    "workspace_context": {
+                        "workspace_id": request.workspace_id,
+                        "parse_report": request.parse_report if isinstance(request.parse_report, dict) else None,
+                    }
+                },
                 created_at=created_at
             )
             db.add(job)
@@ -1805,6 +1926,7 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
                 "status": "queued",
                 "message": "Pipeline automático encolado correctamente",
                 "websocket_url": f"/ws/optimize/{job_id}",
+                "workspace_id": request.workspace_id,
                 "config_applied": config_payload,
             }
         except Exception as e:
@@ -1833,6 +1955,7 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
             "status": "queued",
             "message": "Pipeline automático encolado (modo local)",
             "websocket_url": f"/ws/optimize/{job_id}",
+            "workspace_id": request.workspace_id,
             "config_applied": config_payload,
         }
     except Exception as e:
@@ -2833,6 +2956,22 @@ async def startup_event():
             logger.info("[Startup] Database tables ensured")
         except Exception as e:
             logger.warning(f"[Startup] Could not ensure database tables: {e}")
+        try:
+            from db import crud as db_crud
+            db = SessionLocal()
+            try:
+                success, migrated, workspace, details = db_crud.migrate_legacy_workspace_bootstrap(db)
+                logger.info(
+                    "[Startup] Workspace migration check | success=%s migrated=%s workspace=%s details=%s",
+                    success,
+                    migrated,
+                    getattr(workspace, "id", None),
+                    details,
+                )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"[Startup] Could not execute workspace migration bootstrap: {e}")
     
     # Start progress listener if available
     if PROGRESS_LISTENER_AVAILABLE and WEBSOCKET_AVAILABLE and manager:
