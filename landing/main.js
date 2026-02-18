@@ -1,7 +1,8 @@
 const REPO_OWNER = "odinx-svg";
 const REPO_NAME = "bus-route-optimizer";
 const FALLBACK_RELEASES = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`;
-const FALLBACK_DOWNLOAD = `${FALLBACK_RELEASES}/latest`;
+const FALLBACK_DOWNLOAD = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/TuttiSetup.exe`;
+const FALLBACK_DOWNLOAD_PAGE = `${FALLBACK_RELEASES}/latest`;
 const HOTFIX_TAG = "v0.2.3";
 const HOTFIX_RELEASE_URL = `${FALLBACK_RELEASES}/tag/${HOTFIX_TAG}`;
 
@@ -177,7 +178,11 @@ const applyLatestRelease = async () => {
     const assets = Array.isArray(release.assets) ? release.assets : [];
     const { asset: preferredAsset, kind } = pickPreferredAsset(assets);
 
-    const downloadHref = preferredAsset?.browser_download_url || release.html_url || FALLBACK_DOWNLOAD;
+    const downloadHref =
+      preferredAsset?.browser_download_url ||
+      FALLBACK_DOWNLOAD ||
+      release.html_url ||
+      FALLBACK_DOWNLOAD_PAGE;
     const versionLabel = release.tag_name || release.name || "release";
 
     setDownloadHref(downloadHref);
