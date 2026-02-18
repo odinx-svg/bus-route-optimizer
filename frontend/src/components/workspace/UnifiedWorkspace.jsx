@@ -630,13 +630,19 @@ export function UnifiedWorkspace({
 
   useEffect(() => {
     if (typeof onBusSelect !== 'function') return;
-    onBusSelect(selectedBusId || null);
-  }, [onBusSelect, selectedBusId]);
+    const internalBusId = selectedBusId || null;
+    const externalBusId = selectedBusIdExternal || null;
+    if (internalBusId === externalBusId) return;
+    onBusSelect(internalBusId);
+  }, [onBusSelect, selectedBusId, selectedBusIdExternal]);
 
   useEffect(() => {
     if (typeof onRouteSelect !== 'function') return;
-    onRouteSelect(selectedRouteId || null);
-  }, [onRouteSelect, selectedRouteId]);
+    const internalRouteId = selectedRouteId || null;
+    const externalRouteId = selectedRouteIdExternal || null;
+    if (internalRouteId === externalRouteId) return;
+    onRouteSelect(internalRouteId);
+  }, [onRouteSelect, selectedRouteId, selectedRouteIdExternal]);
 
   // Efecto para sincronizar con initialSchedule cuando cambia (post-optimizacion)
   useEffect(() => {
@@ -1299,22 +1305,58 @@ export function UnifiedWorkspace({
     mode,
     buses: buses.map((bus) => ({
       bus_id: bus.id,
-      items: bus.routes.map((route, index) => ({
-        route_id: route.id,
-        route_code: route.code,
-        start_time: route.startTime,
-        end_time: route.endTime,
-        origin: route.origin,
-        destination: route.destination,
-        type: route.type,
-        order: index,
-      })),
+      items: bus.routes.map((route, index) => {
+        const positioningMinutes = extractPositioningMinutes(route);
+        const startLocation = Array.isArray(route.start_location)
+          ? route.start_location
+          : (Array.isArray(route.start_loc) ? route.start_loc : (
+            Array.isArray(route?.rawRoute?.start_location)
+              ? route.rawRoute.start_location
+              : (Array.isArray(route?.rawRoute?.start_loc) ? route.rawRoute.start_loc : null)
+          ));
+        const endLocation = Array.isArray(route.end_location)
+          ? route.end_location
+          : (Array.isArray(route.end_loc) ? route.end_loc : (
+            Array.isArray(route?.rawRoute?.end_location)
+              ? route.rawRoute.end_location
+              : (Array.isArray(route?.rawRoute?.end_loc) ? route.rawRoute.end_loc : null)
+          ));
+
+        return {
+          route_id: route.id,
+          route_code: route.code,
+          start_time: route.startTime,
+          end_time: route.endTime,
+          origin: route.origin,
+          destination: route.destination,
+          type: route.type,
+          order: index,
+          school_name: route.school || route.school_name || route?.rawRoute?.school_name || null,
+          stops: Array.isArray(route.stops) ? route.stops : [],
+          start_location: startLocation,
+          end_location: endLocation,
+          time_shift_minutes: Number(
+            route.timeShift ??
+            route.time_shift_minutes ??
+            route?.rawRoute?.time_shift_minutes ??
+            0
+          ) || 0,
+          deadhead_minutes: positioningMinutes,
+          positioning_minutes: positioningMinutes,
+          capacity_needed: getItemCapacityNeeded(route, routeCapacityById),
+          vehicle_capacity_min: route.vehicle_capacity_min ?? route.vehicleCapacityMin ?? null,
+          vehicle_capacity_max: route.vehicle_capacity_max ?? route.vehicleCapacityMax ?? null,
+          vehicle_capacity_range: route.vehicle_capacity_range ?? route.vehicleCapacityRange ?? null,
+          contract_id: route.contract_id ?? route.contractId ?? route?.rawRoute?.contract_id ?? null,
+          is_locked: Boolean(route.is_locked ?? route.isLocked ?? route?.rawRoute?.is_locked),
+        };
+      }),
     })),
     stats: {
       total_buses: buses.length,
       total_routes: buses.reduce((sum, b) => sum + b.routes.length, 0),
     },
-  }), [activeDay, buses, mode]);
+  }), [activeDay, buses, mode, routeCapacityById]);
 
   useEffect(() => {
     if (typeof onLiveScheduleChange !== 'function') return;

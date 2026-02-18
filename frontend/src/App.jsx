@@ -547,20 +547,20 @@ function App() {
     }
   };
 
-  const handleDayChange = (day) => {
+  const handleDayChange = useCallback((day) => {
     setActiveDay(day);
     setSelectedBusId(null);
     setSelectedRouteId(null);
-  };
+  }, []);
 
-  const handleBusSelect = (busId) => {
+  const handleBusSelect = useCallback((busId) => {
     setSelectedBusId(busId);
     setSelectedRouteId(null);
-  };
+  }, []);
 
-  const handleRouteSelect = (routeId) => {
+  const handleRouteSelect = useCallback((routeId) => {
     setSelectedRouteId(routeId);
-  };
+  }, []);
 
   const handleSaveManualSchedule = async (scheduleData, intent = 'save') => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';

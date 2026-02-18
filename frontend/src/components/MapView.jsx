@@ -100,7 +100,14 @@ const parseConnectionSelectionId = (value) => {
 };
 
 const getPositioningMinutes = (item) => {
-  const raw = item?.positioning_minutes ?? item?.deadhead_minutes ?? item?.deadhead ?? 0;
+  const raw = (
+    item?.positioning_minutes ??
+    item?.positioningMinutes ??
+    item?.deadhead_minutes ??
+    item?.deadheadMinutes ??
+    item?.deadhead ??
+    0
+  );
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
 };

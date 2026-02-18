@@ -966,6 +966,13 @@ export function TimelineBusRow({ bus, routes, validations, onRemoveRoute, onSele
     return map;
   }, [routes]);
 
+  const shouldAnimateLight = useMemo(() => {
+    if (!Array.isArray(routes) || routes.length === 0) return false;
+    if (isActive) return true;
+    if (!selectedRouteId) return false;
+    return routes.some((route) => String(route?.id || route?.route_id || '') === String(selectedRouteId));
+  }, [isActive, routes, selectedRouteId]);
+
   const osrmIssueRows = useMemo(() => {
     return (Array.isArray(osrmIssues) ? osrmIssues : []).map((issue, idx) => {
       const rawA = issue?.route_a ?? '?';
@@ -1160,7 +1167,7 @@ export function TimelineBusRow({ bus, routes, validations, onRemoveRoute, onSele
         <div className="absolute top-1/2 left-0 right-0 h-[2px] bg-slate-700/65" />
 
         {/* Punto de luz animado - solo si hay rutas */}
-        {routes.length > 0 && (
+        {shouldAnimateLight && (
           <AnimatedLight 
             routes={routes}
             selectedRouteId={selectedRouteId}

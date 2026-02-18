@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import MapView from './MapView';
 import BusListPanel from './BusListPanel';
 import { UnifiedWorkspace } from './workspace';
@@ -27,14 +27,23 @@ export default function OptimizationStudio({
   const [studioTab, setStudioTab] = useState('mixed');
   const [splitPercent, setSplitPercent] = useState(40);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
-  const [liveSchedule, setLiveSchedule] = useState(null);
+  const [liveScheduleByDay, setLiveScheduleByDay] = useState({});
 
   const currentDaySchedule = useMemo(
     () => scheduleByDay?.[activeDay]?.schedule || [],
     [scheduleByDay, activeDay],
   );
 
-  const mapSchedule = liveSchedule || currentDaySchedule;
+  const mapSchedule = liveScheduleByDay?.[activeDay] || currentDaySchedule;
+  const workspaceInitialSchedule = Array.isArray(currentDaySchedule) ? currentDaySchedule : [];
+
+  const handleLiveScheduleChange = useCallback((nextBuses) => {
+    const safeBuses = Array.isArray(nextBuses) ? nextBuses : [];
+    setLiveScheduleByDay((prev) => ({
+      ...prev,
+      [activeDay]: safeBuses,
+    }));
+  }, [activeDay]);
 
   const onDividerMouseDown = () => {
     if (studioTab !== 'mixed') return;
@@ -63,10 +72,6 @@ export default function OptimizationStudio({
       window.removeEventListener('mouseup', onMouseUp);
     };
   }, [isDraggingSplit]);
-
-  const workspaceInitialSchedule = Array.isArray(mapSchedule) && mapSchedule.length > 0
-    ? mapSchedule
-    : null;
 
   return (
     <div className="h-full w-full min-h-0 flex flex-col gap-2">
@@ -122,7 +127,7 @@ export default function OptimizationStudio({
                 onValidationReportChange={onValidationReportChange}
                 onSave={onSave}
                 onPublish={onPublish}
-                onLiveScheduleChange={setLiveSchedule}
+                onLiveScheduleChange={handleLiveScheduleChange}
                 selectedBusIdExternal={selectedBusId}
                 selectedRouteIdExternal={selectedRouteId}
                 onBusSelect={onBusSelect}
@@ -170,7 +175,7 @@ export default function OptimizationStudio({
               onValidationReportChange={onValidationReportChange}
               onSave={onSave}
               onPublish={onPublish}
-              onLiveScheduleChange={setLiveSchedule}
+              onLiveScheduleChange={handleLiveScheduleChange}
               selectedBusIdExternal={selectedBusId}
               selectedRouteIdExternal={selectedRouteId}
               onBusSelect={onBusSelect}
