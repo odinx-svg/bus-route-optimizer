@@ -35,21 +35,19 @@ def _clean_router_state():
 class TestCache:
     """Test suite for cache functionality."""
     
-    @patch('os.path.exists')
-    @patch('builtins.open', new_callable=mock_open)
+    @patch('pathlib.Path.exists', return_value=True)
+    @patch('pathlib.Path.open', new_callable=mock_open)
     @patch('json.load')
     def test_load_cache_exists(self, mock_json_load, mock_file, mock_exists):
         """Test loading cache when file exists."""
-        mock_exists.return_value = True
         mock_json_load.return_value = {"key1": 10, "key2": 20}
-        
-        # Import after patching
+
         import router_service
         router_service._travel_time_cache = {}
         router_service.load_cache()
-        
+
         assert router_service._travel_time_cache == {"key1": 10, "key2": 20}
-    
+
     @patch('pathlib.Path.exists', return_value=False)
     def test_load_cache_not_exists(self, mock_exists):
         """Test loading cache when file doesn't exist."""
@@ -58,16 +56,16 @@ class TestCache:
         router_service.load_cache()
 
         assert router_service._travel_time_cache == {}
-    
-    @patch('builtins.open', new_callable=mock_open)
+
+    @patch('pathlib.Path.open', new_callable=mock_open)
     @patch('json.dump')
     def test_save_cache(self, mock_json_dump, mock_file):
         """Test saving cache."""
         import router_service
         router_service._travel_time_cache = {"key1": 10}
-        
+
         router_service.save_cache()
-        
+
         mock_json_dump.assert_called_once()
     
     def test_get_cache_key(self):
