@@ -23,6 +23,8 @@ export default function OptimizationStudio({
   onBusSelect,
   onRouteSelect,
   onExport,
+  pinnedBusIds = [],
+  onTogglePinBus = null,
 }) {
   const [studioTab, setStudioTab] = useState('mixed');
   const [splitPercent, setSplitPercent] = useState(40);
@@ -36,6 +38,18 @@ export default function OptimizationStudio({
 
   const mapSchedule = liveScheduleByDay?.[activeDay] || currentDaySchedule;
   const workspaceInitialSchedule = Array.isArray(currentDaySchedule) ? currentDaySchedule : [];
+  const effectivePinnedBusIds = useMemo(() => (
+    (Array.isArray(pinnedBusIds) ? pinnedBusIds : [])
+      .map((id) => String(id || '').trim())
+      .filter((id) => id.length > 0)
+  ), [pinnedBusIds]);
+  const pinnedBusIdSet = useMemo(() => new Set(effectivePinnedBusIds), [effectivePinnedBusIds]);
+  const mixedMapSchedule = useMemo(() => {
+    if (pinnedBusIdSet.size === 0) return [];
+    return (Array.isArray(mapSchedule) ? mapSchedule : []).filter((bus) => (
+      pinnedBusIdSet.has(String(bus?.bus_id || bus?.id || ''))
+    ));
+  }, [mapSchedule, pinnedBusIdSet]);
 
   const handleLiveScheduleChange = useCallback((nextBuses) => {
     const safeBuses = Array.isArray(nextBuses) ? nextBuses : [];
@@ -101,10 +115,12 @@ export default function OptimizationStudio({
             <div className="min-h-0 rounded-[12px] border border-[#2f465d] overflow-hidden">
               <MapView
                 routes={routes}
-                schedule={mapSchedule}
+                schedule={mixedMapSchedule}
                 selectedBusId={selectedBusId}
                 selectedRouteId={selectedRouteId}
                 onBusSelect={onBusSelect}
+                pinnedBusIds={effectivePinnedBusIds}
+                onTogglePinBus={onTogglePinBus}
               />
             </div>
 
@@ -132,6 +148,9 @@ export default function OptimizationStudio({
                 selectedRouteIdExternal={selectedRouteId}
                 onBusSelect={onBusSelect}
                 onRouteSelect={onRouteSelect}
+                visibleBusIds={effectivePinnedBusIds}
+                pinnedBusIds={effectivePinnedBusIds}
+                onTogglePinBus={onTogglePinBus}
               />
             </div>
           </div>
@@ -146,6 +165,8 @@ export default function OptimizationStudio({
                 selectedBusId={selectedBusId}
                 selectedRouteId={selectedRouteId}
                 onBusSelect={onBusSelect}
+                pinnedBusIds={effectivePinnedBusIds}
+                onTogglePinBus={onTogglePinBus}
               />
             </div>
             <div className="w-[320px] min-h-0">
@@ -180,6 +201,8 @@ export default function OptimizationStudio({
               selectedRouteIdExternal={selectedRouteId}
               onBusSelect={onBusSelect}
               onRouteSelect={onRouteSelect}
+              pinnedBusIds={effectivePinnedBusIds}
+              onTogglePinBus={onTogglePinBus}
             />
           </div>
         )}

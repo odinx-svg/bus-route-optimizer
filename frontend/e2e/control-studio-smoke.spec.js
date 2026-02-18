@@ -245,6 +245,10 @@ test.describe('Control Hub + Studio smoke', () => {
     await expect(page.getByRole('button', { name: 'Mapa', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Workspace', exact: true })).toBeVisible();
 
+    await expect(page.getByText(/No hay buses pineados/i)).toBeVisible();
+    await page.getByRole('button', { name: 'Workspace', exact: true }).click();
+    await page.getByTitle(/Pinear bus para vista Mixto/i).first().click();
+    await page.getByRole('button', { name: 'Mixto', exact: true }).click();
     await expect(page.getByText('Todas las Rutas')).toBeVisible();
     await page.getByText('B001', { exact: true }).first().click();
     await expect.poll(async () => page.getByText('Todas las Rutas').count()).toBe(0);

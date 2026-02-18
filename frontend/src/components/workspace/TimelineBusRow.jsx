@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Maximize2,
   MoreHorizontal,
-  Timer
+  Timer,
+  Pin
 } from 'lucide-react';
 import { notifications } from '../../services/notifications';
 
@@ -917,7 +918,22 @@ function RouteConnector({ from, to, minHour, pixelsPerHour, segments }) {
 // FILA DE BUS
 // ============================================================================
 
-export function TimelineBusRow({ bus, routes, validations, onRemoveRoute, onSelectRoute, isActive, minHour, maxHour, pixelsPerHour, segments, selectedRouteId, onValidateBus }) {
+export function TimelineBusRow({
+  bus,
+  routes,
+  validations,
+  onRemoveRoute,
+  onSelectRoute,
+  isActive,
+  minHour,
+  maxHour,
+  pixelsPerHour,
+  segments,
+  selectedRouteId,
+  onValidateBus,
+  isPinned = false,
+  onTogglePin = null,
+}) {
   const { isOver, setNodeRef } = useDroppable({ 
     id: `bus-${bus.id}`,
     data: { type: 'bus', busId: bus.id }
@@ -1015,6 +1031,24 @@ export function TimelineBusRow({ bus, routes, validations, onRemoveRoute, onSele
           `}>
             {bus.id}
           </div>
+
+          {typeof onTogglePin === 'function' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin(bus.id);
+              }}
+              data-no-timeline-pan
+              className={`px-1.5 py-1 rounded-sm border text-[9px] font-semibold tracking-[0.14em] uppercase transition-colors ${
+                isPinned
+                  ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-200'
+                  : 'bg-[#151b25] border-slate-600/60 hover:border-cyan-400/50 text-slate-300 hover:text-cyan-200'
+              }`}
+              title={isPinned ? 'Quitar pin del bus' : 'Pinear bus para vista Mixto'}
+            >
+              <Pin className="w-3 h-3" />
+            </button>
+          )}
           
           {/* Boton de comprobacion OSRM */}
           {routes.length > 0 && (

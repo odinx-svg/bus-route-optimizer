@@ -31,6 +31,12 @@ const createEmptyScheduleByDay = () => (
     return acc;
   }, {})
 );
+const createEmptyPinnedBusesByDay = () => (
+  ALL_DAYS.reduce((acc, day) => {
+    acc[day] = [];
+    return acc;
+  }, {})
+);
 
 const getBusItems = (bus) => {
   if (Array.isArray(bus?.items)) return bus.items;
@@ -138,6 +144,7 @@ function App() {
   const [workspaceMode, setWorkspaceMode] = useState('create'); // 'create' | 'edit' | 'optimize'
   const [selectedBusId, setSelectedBusId] = useState(null);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
+  const [pinnedBusesByDay, setPinnedBusesByDay] = useState(createEmptyPinnedBusesByDay());
   const [ingestionPanelOpen, setIngestionPanelOpen] = useState(false);
   const [createFlowMode, setCreateFlowMode] = useState(false);
 
@@ -189,6 +196,7 @@ function App() {
     if (switchToStudio) {
       setViewMode('studio');
     }
+    setPinnedBusesByDay(createEmptyPinnedBusesByDay());
     setIngestionPanelOpen(false);
     setCreateFlowMode(false);
     studioMarkSaved();
@@ -558,6 +566,22 @@ function App() {
     setSelectedRouteId(null);
   }, []);
 
+  const handleTogglePinBus = useCallback((busId) => {
+    const normalized = String(busId || '').trim();
+    if (!normalized) return;
+    setPinnedBusesByDay((prev) => {
+      const dayPins = Array.isArray(prev?.[activeDay]) ? prev[activeDay] : [];
+      const alreadyPinned = dayPins.includes(normalized);
+      const nextDayPins = alreadyPinned
+        ? dayPins.filter((id) => id !== normalized)
+        : [...dayPins, normalized];
+      return {
+        ...prev,
+        [activeDay]: nextDayPins,
+      };
+    });
+  }, [activeDay]);
+
   const handleRouteSelect = useCallback((routeId) => {
     setSelectedRouteId(routeId);
   }, []);
@@ -821,6 +845,8 @@ function App() {
                 onBusSelect={handleBusSelect}
                 onRouteSelect={handleRouteSelect}
                 onExport={handleExport}
+                pinnedBusIds={pinnedBusesByDay?.[activeDay] || []}
+                onTogglePinBus={handleTogglePinBus}
               />
             )}
           </div>

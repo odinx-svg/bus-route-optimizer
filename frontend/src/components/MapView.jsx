@@ -176,7 +176,15 @@ function MapBounds({ routes }) {
   return null;
 }
 
-const MapView = ({ routes, schedule, selectedBusId, selectedRouteId, onBusSelect }) => {
+const MapView = ({
+  routes,
+  schedule,
+  selectedBusId,
+  selectedRouteId,
+  onBusSelect,
+  pinnedBusIds = [],
+  onTogglePinBus = null,
+}) => {
   const [mapRoutes, setMapRoutes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
@@ -192,6 +200,13 @@ const MapView = ({ routes, schedule, selectedBusId, selectedRouteId, onBusSelect
     return matchedRoute?.busId || null;
   }, [selectedConnection, selectedRouteId, mapRoutes]);
   const effectiveSelectedBusId = selectedConnection?.busId || selectedBusId || selectedRouteBusId;
+  const pinnedBusIdSet = useMemo(
+    () => new Set((Array.isArray(pinnedBusIds) ? pinnedBusIds : []).map((id) => String(id || '').trim())),
+    [pinnedBusIds],
+  );
+  const isSelectedBusPinned = effectiveSelectedBusId
+    ? pinnedBusIdSet.has(String(effectiveSelectedBusId))
+    : false;
 
   const busColors = useMemo(() => {
     if (!schedule) return {};
@@ -683,6 +698,20 @@ const MapView = ({ routes, schedule, selectedBusId, selectedRouteId, onBusSelect
             <p className="text-[10px] text-zinc-500 mt-0.5">
               {mapRoutes.length} rutas | {schedule?.length || 0} buses
             </p>
+          )}
+          {effectiveSelectedBusId && typeof onTogglePinBus === 'function' && (
+            <button
+              type="button"
+              onClick={() => onTogglePinBus(effectiveSelectedBusId)}
+              className={`mt-2 px-2 py-1 rounded-md border text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors ${
+                isSelectedBusPinned
+                  ? 'border-cyan-400/45 bg-cyan-500/15 text-cyan-200'
+                  : 'border-slate-500/45 bg-[#101926] text-slate-300 hover:text-slate-100 hover:border-slate-300/45'
+              }`}
+              title={isSelectedBusPinned ? 'Quitar pin' : 'Pinear bus en Mixto'}
+            >
+              {isSelectedBusPinned ? 'Bus pineado' : 'Pinear bus'}
+            </button>
           )}
         </div>
       </div>

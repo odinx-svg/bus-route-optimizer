@@ -412,6 +412,9 @@ export function UnifiedWorkspace({
   selectedRouteIdExternal = null,
   onBusSelect = null,
   onRouteSelect = null,
+  visibleBusIds = null,
+  pinnedBusIds = [],
+  onTogglePinBus = null,
 }) {
   // Helper function to format time from backend (handles "HH:MM:SS" or time objects)
   function formatTimeFromBackend(timeValue) {
@@ -571,13 +574,26 @@ export function UnifiedWorkspace({
     startScrollLeft: 0,
   });
   const [isTimelinePanning, setIsTimelinePanning] = useState(false);
+  const isBusFilterActive = Array.isArray(visibleBusIds);
+  const visibleBusIdSet = useMemo(
+    () => new Set((Array.isArray(visibleBusIds) ? visibleBusIds : []).map((id) => String(id || '').trim())),
+    [visibleBusIds],
+  );
+  const pinnedBusIdSet = useMemo(
+    () => new Set((Array.isArray(pinnedBusIds) ? pinnedBusIds : []).map((id) => String(id || '').trim())),
+    [pinnedBusIds],
+  );
+  const displayedBuses = useMemo(() => {
+    if (!isBusFilterActive) return buses;
+    return buses.filter((bus) => visibleBusIdSet.has(String(bus?.id || bus?.bus_id || '')));
+  }, [buses, isBusFilterActive, visibleBusIdSet]);
   
   // Calcular compresion del timeline (eliminar huecos vacios)
   const { segments: compressedSegments, compressedWidth } = useMemo(() => {
     // Obtener todas las rutas de todos los buses
-    const allRoutes = buses.flatMap(bus => bus.routes);
+    const allRoutes = displayedBuses.flatMap(bus => bus.routes);
     return calculateTimelineCompression(allRoutes, timelineRange.min, timelineRange.max);
-  }, [buses, timelineRange.min, timelineRange.max]);
+  }, [displayedBuses, timelineRange.min, timelineRange.max]);
 
   // Zoom efectivo: si el zoom base deja huecos a la derecha, se estira para ocupar todo el workspace.
   const effectiveTimelineZoom = useMemo(() => {
@@ -764,7 +780,7 @@ export function UnifiedWorkspace({
 
   const listRowsBase = useMemo(() => {
     const rows = [];
-    const orderedBuses = sortBusesById(buses);
+    const orderedBuses = sortBusesById(displayedBuses);
 
     orderedBuses.forEach((bus) => {
       const orderedRoutes = sortRoutesByTime(bus.routes || []);
@@ -804,7 +820,7 @@ export function UnifiedWorkspace({
     });
 
     return rows;
-  }, [buses]);
+  }, [displayedBuses]);
 
   const listRows = useMemo(() => {
     const sorted = [...listRowsBase];
@@ -1761,9 +1777,15 @@ export function UnifiedWorkspace({
 
             {/* Stats */}
             <div className="flex items-center gap-2 text-[10px] text-slate-500 uppercase tracking-[0.12em] data-mono">
-              <span><strong className="text-slate-200 tabular-nums">{buses.length}</strong> buses</span>
+              <span><strong className="text-slate-200 tabular-nums">{displayedBuses.length}</strong> buses</span>
               <span className="text-slate-600">|</span>
-              <span><strong className="text-slate-200 tabular-nums">{buses.reduce((s, b) => s + b.routes.length, 0)}</strong> rutas</span>
+              <span><strong className="text-slate-200 tabular-nums">{displayedBuses.reduce((s, b) => s + b.routes.length, 0)}</strong> rutas</span>
+              {isBusFilterActive && (
+                <>
+                  <span className="text-slate-600">|</span>
+                  <span className="text-slate-400">filtrados</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -1918,7 +1940,18 @@ export function UnifiedWorkspace({
           {/* Area central: Workspace */}
           <div className="flex-1 p-3 overflow-hidden relative" style={{ minWidth: 0 }}>
               <WorkspaceArea isOverWorkspace={isOverWorkspace}>
-                {buses.length === 0 || buses.every(b => b.routes.length === 0) ? (
+                {isBusFilterActive && displayedBuses.length === 0 ? (
+                  <div className="h-full flex items-center justify-center rounded-md border border-[#2a3f54] bg-[#0d1622]">
+                    <div className="text-center px-6">
+                      <div className="text-[12px] uppercase tracking-[0.12em] text-cyan-300 data-mono font-semibold">
+                        Mixto filtrado por pines
+                      </div>
+                      <p className="mt-2 text-[12px] text-slate-400">
+                        No hay buses pineados en este dia. Pinea buses en Mapa o Workspace para mostrarlos aqui.
+                      </p>
+                    </div>
+                  </div>
+                ) : displayedBuses.length === 0 || displayedBuses.every(b => b.routes.length === 0) ? (
                   <EmptyWorkspace onAddBus={handleAddBus} />
                 ) : viewMode === 'timeline' ? (
                   /* Modo Timeline */
@@ -1952,7 +1985,7 @@ export function UnifiedWorkspace({
                     
                     {/* Filas de buses */}
                     <div className="py-2 border-t border-[#2a4056]/60">
-                      {buses.map((bus) => (
+                      {displayedBuses.map((bus) => (
                         <div 
                           key={bus.id} 
                           className={`relative group ${selectedBusId === bus.id ? 'ring-1 ring-cyan-400/40 rounded-md' : ''}`}
@@ -1971,6 +2004,8 @@ export function UnifiedWorkspace({
                             segments={compressedSegments}
                             selectedRouteId={selectedRouteId}
                             onValidateBus={validateBus}
+                            isPinned={pinnedBusIdSet.has(String(bus.id || ''))}
+                            onTogglePin={onTogglePinBus}
                           />
                           
                           <button
