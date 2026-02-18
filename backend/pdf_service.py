@@ -871,10 +871,22 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
         alignment=TA_LEFT,
     )
 
+    def _safe_cell_text(value: Any, fallback: str = 'N/A', max_length: int = 30) -> str:
+        """Normalize PDF table cell values to avoid None/invalid slicing errors."""
+        if value is None:
+            text = fallback
+        else:
+            text = str(value).strip()
+            if not text:
+                text = fallback
+        return text[:max_length]
+
     for i, item in enumerate(ordered_items, 1):
         stops = item.get('stops', [])
-        origin = stops[0].get('name', 'N/A') if stops else 'N/A'
-        destination = stops[-1].get('name', 'N/A') if stops else item.get('school_name', 'N/A')
+        first_stop = stops[0] if stops and isinstance(stops[0], dict) else {}
+        last_stop = stops[-1] if stops and isinstance(stops[-1], dict) else {}
+        origin = _safe_cell_text(first_stop.get('name', 'N/A'))
+        destination = _safe_cell_text(last_stop.get('name') if stops else item.get('school_name', 'N/A'))
         
         start_time = format_time(item.get('start_time', ''))
         end_time = format_time(item.get('end_time', ''))
@@ -900,8 +912,8 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
         
         row = [
             Paragraph(str(i), styles['table_cell']),
-            Paragraph(origin[:30], styles['table_cell_left']),
-            Paragraph(destination[:30], styles['table_cell_left']),
+            Paragraph(origin, styles['table_cell_left']),
+            Paragraph(destination, styles['table_cell_left']),
             Paragraph(start_time, styles['table_cell']),
             Paragraph(end_time, styles['table_cell']),
             Paragraph(f"{duration}m", styles['table_cell']),
