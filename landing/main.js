@@ -2,11 +2,14 @@ const REPO_OWNER = "odinx-svg";
 const REPO_NAME = "bus-route-optimizer";
 const FALLBACK_RELEASES = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`;
 const FALLBACK_DOWNLOAD = `${FALLBACK_RELEASES}/latest`;
+const HOTFIX_TAG = "v0.2.3";
+const HOTFIX_RELEASE_URL = `${FALLBACK_RELEASES}/tag/${HOTFIX_TAG}`;
 
 const releaseInfoEl = document.getElementById("releaseInfo");
 const releaseBtn = document.getElementById("releaseBtn");
 const downloadTop = document.getElementById("downloadBtn");
 const downloadBottom = document.getElementById("downloadBtnBottom");
+const hotfixBtn = document.getElementById("hotfixBtn");
 const changelogEl = document.getElementById("changelog");
 const checksumEl = document.getElementById("checksums");
 const yearEl = document.getElementById("year");
@@ -202,6 +205,10 @@ const applyLatestRelease = async () => {
       }
     }
 
+    if (hotfixBtn) {
+      hotfixBtn.href = HOTFIX_RELEASE_URL;
+    }
+
     // Render changelog and checksums.
     renderChangelog(release.body);
     renderChecksums(assets);
@@ -215,6 +222,10 @@ const applyLatestRelease = async () => {
 
     if (releaseInfoEl) {
       releaseInfoEl.textContent = "No se pudo leer GitHub API. Usando enlace de releases.";
+    }
+
+    if (hotfixBtn) {
+      hotfixBtn.href = HOTFIX_RELEASE_URL;
     }
 
     // Keep console trace for troubleshooting if needed.

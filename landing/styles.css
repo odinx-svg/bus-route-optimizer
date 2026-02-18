@@ -210,6 +210,12 @@ main {
   border-color: rgba(67, 210, 195, 0.42);
 }
 
+.btn.hotfix {
+  background: rgba(255, 159, 67, 0.12);
+  color: #ffe2c2;
+  border-color: rgba(255, 159, 67, 0.46);
+}
+
 .btn.ghost {
   background: transparent;
   color: var(--ink);
@@ -226,6 +232,21 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #8ec6bd;
+}
+
+.release-note {
+  margin-top: 0.55rem;
+  color: #f8c58f;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.release-note a {
+  color: #ffd39d;
+}
+
+.release-note-cta {
+  margin-top: 0.8rem;
 }
 
 .signal {
