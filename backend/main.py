@@ -2003,6 +2003,7 @@ async def optimize_async(
         dict: InformaciÃ³n del job encolado (job_id, task_id, status)
     """
     job_id = str(uuid4())
+    routes_payload = [_route_to_json_payload(route) for route in routes]
     
     # Crear job en DB si estÃ¡ disponible
     db = None
@@ -2013,7 +2014,7 @@ async def optimize_async(
                 id=job_id,
                 status="queued",
                 algorithm="v6",
-                input_data=[r.dict() for r in routes],
+                input_data=routes_payload,
                 created_at=datetime.utcnow()
             )
             db.add(job)
@@ -2028,7 +2029,7 @@ async def optimize_async(
         try:
             # Encolar tarea Celery
             task = optimize_task.delay(
-                routes_data=[r.dict() for r in routes],
+                routes_data=routes_payload,
                 job_id=job_id,
                 use_ml_assignment=use_ml_assignment,
             )
@@ -2119,6 +2120,7 @@ async def optimize_async_advanced(
         dict: InformaciÃ³n del job encolado
     """
     job_id = str(uuid4())
+    routes_payload = [_route_to_json_payload(route) for route in routes]
     
     # Crear job en DB si estÃ¡ disponible
     db = None
@@ -2129,7 +2131,7 @@ async def optimize_async_advanced(
                 id=job_id,
                 status="queued",
                 algorithm="v6-advanced",
-                input_data=[r.dict() for r in routes],
+                input_data=routes_payload,
                 created_at=datetime.utcnow()
             )
             db.add(job)
@@ -2151,7 +2153,7 @@ async def optimize_async_advanced(
         try:
             # Encolar tarea Celery avanzada
             task = optimize_advanced_task.delay(
-                routes_data=[r.dict() for r in routes],
+                routes_data=routes_payload,
                 job_id=job_id,
                 weights=weights,
                 preset=preset,

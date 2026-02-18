@@ -1,13 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Layout from './components/Layout';
 import Sidebar from './components/Sidebar';
-import BusListPanel from './components/BusListPanel';
-import MapView from './components/MapView';
 import { CompareView } from './components/CompareView';
 import OptimizationStudio from './components/OptimizationStudio';
-import { MonteCarloPanel } from './components/MonteCarloPanel';
 import OptimizationProgress from './components/OptimizationProgress';
-import FleetPage from './pages/FleetPage';
 import ControlHubPage from './pages/ControlHubPage';
 import { notifications } from './services/notifications';
 import { clearGeometryCache } from './services/RouteService';
@@ -26,7 +22,6 @@ import {
   setLastOpenWorkspace,
 } from './services/workspaceService';
 import { useWorkspaceStudioStore } from './stores/workspaceStudioStore';
-import { PanelLeftClose, PanelLeft } from 'lucide-react';
 
 const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
 const ALL_DAYS = ['L', 'M', 'Mc', 'X', 'V'];
@@ -139,11 +134,12 @@ function App() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
 
   const [activeTab, setActiveTab] = useState('upload');
-  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'map' | 'workspace' | 'fleet' | 'montecarlo'
+  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'studio'
   const [workspaceMode, setWorkspaceMode] = useState('create'); // 'create' | 'edit' | 'optimize'
   const [selectedBusId, setSelectedBusId] = useState(null);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [ingestionPanelOpen, setIngestionPanelOpen] = useState(false);
+  const [createFlowMode, setCreateFlowMode] = useState(false);
 
   const [pipelineJobId, setPipelineJobId] = useState(null);
   const [pipelineStatus, setPipelineStatus] = useState('idle');
@@ -191,8 +187,10 @@ function App() {
     hydrateWorkspaceDetail(detail);
     setLastOpenWorkspace(workspaceId).catch(() => {});
     if (switchToStudio) {
-      setViewMode('workspace');
+      setViewMode('studio');
     }
+    setIngestionPanelOpen(false);
+    setCreateFlowMode(false);
     studioMarkSaved();
     return detail;
   }, [hydrateWorkspaceDetail, studioMarkSaved, studioSetWorkspaceId]);
@@ -213,6 +211,14 @@ function App() {
     await openWorkspaceById(created?.id, { switchToStudio: true });
     return created;
   }, [openWorkspaceById, refreshWorkspaces]);
+
+  const startNewWorkspaceFlow = useCallback(() => {
+    setViewMode('dashboard');
+    setIngestionPanelOpen(true);
+    setCreateFlowMode(true);
+    setActiveTab('upload');
+    notifications.info('Nueva optimizacion', 'Sube excels para crear una optimizacion nueva');
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -297,7 +303,7 @@ function App() {
     setScheduleByDay(normalizedResult);
     setValidationReport(pipelineResult?.validation_report || null);
     setShowComparison(true);
-    setViewMode('workspace');
+    setViewMode('studio');
     setWorkspaceMode('optimize');
     studioSetDirty(true);
 
@@ -328,7 +334,7 @@ function App() {
     setPipelineJobId(null);
     setPipelineEvents([]);
     setPipelineMetrics(null);
-    setViewMode('workspace');
+    setViewMode('studio');
     setWorkspaceMode('optimize');
 
     const loadingToast = notifications.loading('Iniciando pipeline automatico...');
@@ -429,7 +435,7 @@ function App() {
 
     try {
       let workspaceId = activeWorkspaceId;
-      if (!workspaceId) {
+      if (!workspaceId || createFlowMode) {
         const created = await createWorkspaceAndOpen({
           name: `Optimizacion ${new Date().toLocaleDateString()}`,
           routes_payload: uploadedRoutes,
@@ -447,6 +453,8 @@ function App() {
       }
       await refreshWorkspaces();
       await startAutoPipeline(uploadedRoutes, uploadReport, workspaceId);
+      setIngestionPanelOpen(false);
+      setCreateFlowMode(false);
     } catch (error) {
       notifications.error('No se pudo preparar la optimizacion', error.message || 'Error creando workspace');
     }
@@ -472,6 +480,8 @@ function App() {
       setPipelineMetrics(null);
       setViewMode('dashboard');
       setWorkspaceMode('create');
+      setIngestionPanelOpen(false);
+      setCreateFlowMode(false);
       studioReset();
       clearGeometryCache();
       notifications.info('Datos borrados', 'Puedes empezar de nuevo');
@@ -728,88 +738,49 @@ function App() {
       onDayChange={handleDayChange}
       viewMode={viewMode}
       setViewMode={setViewMode}
+      hasStudioAccess={Boolean(activeWorkspaceId)}
     >
-      {/* Sidebar colapsable */}
-      <div className={`
-        transition-all duration-300 ease-in-out overflow-hidden m-3 h-full
-        ${sidebarCollapsed ? 'w-0 opacity-0' : 'w-80 opacity-100'}
-      `}>
-        <Sidebar
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onUploadSuccess={handleUploadSuccess}
-          routes={routes}
-          parseReport={parseReport}
-          schedule={schedule}
-          onOptimize={handleOptimize}
-          isOptimizing={optimizing}
-          onReset={handleReset}
-          optimizationStats={optimizationStats}
-          scheduleByDay={scheduleByDay}
-        >
-          {pipelineJobId && (
-            <OptimizationProgress
-              jobId={pipelineJobId}
-              onProgress={handlePipelineProgress}
-              onComplete={handlePipelineComplete}
-              onError={handlePipelineError}
-            />
-          )}
-          {!pipelineJobId && pipelineStatus === 'running' && (
-            <div className="text-[10px] text-slate-500 data-mono px-1 uppercase tracking-[0.08em]">
-              Eventos: {pipelineEvents.length} | metricas: {pipelineMetrics ? 'ok' : 'n/a'}
-            </div>
-          )}
-        </Sidebar>
-      </div>
-
-      {/* Boton toggle sidebar */}
-      <button
-        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        className="
-          absolute left-0 top-1/2 -translate-y-1/2 z-50
-          p-2 bg-[#101a26] border border-[#2c4359] rounded-r-md
-          text-slate-400 hover:text-cyan-200 hover:border-cyan-500/40 hover:bg-[#162433]
-          transition-all duration-300
-          flex items-center justify-center
-        "
-        style={{
-          marginLeft: sidebarCollapsed ? '12px' : '332px',
-        }}
-        title={sidebarCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-      >
-        {sidebarCollapsed ? (
-          <PanelLeft className="w-4 h-4" />
-        ) : (
-          <PanelLeftClose className="w-4 h-4" />
-        )}
-      </button>
+      {ingestionPanelOpen && (
+        <div className="m-3 h-full">
+          <Sidebar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            onUploadSuccess={handleUploadSuccess}
+            routes={routes}
+            parseReport={parseReport}
+            schedule={schedule}
+            onOptimize={handleOptimize}
+            isOptimizing={optimizing}
+            onReset={handleReset}
+            optimizationStats={optimizationStats}
+            scheduleByDay={scheduleByDay}
+            forceUploadMode={createFlowMode}
+            showCloseButton={true}
+            onClose={() => {
+              setIngestionPanelOpen(false);
+              setCreateFlowMode(false);
+            }}
+          >
+            {pipelineJobId && (
+              <OptimizationProgress
+                jobId={pipelineJobId}
+                onProgress={handlePipelineProgress}
+                onComplete={handlePipelineComplete}
+                onError={handlePipelineError}
+              />
+            )}
+            {!pipelineJobId && pipelineStatus === 'running' && (
+              <div className="text-[10px] text-slate-500 data-mono px-1 uppercase tracking-[0.08em]">
+                Eventos: {pipelineEvents.length} | metricas: {pipelineMetrics ? 'ok' : 'n/a'}
+              </div>
+            )}
+          </Sidebar>
+        </div>
+      )}
 
       <section className="flex-1 relative m-3">
         <div className="absolute inset-0 flex flex-col">
           <div className="flex-1 relative overflow-auto">
-            {viewMode === 'map' && (
-              <>
-                <MapView
-                  routes={routes}
-                  schedule={schedule}
-                  selectedBusId={selectedBusId}
-                  selectedRouteId={selectedRouteId}
-                  onBusSelect={handleBusSelect}
-                />
-
-                {routes.length === 0 && (
-                  <div className="absolute inset-0 bg-[#07101a]/86 backdrop-blur-sm flex items-center justify-center pointer-events-none rounded-[12px] border border-[#253a4f]">
-                    <div className="text-center p-6 control-card rounded-md">
-                      <p className="text-[14px] font-semibold text-slate-200 uppercase tracking-[0.12em] data-mono">Mapa Operativo</p>
-                      <p className="text-[11px] text-slate-500 mt-1.5 max-w-[220px] uppercase tracking-[0.08em]">
-                        Carga datasets para visualizar geometria y rutas
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
             {viewMode === 'dashboard' && (
               <ControlHubPage
                 workspaces={workspaces}
@@ -817,15 +788,7 @@ function App() {
                 onOpenWorkspace={async (workspaceId) => {
                   await openWorkspaceById(workspaceId, { switchToStudio: true });
                 }}
-                onCreateWorkspace={async () => {
-                  await createWorkspaceAndOpen({
-                    name: `Optimizacion ${new Date().toLocaleDateString()}`,
-                    routes_payload: routes,
-                    parse_report: parseReport,
-                    schedule_by_day: scheduleByDay,
-                    summary_metrics: optimizationStats || null,
-                  });
-                }}
+                onCreateWorkspace={startNewWorkspaceFlow}
                 onRefresh={refreshWorkspaces}
                 onArchiveWorkspace={async (workspaceId) => {
                   await archiveWorkspace(workspaceId);
@@ -837,7 +800,7 @@ function App() {
                 }}
               />
             )}
-            {viewMode === 'workspace' && (
+            {viewMode === 'studio' && (
               <OptimizationStudio
                 workspaceMode={workspaceMode}
                 routes={routes}
@@ -856,15 +819,8 @@ function App() {
                 selectedBusId={selectedBusId}
                 selectedRouteId={selectedRouteId}
                 onBusSelect={handleBusSelect}
-              />
-            )}
-            {viewMode === 'fleet' && (
-              <FleetPage />
-            )}
-            {viewMode === 'montecarlo' && (
-              <MonteCarloPanel
-                schedule={schedule}
-                hasOptimizedSchedule={schedule.length > 0}
+                onRouteSelect={handleRouteSelect}
+                onExport={handleExport}
               />
             )}
           </div>
@@ -886,22 +842,6 @@ function App() {
           )}
         </div>
       </section>
-
-      {/* BusListPanel visible en mapa y montecarlo */}
-      {(viewMode === 'map' || viewMode === 'montecarlo') && (
-        <div className="my-3 mr-3 min-h-0 flex">
-          <BusListPanel
-            schedule={schedule}
-            routes={routes}
-            selectedBusId={selectedBusId}
-            selectedRouteId={selectedRouteId}
-            onBusSelect={handleBusSelect}
-            onRouteSelect={handleRouteSelect}
-            onExport={handleExport}
-            activeDay={activeDay}
-          />
-        </div>
-      )}
     </Layout>
   );
 }

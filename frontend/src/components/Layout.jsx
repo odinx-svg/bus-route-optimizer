@@ -1,5 +1,5 @@
 import React from 'react';
-import { Map as MapIcon, LayoutGrid, Box, Activity, Bus, Gauge } from 'lucide-react';
+import { LayoutGrid, Activity, Gauge } from 'lucide-react';
 
 const DAY_CONFIG = [
   { key: 'L', label: 'L', full: 'Lunes' },
@@ -50,19 +50,16 @@ const DaySelector = ({ scheduleByDay, activeDay, onDayChange }) => {
   );
 };
 
-const ViewTabs = ({ viewMode, setViewMode, hasSchedule }) => {
+const ViewTabs = ({ viewMode, setViewMode, hasStudioAccess }) => {
   const tabs = [
     { id: 'dashboard', label: 'Control', icon: Gauge, requiresSchedule: false },
-    { id: 'map', label: 'Mapa', icon: MapIcon, requiresSchedule: false },
-    { id: 'workspace', label: 'Workspace', icon: LayoutGrid, requiresSchedule: false },
-    { id: 'fleet', label: 'Flota', icon: Bus, requiresSchedule: false },
-    { id: 'montecarlo', label: 'Monte Carlo', icon: Box, requiresSchedule: true },
+    { id: 'studio', label: 'Studio', icon: LayoutGrid, requiresSchedule: false },
   ];
 
   return (
     <div className="flex items-center gap-0.5 bg-[#101a26] rounded-md p-0.5 border border-[#2b4056]">
       {tabs.map(({ id, label, icon: Icon, requiresSchedule }) => {
-        const disabled = requiresSchedule && !hasSchedule;
+        const disabled = id === 'studio' ? !hasStudioAccess : (requiresSchedule && !hasStudioAccess);
         return (
         <button
           key={id}
@@ -77,7 +74,7 @@ const ViewTabs = ({ viewMode, setViewMode, hasSchedule }) => {
                 : 'text-slate-500 hover:text-slate-200 hover:bg-[#182432]'
             }
           `}
-          title={disabled ? 'Disponible al tener un horario optimizado' : label}
+          title={disabled ? 'Abre una optimizacion desde Control para entrar al Studio' : label}
         >
           <Icon className="w-3.5 h-3.5" />
           {label}
@@ -94,9 +91,11 @@ const Header = ({
   activeDay,
   onDayChange,
   viewMode,
-  setViewMode
+  setViewMode,
+  hasStudioAccess
 }) => {
   const hasSchedule = scheduleByDay && Object.values(scheduleByDay).some(day => day?.schedule?.length > 0);
+  const showOperationalHeader = viewMode === 'studio';
 
   return (
     <header className="h-[58px] bg-[#0a111a]/95 backdrop-blur-xl border-b border-[#24374a] flex items-center px-4 flex-shrink-0 z-50">
@@ -113,10 +112,10 @@ const Header = ({
       <ViewTabs
         viewMode={viewMode}
         setViewMode={setViewMode}
-        hasSchedule={hasSchedule}
+        hasStudioAccess={hasStudioAccess}
       />
 
-      {scheduleByDay && (
+      {showOperationalHeader && scheduleByDay && (
         <div className="ml-6">
           <DaySelector
             scheduleByDay={scheduleByDay}
@@ -128,7 +127,7 @@ const Header = ({
 
       <div className="flex-1" />
 
-      {stats && hasSchedule && (
+      {showOperationalHeader && stats && hasSchedule && (
         <div className="flex items-center gap-2">
           {stats.buses > 0 && (
             <MetricBadge
@@ -172,7 +171,8 @@ const Layout = ({
   activeDay,
   onDayChange,
   viewMode,
-  setViewMode
+  setViewMode,
+  hasStudioAccess = false,
 }) => {
   return (
     <div className="flex flex-col h-screen w-screen bg-[#070b10] text-[#d7e4f1] font-sans overflow-hidden">
@@ -183,6 +183,7 @@ const Layout = ({
         onDayChange={onDayChange}
         viewMode={viewMode}
         setViewMode={setViewMode}
+        hasStudioAccess={hasStudioAccess}
       />
       <main className="flex-1 flex overflow-hidden">
         {children}

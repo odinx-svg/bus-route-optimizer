@@ -16,9 +16,12 @@ const Sidebar = ({
   onReset,
   optimizationStats = null,
   scheduleByDay = null,
+  forceUploadMode = false,
+  showCloseButton = false,
+  onClose = null,
   children // Para mostrar OptimizationProgress
 }) => {
-  const hasData = routes.length > 0;
+  const hasData = !forceUploadMode && routes.length > 0;
   const hasResults = schedule.length > 0;
   const droppedRows = Number(parseReport?.rows_dropped_invalid || 0);
   const invalidReasons = Array.isArray(parseReport?.invalid_reasons) ? parseReport.invalid_reasons : [];
@@ -27,8 +30,21 @@ const Sidebar = ({
     <aside className="w-[300px] control-panel rounded-[12px] flex flex-col flex-shrink-0 overflow-hidden">
       {/* Header */}
       <div className="px-5 pt-5 pb-4 border-b border-[#243649]">
-        <p className="text-[11px] font-semibold text-[#d6e6f2] uppercase tracking-[0.14em]">Ingesta</p>
-        <p className="text-[11px] text-slate-500 mt-0.5">Carga de datasets operativos</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-semibold text-[#d6e6f2] uppercase tracking-[0.14em]">Ingesta</p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Carga de datasets operativos</p>
+          </div>
+          {showCloseButton && typeof onClose === 'function' && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-2 py-1 text-[10px] uppercase tracking-[0.08em] rounded-md border border-[#2b4257] text-slate-400 hover:text-slate-200 hover:bg-[#152230]"
+            >
+              Cerrar
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Content */}

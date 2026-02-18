@@ -408,6 +408,10 @@ export function UnifiedWorkspace({
   onSave,
   onPublish,
   onLiveScheduleChange = null,
+  selectedBusIdExternal = null,
+  selectedRouteIdExternal = null,
+  onBusSelect = null,
+  onRouteSelect = null,
 }) {
   // Helper function to format time from backend (handles "HH:MM:SS" or time objects)
   function formatTimeFromBackend(timeValue) {
@@ -609,6 +613,30 @@ export function UnifiedWorkspace({
     mode: 'edit', // 'edit', 'create', 'duplicate'
     route: null,
   });
+
+  useEffect(() => {
+    const nextBusId = selectedBusIdExternal || null;
+    if (nextBusId !== selectedBusId) {
+      setSelectedBusId(nextBusId);
+    }
+  }, [selectedBusIdExternal, selectedBusId]);
+
+  useEffect(() => {
+    const nextRouteId = selectedRouteIdExternal || null;
+    if (nextRouteId !== selectedRouteId) {
+      setSelectedRouteId(nextRouteId);
+    }
+  }, [selectedRouteIdExternal, selectedRouteId]);
+
+  useEffect(() => {
+    if (typeof onBusSelect !== 'function') return;
+    onBusSelect(selectedBusId || null);
+  }, [onBusSelect, selectedBusId]);
+
+  useEffect(() => {
+    if (typeof onRouteSelect !== 'function') return;
+    onRouteSelect(selectedRouteId || null);
+  }, [onRouteSelect, selectedRouteId]);
 
   // Efecto para sincronizar con initialSchedule cuando cambia (post-optimizacion)
   useEffect(() => {
