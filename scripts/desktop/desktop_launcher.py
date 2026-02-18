@@ -883,6 +883,32 @@ def _wait_backend_ready(timeout_sec: int = 60) -> bool:
     return False
 
 
+def _kill_stale_backend_on_port(port: int = 8000) -> None:
+    """Kill any leftover process holding the backend port from a previous session."""
+    if os.name != "nt":
+        return
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano"],
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW,  # type: ignore[attr-defined]
+        )
+        for line in result.stdout.splitlines():
+            if f"127.0.0.1:{port}" in line and "LISTENING" in line:
+                parts = line.split()
+                pid = int(parts[-1])
+                if pid > 0 and pid != os.getpid():
+                    subprocess.run(
+                        ["taskkill", "/F", "/PID", str(pid)],
+                        capture_output=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW,  # type: ignore[attr-defined]
+                    )
+                    time.sleep(0.5)
+    except Exception:
+        pass
+
+
 class DesktopRuntime:
     def __init__(self, runtime_root: Path) -> None:
         self.runtime_root = runtime_root
@@ -898,6 +924,9 @@ class DesktopRuntime:
         return sys.executable
 
     def start_backend(self) -> None:
+        # Kill stale backend from a previous crashed session.
+        _kill_stale_backend_on_port(8000)
+
         data_dir = _resolve_persistent_data_dir()
         database_url = _sqlite_url_for_path(data_dir / "tutti_desktop.db")
 
@@ -913,6 +942,20 @@ class DesktopRuntime:
         env["PYTHONUNBUFFERED"] = "1"
         env["CORS_ORIGINS"] = "http://127.0.0.1:8000,http://localhost:8000"
         _apply_desktop_osrm_defaults(env)
+
+        # OSRM cache persistence in AppData (survives between sessions).
+        osrm_cache_path = data_dir / "osrm_cache.json"
+        env["OSRM_CACHE_FILE"] = str(osrm_cache_path)
+        env["OSRM_CACHE_ENABLED"] = "true"
+
+        # Desktop-optimized pipeline: reduce iterations, relax timeout.
+        env.setdefault("TUTTI_PIPELINE_MAX_ITERATIONS", "1")
+        env.setdefault("TUTTI_PIPELINE_MAX_DURATION_SEC", "180")
+
+        # Faster OSRM failure recovery for desktop.
+        env.setdefault("OSRM_TIMEOUT", "8")
+        env.setdefault("OSRM_MAX_RETRIES", "1")
+        env.setdefault("OSRM_RETRY_DELAY", "0.3")
 
         logs_dir = Path.home() / "AppData" / "Local" / "Tutti" / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)

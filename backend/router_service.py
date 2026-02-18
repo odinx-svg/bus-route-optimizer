@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_OSRM_BASE_URL = os.getenv("OSRM_DEFAULT_BASE_URL", "http://187.77.33.218:5000").strip()
 NEGATIVE_CACHE_TTL_SEC = max(15, int(os.getenv("OSRM_NEGATIVE_CACHE_TTL_SEC", "120")))
+OSRM_REQUEST_TIMEOUT = float(os.getenv("OSRM_TIMEOUT", "5.0"))
 
 
 def _normalize_base_url(url: str) -> str:
@@ -199,7 +200,7 @@ def get_real_travel_time(
 
     try:
         _router_metrics["http_requests"] += 1
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=OSRM_REQUEST_TIMEOUT)
         if response.status_code == 200:
             data: Dict[str, Any] = response.json()
             routes = data.get("routes", [])
@@ -248,7 +249,7 @@ def get_route_duration(stops: List[Any]) -> Optional[int]:
 
     try:
         _router_metrics["http_requests"] += 1
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=OSRM_REQUEST_TIMEOUT)
         if response.status_code == 200:
             data: Dict[str, Any] = response.json()
             routes = data.get("routes", [])
@@ -346,11 +347,12 @@ def get_travel_time_matrix(
                 continue
 
             ok = False
-            for retry in range(max_retries):
+            effective_retries = min(max_retries, max(1, int(os.getenv("OSRM_MAX_RETRIES", str(max_retries)))))
+            for retry in range(effective_retries):
                 try:
                     _router_metrics["http_requests"] += 1
                     _router_metrics["matrix_http_requests"] += 1
-                    timeout = 15 + retry * 10
+                    timeout = min(OSRM_REQUEST_TIMEOUT * 3, 15 + retry * 10)
                     response = requests.get(url, timeout=timeout)
                     if response.status_code == 200:
                         data: Dict[str, Any] = response.json()

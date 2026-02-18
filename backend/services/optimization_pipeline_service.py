@@ -40,12 +40,28 @@ DayTraceCallback = Optional[Callable[[str, str, int, str, Optional[Dict[str, Any
 logger = logging.getLogger(__name__)
 
 
+def _env_int(name: str, default: int) -> int:
+    """Read an integer from environment, falling back to *default*."""
+    raw = os.environ.get(name, "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+    return default
+
+
+# Desktop-tunable defaults (overridable via env vars set by the launcher).
+_DEFAULT_MAX_DURATION_SEC = _env_int("TUTTI_PIPELINE_MAX_DURATION_SEC", 300)
+_DEFAULT_MAX_ITERATIONS = _env_int("TUTTI_PIPELINE_MAX_ITERATIONS", 2)
+
+
 @dataclass
 class PipelineConfig:
     auto_start: bool = True
     objective: str = "min_buses_viability"
-    max_duration_sec: int = 300
-    max_iterations: int = 2
+    max_duration_sec: int = _DEFAULT_MAX_DURATION_SEC
+    max_iterations: int = _DEFAULT_MAX_ITERATIONS
     use_ml_assignment: bool = True
     invalid_rows_dropped: int = 0
 
@@ -56,8 +72,8 @@ class PipelineConfig:
         return cls(
             auto_start=bool(data.get("auto_start", True)),
             objective=str(data.get("objective", "min_buses_viability")),
-            max_duration_sec=max(30, int(data.get("max_duration_sec", 300))),
-            max_iterations=int(data.get("max_iterations", 2)),
+            max_duration_sec=max(30, int(data.get("max_duration_sec", _DEFAULT_MAX_DURATION_SEC))),
+            max_iterations=int(data.get("max_iterations", _DEFAULT_MAX_ITERATIONS)),
             use_ml_assignment=bool(data.get("use_ml_assignment", True)),
             invalid_rows_dropped=max(0, int(data.get("invalid_rows_dropped", 0))),
         )

@@ -1745,8 +1745,8 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
     config_payload = request.config.model_dump() if request.config else {
         "auto_start": True,
         "objective": "min_buses_viability",
-        "max_duration_sec": 300,
-        "max_iterations": 2,
+        "max_duration_sec": int(os.environ.get("TUTTI_PIPELINE_MAX_DURATION_SEC", "300")),
+        "max_iterations": int(os.environ.get("TUTTI_PIPELINE_MAX_ITERATIONS", "2")),
         "use_ml_assignment": True,
         "invalid_rows_dropped": 0,
     }
@@ -1848,8 +1848,8 @@ async def optimize_hybrid_by_day_async(request: PipelineOptimizationRequest) -> 
     config_payload = request.config.model_dump() if request.config else {}
     config_payload["objective"] = "min_buses_viability_hybrid"
     config_payload.setdefault("auto_start", True)
-    config_payload.setdefault("max_duration_sec", 300)
-    config_payload.setdefault("max_iterations", 2)
+    config_payload.setdefault("max_duration_sec", int(os.environ.get("TUTTI_PIPELINE_MAX_DURATION_SEC", "300")))
+    config_payload.setdefault("max_iterations", int(os.environ.get("TUTTI_PIPELINE_MAX_ITERATIONS", "2")))
     config_payload.setdefault("use_ml_assignment", True)
     config_payload.setdefault("invalid_rows_dropped", 0)
 
