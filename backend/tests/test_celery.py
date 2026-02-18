@@ -6,6 +6,10 @@ Validates the async optimization workflow including:
 - Progress reporting
 - Error handling and retries
 - Database integration
+
+NOTE: These tests require Celery + Redis + PostgreSQL.  They are skipped
+automatically in environments where those services are unavailable (CI,
+desktop builds, etc.).
 """
 
 import pytest
@@ -17,6 +21,28 @@ import uuid
 
 # Import models
 from models import Route, Stop
+
+# ---- Skip the entire module when Celery infra is not available ----
+def _check_celery_infra() -> bool:
+    """Return True only when Celery, Redis and the task module are usable."""
+    try:
+        from celery_app import celery_app as _app  # noqa: F401
+        from tasks import optimize_task as _task  # noqa: F401
+        # Quick smoke-test: if the broker/backend is unreachable the tests
+        # will hang or raise.  Check whether Redis (default broker) responds.
+        import redis
+        r = redis.Redis.from_url(_app.conf.broker_url, socket_connect_timeout=1)
+        r.ping()
+        return True
+    except Exception:
+        return False
+
+_CELERY_INFRA_OK = _check_celery_infra()
+
+pytestmark = pytest.mark.skipif(
+    not _CELERY_INFRA_OK,
+    reason="Celery/Redis infrastructure not available – skipping Celery tests",
+)
 
 
 # ============================================================
