@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_OSRM_BASE_URL = os.getenv("OSRM_DEFAULT_BASE_URL", "http://187.77.33.218:5000").strip()
 NEGATIVE_CACHE_TTL_SEC = max(15, int(os.getenv("OSRM_NEGATIVE_CACHE_TTL_SEC", "120")))
 OSRM_REQUEST_TIMEOUT = float(os.getenv("OSRM_TIMEOUT", "5.0"))
+OSRM_CIRCUIT_FAILURE_THRESHOLD = max(1, int(os.getenv("OSRM_CIRCUIT_FAILURE_THRESHOLD", "3")))
+OSRM_CIRCUIT_COOLDOWN_SEC = max(5.0, float(os.getenv("OSRM_CIRCUIT_COOLDOWN_SEC", "60")))
 
 
 def _normalize_base_url(url: str) -> str:
@@ -88,7 +90,12 @@ _router_metrics: Dict[str, int] = {
     "http_requests": 0,
     "matrix_http_requests": 0,
     "api_errors": 0,
+    "circuit_open_skips": 0,
+    "circuit_open_count": 0,
 }
+
+_osrm_failure_streak = 0
+_osrm_circuit_open_until = 0.0
 
 
 def reset_router_metrics() -> None:
@@ -129,6 +136,39 @@ def _negative_key_alive(key: str) -> bool:
 
 def _mark_negative(key: str) -> None:
     _negative_cache[key] = time_module.time() + float(NEGATIVE_CACHE_TTL_SEC)
+
+
+def _is_circuit_open() -> bool:
+    global _osrm_circuit_open_until
+    now = time_module.time()
+    if _osrm_circuit_open_until > now:
+        _router_metrics["circuit_open_skips"] += 1
+        return True
+    if _osrm_circuit_open_until > 0.0:
+        _osrm_circuit_open_until = 0.0
+    return False
+
+
+def _register_osrm_success() -> None:
+    global _osrm_failure_streak
+    _osrm_failure_streak = 0
+
+
+def _register_osrm_failure() -> None:
+    global _osrm_failure_streak, _osrm_circuit_open_until
+    _osrm_failure_streak += 1
+    if _osrm_failure_streak < OSRM_CIRCUIT_FAILURE_THRESHOLD:
+        return
+    _osrm_failure_streak = 0
+    now = time_module.time()
+    until = now + OSRM_CIRCUIT_COOLDOWN_SEC
+    if until > _osrm_circuit_open_until:
+        _osrm_circuit_open_until = until
+        _router_metrics["circuit_open_count"] += 1
+        logger.warning(
+            "OSRM circuit opened for %.1fs after repeated failures",
+            OSRM_CIRCUIT_COOLDOWN_SEC,
+        )
 
 
 def load_cache() -> None:
@@ -183,6 +223,8 @@ def get_real_travel_time(
     """
     if lat1 == 0 or lon1 == 0 or lat2 == 0 or lon2 == 0:
         return None
+    if _is_circuit_open():
+        return None
 
     key = _get_cache_key(lat1, lon1, lat2, lon2)
     cached = _cache_get(key)
@@ -210,10 +252,13 @@ def get_real_travel_time(
                     _travel_time_cache[key] = minutes
                     _negative_cache.pop(neg_pair_key, None)
                     _negative_cache.pop(neg_url_key, None)
+                    _register_osrm_success()
                     return minutes
         _router_metrics["api_errors"] += 1
+        _register_osrm_failure()
     except Exception as exc:
         _router_metrics["api_errors"] += 1
+        _register_osrm_failure()
         logger.warning("OSRM route request failed: %s", exc)
 
     _mark_negative(neg_pair_key)
@@ -225,6 +270,8 @@ def get_route_duration(stops: List[Any]) -> Optional[int]:
     """Calculate total driving time for a stop sequence using OSRM route API."""
     if not stops or len(stops) < 2:
         return 0
+    if _is_circuit_open():
+        return None
 
     coords: List[str] = []
     for stop in stops:
@@ -259,10 +306,13 @@ def get_route_duration(stops: List[Any]) -> Optional[int]:
                     _travel_time_cache[cache_key] = minutes
                     _negative_cache.pop(neg_key, None)
                     _negative_cache.pop(neg_url_key, None)
+                    _register_osrm_success()
                     return minutes
         _router_metrics["api_errors"] += 1
+        _register_osrm_failure()
     except Exception as exc:
         _router_metrics["api_errors"] += 1
+        _register_osrm_failure()
         logger.warning("OSRM route duration request failed: %s", exc)
 
     _mark_negative(neg_key)
@@ -283,6 +333,8 @@ def get_travel_time_matrix(
     matrix: List[List[Optional[int]]] = [[None for _ in range(n_dest)] for _ in range(n_src)]
 
     if n_src == 0 or n_dest == 0:
+        return matrix
+    if _is_circuit_open():
         return matrix
 
     for i in range(n_src):
@@ -345,6 +397,9 @@ def get_travel_time_matrix(
             neg_url_key = f"url:{url}"
             if _negative_key_alive(neg_url_key):
                 continue
+            if _is_circuit_open():
+                _mark_negative(neg_url_key)
+                continue
 
             ok = False
             effective_retries = min(max_retries, max(1, int(os.getenv("OSRM_MAX_RETRIES", str(max_retries)))))
@@ -373,19 +428,26 @@ def get_travel_time_matrix(
                                     cache_updated = True
                             ok = True
                             _negative_cache.pop(neg_url_key, None)
+                            _register_osrm_success()
                             break
                         _router_metrics["api_errors"] += 1
+                        _register_osrm_failure()
                         break
-                    if response.status_code == 429 and retry < max_retries - 1:
+                    if response.status_code == 429 and retry < effective_retries - 1:
                         time_module.sleep(2 + retry * 2)
                         continue
                     _router_metrics["api_errors"] += 1
+                    _register_osrm_failure()
                     break
                 except Exception as exc:
-                    if retry < max_retries - 1:
+                    if retry < effective_retries - 1:
+                        _register_osrm_failure()
+                        if _is_circuit_open():
+                            break
                         time_module.sleep(1 + retry)
                         continue
                     _router_metrics["api_errors"] += 1
+                    _register_osrm_failure()
                     logger.warning("OSRM matrix request failed after retries: %s", exc)
             if not ok:
                 _mark_negative(neg_url_key)

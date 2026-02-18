@@ -420,6 +420,8 @@ _LAST_OPTIMIZATION_DIAGNOSTICS: Dict[str, Any] = {
     "pairs_pruned": 0,
     "osrm_cache_hits": 0,
     "osrm_fallback_count": 0,
+    "ilp_solver_failures": 0,
+    "ilp_fallback_greedy_matches": 0,
 }
 
 _RUNTIME_METRICS: Dict[str, Any] = {
@@ -427,6 +429,8 @@ _RUNTIME_METRICS: Dict[str, Any] = {
     "pairs_total": 0,
     "pairs_pruned": 0,
     "osrm_fallback_count": 0,
+    "ilp_solver_failures": 0,
+    "ilp_fallback_greedy_matches": 0,
 }
 
 _CONNECTION_TIME_CACHE: Dict[str, int] = {}
@@ -437,6 +441,8 @@ def _reset_runtime_metrics() -> None:
     _RUNTIME_METRICS["pairs_total"] = 0
     _RUNTIME_METRICS["pairs_pruned"] = 0
     _RUNTIME_METRICS["osrm_fallback_count"] = 0
+    _RUNTIME_METRICS["ilp_solver_failures"] = 0
+    _RUNTIME_METRICS["ilp_fallback_greedy_matches"] = 0
     _CONNECTION_TIME_CACHE.clear()
 
 
@@ -1210,6 +1216,31 @@ def _get_chain_start_info(
         return (_exit_departure_min(first_job), first_job.start_loc)
 
 
+def _greedy_cross_block_matching(
+    feasible: Dict[Tuple[int, int], int],
+    pair_value: Dict[Tuple[int, int], float],
+) -> List[Tuple[int, int]]:
+    """
+    Safe fallback for cross-block matching when ILP solve fails.
+
+    Prioritizes minimal temporal gap and then higher affinity bonus.
+    """
+    ranked = sorted(
+        feasible.keys(),
+        key=lambda pair: (feasible[pair], -pair_value.get(pair, 0.0), pair[0], pair[1]),
+    )
+    used_src: Set[int] = set()
+    used_dst: Set[int] = set()
+    pairs: List[Tuple[int, int]] = []
+    for i, j in ranked:
+        if i in used_src or j in used_dst:
+            continue
+        used_src.add(i)
+        used_dst.add(j)
+        pairs.append((i, j))
+    return pairs
+
+
 def match_blocks_ilp(
     chains_a_ends: List[Tuple[int, Tuple[float, float]]],
     chains_b_starts: List[Tuple[int, Tuple[float, float]]],
@@ -1332,12 +1363,39 @@ def match_blocks_ilp(
             prob += pulp.lpSum(relevant) <= 1
 
     solver = _build_cbc_solver(10)
-    prob.solve(solver)
+    try:
+        prob.solve(solver)
+    except Exception as exc:
+        logger.warning("Cross-block ILP solve failed, using greedy fallback: %s", exc)
+        _RUNTIME_METRICS["ilp_solver_failures"] = int(_RUNTIME_METRICS.get("ilp_solver_failures", 0)) + 1
+        fallback_pairs = _greedy_cross_block_matching(feasible, pair_value)
+        _RUNTIME_METRICS["ilp_fallback_greedy_matches"] = int(
+            _RUNTIME_METRICS.get("ilp_fallback_greedy_matches", 0)
+        ) + len(fallback_pairs)
+        return fallback_pairs
 
     pairs: List[Tuple[int, int]] = []
     for (i, j), var in m.items():
         if var.value() is not None and var.value() > 0.5:
             pairs.append((i, j))
+
+    if pairs:
+        return pairs
+
+    # If solver finished without usable assignment despite feasible edges,
+    # return a deterministic greedy fallback to avoid pipeline stalls/failures.
+    status_name = str(pulp.LpStatus.get(prob.status, "unknown")).lower()
+    if feasible and status_name != "optimal":
+        logger.warning(
+            "Cross-block ILP ended with status=%s and no pairs, using greedy fallback",
+            status_name,
+        )
+        _RUNTIME_METRICS["ilp_solver_failures"] = int(_RUNTIME_METRICS.get("ilp_solver_failures", 0)) + 1
+        fallback_pairs = _greedy_cross_block_matching(feasible, pair_value)
+        _RUNTIME_METRICS["ilp_fallback_greedy_matches"] = int(
+            _RUNTIME_METRICS.get("ilp_fallback_greedy_matches", 0)
+        ) + len(fallback_pairs)
+        return fallback_pairs
 
     return pairs
 
@@ -2257,6 +2315,8 @@ def optimize_v6(
             "pairs_pruned": int(_RUNTIME_METRICS.get("pairs_pruned", 0)),
             "osrm_cache_hits": int(router_metrics.get("cache_hits", 0) or 0),
             "osrm_fallback_count": int(_RUNTIME_METRICS.get("osrm_fallback_count", 0)),
+            "ilp_solver_failures": int(_RUNTIME_METRICS.get("ilp_solver_failures", 0)),
+            "ilp_fallback_greedy_matches": int(_RUNTIME_METRICS.get("ilp_fallback_greedy_matches", 0)),
         }
         report_progress("completed", 100, "No hay rutas para optimizar")
         return []
@@ -2395,6 +2455,8 @@ def optimize_v6(
         "pairs_pruned": int(_RUNTIME_METRICS.get("pairs_pruned", 0)),
         "osrm_cache_hits": int(router_metrics.get("cache_hits", 0) or 0),
         "osrm_fallback_count": int(_RUNTIME_METRICS.get("osrm_fallback_count", 0)),
+        "ilp_solver_failures": int(_RUNTIME_METRICS.get("ilp_solver_failures", 0)),
+        "ilp_fallback_greedy_matches": int(_RUNTIME_METRICS.get("ilp_fallback_greedy_matches", 0)),
     }
     total_assigned = sum(len(s.items) for s in schedules)
     entry_count = sum(1 for s in schedules for item in s.items if item.type == "entry")
@@ -2426,6 +2488,11 @@ def optimize_v6(
         "  OSRM metrics: "
         f"cache_hits={_LAST_OPTIMIZATION_DIAGNOSTICS['osrm_cache_hits']}, "
         f"fallbacks={_LAST_OPTIMIZATION_DIAGNOSTICS['osrm_fallback_count']}"
+    )
+    print(
+        "  Matching fallback: "
+        f"ilp_failures={_LAST_OPTIMIZATION_DIAGNOSTICS['ilp_solver_failures']}, "
+        f"greedy_pairs={_LAST_OPTIMIZATION_DIAGNOSTICS['ilp_fallback_greedy_matches']}"
     )
 
     for s in schedules:

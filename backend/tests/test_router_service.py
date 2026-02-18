@@ -23,9 +23,15 @@ def _clean_router_state():
     """Reset travel-time cache and negative cache between every test."""
     _rs._travel_time_cache.clear()
     _rs._negative_cache.clear()
+    _rs._osrm_failure_streak = 0
+    _rs._osrm_circuit_open_until = 0.0
+    _rs.reset_router_metrics()
     yield
     _rs._travel_time_cache.clear()
     _rs._negative_cache.clear()
+    _rs._osrm_failure_streak = 0
+    _rs._osrm_circuit_open_until = 0.0
+    _rs.reset_router_metrics()
 
 
 # ============================================================
@@ -350,3 +356,22 @@ class TestRouterServiceEdgeCases:
             
             result = get_real_travel_time(42.24, -8.72, 42.24, -8.72)
             assert result == 0
+
+    @patch("router_service.requests.get")
+    def test_circuit_breaker_skips_after_repeated_failures(self, mock_get):
+        """After threshold failures, new requests should be skipped temporarily."""
+        mock_get.side_effect = Exception("OSRM down")
+
+        import router_service
+        router_service.OSRM_CIRCUIT_FAILURE_THRESHOLD = 1
+        router_service.OSRM_CIRCUIT_COOLDOWN_SEC = 60.0
+        router_service._osrm_failure_streak = 0
+        router_service._osrm_circuit_open_until = 0.0
+
+        first = get_real_travel_time(42.24, -8.72, 42.25, -8.73)
+        second = get_real_travel_time(42.26, -8.74, 42.27, -8.75)
+
+        assert first is None
+        assert second is None
+        assert mock_get.call_count == 1
+        assert router_service.get_router_metrics()["circuit_open_skips"] >= 1

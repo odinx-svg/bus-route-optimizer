@@ -894,17 +894,34 @@ def _kill_stale_backend_on_port(port: int = 8000) -> None:
             text=True,
             creationflags=subprocess.CREATE_NO_WINDOW,  # type: ignore[attr-defined]
         )
+        bind_tokens = (
+            f"127.0.0.1:{port}",
+            f"0.0.0.0:{port}",
+            f"[::1]:{port}",
+            f"[::]:{port}",
+        )
+        pids_to_kill: set[int] = set()
         for line in result.stdout.splitlines():
-            if f"127.0.0.1:{port}" in line and "LISTENING" in line:
-                parts = line.split()
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            local_addr = parts[1]
+            if not any(token in local_addr for token in bind_tokens):
+                continue
+            try:
                 pid = int(parts[-1])
-                if pid > 0 and pid != os.getpid():
-                    subprocess.run(
-                        ["taskkill", "/F", "/PID", str(pid)],
-                        capture_output=True,
-                        creationflags=subprocess.CREATE_NO_WINDOW,  # type: ignore[attr-defined]
-                    )
-                    time.sleep(0.5)
+            except Exception:
+                continue
+            if pid > 0 and pid != os.getpid():
+                pids_to_kill.add(pid)
+
+        for pid in sorted(pids_to_kill):
+            subprocess.run(
+                ["taskkill", "/F", "/PID", str(pid)],
+                capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,  # type: ignore[attr-defined]
+            )
+            time.sleep(0.4)
     except Exception:
         pass
 
@@ -918,12 +935,30 @@ class DesktopRuntime:
         self.backend_proc: Optional[subprocess.Popen] = None
         self.log_handle = None
 
+    def _close_log_handle(self) -> None:
+        if not self.log_handle:
+            return
+        try:
+            self.log_handle.write("===== TUTTI DESKTOP BACKEND STOP =====\n")
+            self.log_handle.flush()
+            self.log_handle.close()
+        except Exception:
+            pass
+        finally:
+            self.log_handle = None
+
     def _python_cmd(self) -> str:
         if self.venv_python.exists():
             return str(self.venv_python)
         return sys.executable
 
     def start_backend(self) -> None:
+        if self.backend_proc and self.backend_proc.poll() is None:
+            return
+        if self.backend_proc and self.backend_proc.poll() is not None:
+            self.backend_proc = None
+            self._close_log_handle()
+
         # Kill stale backend from a previous crashed session.
         _kill_stale_backend_on_port(8000)
 
@@ -1001,8 +1036,11 @@ class DesktopRuntime:
 
     def stop_backend(self) -> None:
         if not self.backend_proc:
+            self._close_log_handle()
             return
         if self.backend_proc.poll() is not None:
+            self.backend_proc = None
+            self._close_log_handle()
             return
         try:
             self.backend_proc.terminate()
@@ -1012,14 +1050,8 @@ class DesktopRuntime:
         except OSError:
             pass
         finally:
-            if self.log_handle:
-                try:
-                    self.log_handle.write("===== TUTTI DESKTOP BACKEND STOP =====\n")
-                    self.log_handle.flush()
-                    self.log_handle.close()
-                except Exception:
-                    pass
-                self.log_handle = None
+            self.backend_proc = None
+            self._close_log_handle()
 
 
 def main() -> int:

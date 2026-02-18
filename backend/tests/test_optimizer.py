@@ -9,6 +9,7 @@ from models import Route, BusSchedule, Stop
 from optimizer_v6 import (
     optimize_v6,
     optimize_routes_v6,
+    match_blocks_ilp,
     to_minutes,
     from_minutes,
     haversine_km,
@@ -308,6 +309,47 @@ class TestOptimizer:
         result2 = optimize_routes_v6(optimizer_test_routes)
         
         assert len(result1) == len(result2)
+
+    def test_match_blocks_ilp_uses_greedy_fallback_when_solver_crashes(self, monkeypatch):
+        """Cross-block matching must remain stable even if ILP solver raises."""
+        import optimizer_v6
+
+        chains_a = [
+            (480, (42.2400, -8.7200)),
+            (500, (42.2410, -8.7210)),
+        ]
+        chains_b = [
+            (540, (42.2420, -8.7220)),
+            (560, (42.2430, -8.7230)),
+        ]
+        source_meta = [
+            ("School A", 55, False, 40, 65),
+            ("School A", 55, False, 40, 65),
+        ]
+        target_meta = [
+            ("School A", 55, False, 40, 65),
+            ("School A", 55, False, 40, 65),
+        ]
+
+        monkeypatch.setattr(
+            optimizer_v6,
+            "get_travel_time_matrix",
+            lambda src, dst: [[6 for _ in dst] for _ in src],
+        )
+
+        def _raise_solver(_self, *args, **kwargs):
+            raise RuntimeError("forced solver crash")
+
+        monkeypatch.setattr(optimizer_v6.pulp.LpProblem, "solve", _raise_solver)
+
+        pairs = match_blocks_ilp(
+            chains_a,
+            chains_b,
+            source_meta=source_meta,
+            target_meta=target_meta,
+        )
+        assert isinstance(pairs, list)
+        assert len(pairs) >= 1
 
 
 # ============================================================

@@ -18,11 +18,11 @@ import logging
 import os
 import threading
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time
 from time import time as now_seconds
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from models import Route, BusSchedule
+from models import Route, BusSchedule, ScheduleItem
 try:
     from services.fleet_assignment import assign_fleet_profiles_to_schedule_by_day
 except ImportError:
@@ -172,6 +172,85 @@ def _extract_item_locations(item: Any) -> Tuple[Tuple[float, float], Tuple[float
         last = stops[-1]
         return (float(first.lat), float(first.lon)), (float(last.lat), float(last.lon))
     return (0.0, 0.0), (0.0, 0.0)
+
+
+def _time_to_minutes(value: Optional[time], default_minutes: int = 0) -> int:
+    if isinstance(value, time):
+        return (value.hour * 60) + value.minute
+    return int(default_minutes)
+
+
+def _minutes_to_time(total_minutes: int) -> time:
+    normalized = int(total_minutes) % (24 * 60)
+    return time(hour=normalized // 60, minute=normalized % 60)
+
+
+def _route_duration_minutes(route: Route) -> int:
+    durations = []
+    for stop in route.stops or []:
+        try:
+            durations.append(int(getattr(stop, "time_from_start", 0) or 0))
+        except Exception:
+            continue
+    return max(5, max(durations) if durations else 30)
+
+
+def _build_route_per_bus_fallback(day_routes: List[Route]) -> List[BusSchedule]:
+    """
+    Conservative fail-safe schedule:
+    one route per bus, preserving all routes when optimizer crashes.
+    """
+    ordered = sorted(
+        day_routes,
+        key=lambda route: (
+            _time_to_minutes(route.arrival_time, 23 * 60)
+            if route.type == "entry"
+            else _time_to_minutes(route.departure_time, 23 * 60),
+            str(route.id),
+        ),
+    )
+    fallback: List[BusSchedule] = []
+    for idx, route in enumerate(ordered, start=1):
+        duration = _route_duration_minutes(route)
+        if route.type == "entry":
+            end_minutes = _time_to_minutes(route.arrival_time, 8 * 60)
+            start_minutes = end_minutes - duration
+            start_time = _minutes_to_time(start_minutes)
+            end_time = _minutes_to_time(end_minutes)
+            original_start = route.arrival_time
+        else:
+            start_minutes = _time_to_minutes(route.departure_time, 15 * 60)
+            end_minutes = start_minutes + duration
+            start_time = _minutes_to_time(start_minutes)
+            end_time = _minutes_to_time(end_minutes)
+            original_start = route.departure_time
+
+        item = ScheduleItem(
+            route_id=route.id,
+            start_time=start_time,
+            end_time=end_time,
+            type=route.type,
+            original_start_time=original_start,
+            time_shift_minutes=0,
+            deadhead_minutes=0,
+            positioning_minutes=0,
+            capacity_needed=int(route.capacity_needed or 0),
+            vehicle_capacity_min=route.vehicle_capacity_min,
+            vehicle_capacity_max=route.vehicle_capacity_max,
+            vehicle_capacity_range=route.vehicle_capacity_range,
+            school_name=route.school_name,
+            stops=list(route.stops or []),
+            contract_id=route.contract_id,
+        )
+        fallback.append(
+            BusSchedule(
+                bus_id=f"B{idx:03d}",
+                items=[item],
+                last_loc=(item.stops[-1].lat, item.stops[-1].lon) if item.stops else None,
+                min_required_seats=max(1, int(route.capacity_needed or 1)),
+            )
+        )
+    return fallback
 
 
 async def _validate_schedule_by_day(schedule_by_day: Dict[str, List[BusSchedule]]) -> Dict[str, Any]:
@@ -476,12 +555,64 @@ def _optimize_by_day_v6(
                         {"engine": "v6"},
                     )
 
-            by_day[day] = optimize_v6(
-                day_routes,
-                progress_callback=_day_progress,
-                use_ml_assignment=use_ml_assignment,
-            )
-            diagnostics_by_day[day] = get_last_optimization_diagnostics()
+            try:
+                by_day[day] = optimize_v6(
+                    day_routes,
+                    progress_callback=_day_progress,
+                    use_ml_assignment=use_ml_assignment,
+                )
+                diagnostics_by_day[day] = get_last_optimization_diagnostics()
+            except Exception as first_exc:
+                logger.exception(
+                    "[Pipeline] V6 failed for day %s (routes=%s). Retrying with conservative mode.",
+                    day,
+                    len(day_routes),
+                )
+                if trace_callback:
+                    trace_callback(
+                        day,
+                        "day_retry",
+                        55,
+                        "Fallo en V6, reintentando en modo conservador",
+                        {"engine": "v6", "error": f"{type(first_exc).__name__}: {first_exc}"},
+                    )
+                try:
+                    by_day[day] = optimize_v6(
+                        day_routes,
+                        progress_callback=_day_progress,
+                        use_ml_assignment=False,
+                    )
+                    diagnostics_by_day[day] = dict(get_last_optimization_diagnostics() or {})
+                    diagnostics_by_day[day]["solver_status"] = "fallback_ml_disabled"
+                    diagnostics_by_day[day]["fallback_reason"] = f"{type(first_exc).__name__}: {first_exc}"
+                except Exception as second_exc:
+                    logger.exception(
+                        "[Pipeline] V6 retry also failed for day %s. Using route-per-bus fallback.",
+                        day,
+                    )
+                    by_day[day] = _build_route_per_bus_fallback(day_routes)
+                    diagnostics_by_day[day] = {
+                        "total_routes": len(day_routes),
+                        "pre_split_buses": len(by_day[day]),
+                        "best_buses": len(by_day[day]),
+                        "split_count": 0,
+                        "solver_status": "fallback_route_per_bus",
+                        "lower_bound_buses": 0,
+                        "optimality_gap": 0.0,
+                        "fallback_reason": (
+                            f"primary={type(first_exc).__name__}: {first_exc}; "
+                            f"retry={type(second_exc).__name__}: {second_exc}"
+                        ),
+                    }
+                    if trace_callback:
+                        trace_callback(
+                            day,
+                            "day_fallback",
+                            100,
+                            "Fallback de seguridad aplicado (1 ruta por bus)",
+                            {"engine": "v6", "fallback": "route_per_bus"},
+                        )
+
             if trace_callback:
                 day_stats = _calculate_stats(by_day[day])
                 trace_callback(
@@ -868,55 +999,83 @@ async def run_optimization_pipeline_by_day(
 
         hybrid_meta: Dict[str, Any] = {}
         candidate_diagnostics: Dict[str, Dict[str, Any]] = {}
-        if hybrid_mode:
-            add_history(
-                f"qubo_encode_iter_{iteration}",
-                min(base_progress + 3, 90),
-                f"Codificando subproblemas QUBO (iteracion {iteration})",
-                {"stage": "qubo_encode", "iteration": iteration},
-            )
-            candidate_by_day, hybrid_meta = await _optimize_by_day_hybrid(
-                routes=routes,
-                seed_schedule_by_day=best_candidate.get("schedule_by_day_raw", {}),
-                use_ml_assignment=config.use_ml_assignment,
-                max_qubo_vars=160,
-            )
-            candidate_diagnostics = hybrid_meta.get("optimizer_diagnostics_by_day", {}) or {}
-            add_history(
-                f"quantum_refine_iter_{iteration}",
-                min(base_progress + 6, 92),
-                f"Refinamiento quantum-inspired (iteracion {iteration}) completado",
-                {"stage": "quantum_refine", "iteration": iteration, "metrics": {"hybrid": hybrid_meta}},
-            )
-        else:
-            candidate_by_day, candidate_diagnostics = await asyncio.to_thread(
-                _optimize_by_day_lns,
-                routes,
-                config.objective,
-                use_ml_assignment=config.use_ml_assignment,
-                trace_callback=lambda day, phase, progress, message, extra=None: emit_day_trace(
-                    stage=f"reoptimize_trace_{iteration}",
-                    progress_window=(base_progress, min(base_progress + 7, 90)),
-                    day=day,
-                    phase=phase,
-                    local_progress=progress,
-                    message=message,
+        try:
+            if hybrid_mode:
+                add_history(
+                    f"qubo_encode_iter_{iteration}",
+                    min(base_progress + 3, 90),
+                    f"Codificando subproblemas QUBO (iteracion {iteration})",
+                    {"stage": "qubo_encode", "iteration": iteration},
+                )
+                candidate_by_day, hybrid_meta = await _optimize_by_day_hybrid(
+                    routes=routes,
+                    seed_schedule_by_day=best_candidate.get("schedule_by_day_raw", {}),
+                    use_ml_assignment=config.use_ml_assignment,
+                    max_qubo_vars=160,
+                )
+                candidate_diagnostics = hybrid_meta.get("optimizer_diagnostics_by_day", {}) or {}
+                add_history(
+                    f"quantum_refine_iter_{iteration}",
+                    min(base_progress + 6, 92),
+                    f"Refinamiento quantum-inspired (iteracion {iteration}) completado",
+                    {"stage": "quantum_refine", "iteration": iteration, "metrics": {"hybrid": hybrid_meta}},
+                )
+            else:
+                candidate_by_day, candidate_diagnostics = await asyncio.to_thread(
+                    _optimize_by_day_lns,
+                    routes,
+                    config.objective,
+                    use_ml_assignment=config.use_ml_assignment,
+                    trace_callback=lambda day, phase, progress, message, extra=None: emit_day_trace(
+                        stage=f"reoptimize_trace_{iteration}",
+                        progress_window=(base_progress, min(base_progress + 7, 90)),
+                        day=day,
+                        phase=phase,
+                        local_progress=progress,
+                        message=message,
+                        iteration=iteration,
+                        extra=extra,
+                    ),
                     iteration=iteration,
-                    extra=extra,
-                ),
-                iteration=iteration,
+                )
+        except Exception as iteration_exc:
+            logger.exception("[Pipeline] Iteration %s failed during optimization", iteration)
+            add_history(
+                "iteration_failed",
+                min(base_progress + 8, 94),
+                f"Iteracion {iteration} fallida; se conserva la mejor solucion previa",
+                {
+                    "stage": "iteration_failed",
+                    "iteration": iteration,
+                    "error": f"{type(iteration_exc).__name__}: {iteration_exc}",
+                },
             )
+            break
 
         validation_stage = f"osrm_validate_iter_{iteration}"
-        candidate_report = await _validate_schedule_by_day(candidate_by_day)
-        candidate_serialized = _serialize_schedule_by_day(candidate_by_day)
-        candidate_metrics = _report_metrics_from_validation(
-            candidate_report,
-            candidate_serialized,
-            optimizer_diagnostics_by_day=candidate_diagnostics,
-            invalid_rows_dropped=config.invalid_rows_dropped,
-        )
-        candidate_score = calculate_pipeline_candidate_score(candidate_metrics)
+        try:
+            candidate_report = await _validate_schedule_by_day(candidate_by_day)
+            candidate_serialized = _serialize_schedule_by_day(candidate_by_day)
+            candidate_metrics = _report_metrics_from_validation(
+                candidate_report,
+                candidate_serialized,
+                optimizer_diagnostics_by_day=candidate_diagnostics,
+                invalid_rows_dropped=config.invalid_rows_dropped,
+            )
+            candidate_score = calculate_pipeline_candidate_score(candidate_metrics)
+        except Exception as validation_exc:
+            logger.exception("[Pipeline] Iteration %s failed during validation", iteration)
+            add_history(
+                "iteration_failed",
+                min(base_progress + 8, 94),
+                f"Iteracion {iteration} invalida por error de validacion",
+                {
+                    "stage": "iteration_failed",
+                    "iteration": iteration,
+                    "error": f"{type(validation_exc).__name__}: {validation_exc}",
+                },
+            )
+            break
 
         progress_metrics = dict(candidate_metrics)
         if hybrid_meta:
