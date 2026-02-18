@@ -7,6 +7,7 @@ import json
 import os
 from unittest.mock import patch, mock_open, MagicMock
 
+import router_service as _rs
 from router_service import (
     load_cache,
     save_cache,
@@ -15,6 +16,16 @@ from router_service import (
     get_travel_time_matrix,
     _get_cache_key
 )
+
+
+@pytest.fixture(autouse=True)
+def _clean_router_state():
+    """Reset travel-time cache and negative cache between every test."""
+    _rs._travel_time_cache.clear()
+    _rs._negative_cache.clear()
+    yield
+    _rs._travel_time_cache.clear()
+    _rs._negative_cache.clear()
 
 
 # ============================================================
@@ -39,15 +50,13 @@ class TestCache:
         
         assert router_service._travel_time_cache == {"key1": 10, "key2": 20}
     
-    @patch('os.path.exists')
+    @patch('pathlib.Path.exists', return_value=False)
     def test_load_cache_not_exists(self, mock_exists):
         """Test loading cache when file doesn't exist."""
-        mock_exists.return_value = False
-        
         import router_service
         router_service._travel_time_cache = {}
         router_service.load_cache()
-        
+
         assert router_service._travel_time_cache == {}
     
     @patch('builtins.open', new_callable=mock_open)
