@@ -786,7 +786,7 @@ def _check_and_apply_update_if_available() -> bool:
 def _check_update_background(callback: Callable[[Optional[dict], str], None]) -> None:
     """Run the update check in a background thread (non-blocking).
 
-    Calls *callback(release_data, latest_tag)* on the main thread when an
+    Calls *callback(release_data, latest_tag)* from the worker thread when an
     update is available, or *callback(None, "")* when there is nothing to do.
     """
     def _worker() -> None:
@@ -810,8 +810,14 @@ def _check_update_background(callback: Callable[[Optional[dict], str], None]) ->
 
         latest_tag = str(release.get("tag_name") or "").strip()
         if latest_tag and _is_newer_version(APP_VERSION, latest_tag):
+            _log_update(
+                f"Background update available | current_version={APP_VERSION} | latest_tag={latest_tag}"
+            )
             callback(release, latest_tag)
         else:
+            _log_update(
+                f"Background no update | current_version={APP_VERSION} | latest_tag={latest_tag or '?'}"
+            )
             callback(None, "")
 
     thread = threading.Thread(target=_worker, daemon=True)
@@ -1062,6 +1068,7 @@ def main() -> int:
     # otherwise the check runs in background while the app boots.
     blocking_update = _env_flag("TUTTI_DESKTOP_UPDATE_BLOCKING", "0")
     _pending_update: dict = {}
+    _background_update_done = threading.Event()
 
     if blocking_update:
         if _check_and_apply_update_if_available():
@@ -1072,6 +1079,7 @@ def main() -> int:
             if release and tag:
                 _pending_update["release"] = release
                 _pending_update["tag"] = tag
+            _background_update_done.set()
 
         _check_update_background(_on_update_result)
 
@@ -1095,12 +1103,27 @@ def main() -> int:
         print("[Desktop] Backend did not become ready in time.")
         return 1
 
-    # If the background check found an update, prompt the user now (app is
-    # already loaded so it feels snappier).
-    if not blocking_update and _pending_update.get("release"):
-        # Give the background thread a moment to finish writing.
-        time.sleep(0.5)
-        if _check_and_apply_update_if_available():
+    # Update prompt gate:
+    # - If background check already found update -> prompt now.
+    # - If background check is still running (race) -> run foreground check
+    #   once to avoid missing available updates.
+    if not blocking_update:
+        wait_timeout_raw = os.environ.get("TUTTI_DESKTOP_BG_UPDATE_WAIT_SEC", "4")
+        try:
+            wait_timeout = max(0.0, min(15.0, float(wait_timeout_raw)))
+        except Exception:
+            wait_timeout = 4.0
+
+        background_finished = _background_update_done.wait(timeout=wait_timeout)
+        should_check_foreground = bool(_pending_update.get("release")) or (not background_finished)
+
+        if not background_finished:
+            _log_update(
+                "Background update check did not finish before startup gate; "
+                "running foreground update check"
+            )
+
+        if should_check_foreground and _check_and_apply_update_if_available():
             runtime.stop_backend()
             return 0
 
