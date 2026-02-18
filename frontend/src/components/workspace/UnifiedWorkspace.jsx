@@ -555,8 +555,10 @@ export function UnifiedWorkspace({
   const [activeDay, setActiveDay] = useState(externalActiveDay || 'L');
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [selectedBusId, setSelectedBusId] = useState(null);
-  const [selectedRouteId, setSelectedRouteId] = useState(null);
+  const [internalSelectedBusId, setInternalSelectedBusId] = useState(null);
+  const [internalSelectedRouteId, setInternalSelectedRouteId] = useState(null);
+  const selectedBusId = selectedBusIdExternal ?? internalSelectedBusId;
+  const selectedRouteId = selectedRouteIdExternal ?? internalSelectedRouteId;
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [viewMode, setViewMode] = useState('timeline'); // 'list' | 'timeline'
   const [timelineZoom, setTimelineZoom] = useState(140); // pixeles por hora (default optimo)
@@ -614,35 +616,21 @@ export function UnifiedWorkspace({
     route: null,
   });
 
-  useEffect(() => {
-    const nextBusId = selectedBusIdExternal || null;
-    if (nextBusId !== selectedBusId) {
-      setSelectedBusId(nextBusId);
+  const updateSelectedBus = useCallback((nextBusId) => {
+    const value = nextBusId || null;
+    setInternalSelectedBusId(value);
+    if (typeof onBusSelect === 'function') {
+      onBusSelect(value);
     }
-  }, [selectedBusIdExternal, selectedBusId]);
+  }, [onBusSelect]);
 
-  useEffect(() => {
-    const nextRouteId = selectedRouteIdExternal || null;
-    if (nextRouteId !== selectedRouteId) {
-      setSelectedRouteId(nextRouteId);
+  const updateSelectedRoute = useCallback((nextRouteId) => {
+    const value = nextRouteId || null;
+    setInternalSelectedRouteId(value);
+    if (typeof onRouteSelect === 'function') {
+      onRouteSelect(value);
     }
-  }, [selectedRouteIdExternal, selectedRouteId]);
-
-  useEffect(() => {
-    if (typeof onBusSelect !== 'function') return;
-    const internalBusId = selectedBusId || null;
-    const externalBusId = selectedBusIdExternal || null;
-    if (internalBusId === externalBusId) return;
-    onBusSelect(internalBusId);
-  }, [onBusSelect, selectedBusId, selectedBusIdExternal]);
-
-  useEffect(() => {
-    if (typeof onRouteSelect !== 'function') return;
-    const internalRouteId = selectedRouteId || null;
-    const externalRouteId = selectedRouteIdExternal || null;
-    if (internalRouteId === externalRouteId) return;
-    onRouteSelect(internalRouteId);
-  }, [onRouteSelect, selectedRouteId, selectedRouteIdExternal]);
+  }, [onRouteSelect]);
 
   // Efecto para sincronizar con initialSchedule cuando cambia (post-optimizacion)
   useEffect(() => {
@@ -1024,8 +1012,8 @@ export function UnifiedWorkspace({
   const handleRemoveBus = useCallback((busId) => {
     if (!confirm(`Eliminar el bus ${busId}?`)) return;
     setBuses(prev => prev.filter(b => b.id !== busId));
-    if (selectedBusId === busId) setSelectedBusId(null);
-  }, [selectedBusId]);
+    if (selectedBusId === busId) updateSelectedBus(null);
+  }, [selectedBusId, updateSelectedBus]);
 
   const handleDragStart = useCallback((event) => {
     const data = event.active.data.current;
@@ -1968,14 +1956,14 @@ export function UnifiedWorkspace({
                         <div 
                           key={bus.id} 
                           className={`relative group ${selectedBusId === bus.id ? 'ring-1 ring-cyan-400/40 rounded-md' : ''}`}
-                          onClick={() => setSelectedBusId(bus.id)}
+                          onClick={() => updateSelectedBus(bus.id)}
                         >
                           <TimelineBusRow
                             bus={bus}
                             routes={bus.routes}
                             validations={validationResults[bus.id]}
                             onRemoveRoute={(routeId) => handleRemoveRoute(bus.id, routeId)}
-                            onSelectRoute={(routeId) => setSelectedRouteId(routeId === selectedRouteId ? null : routeId)}
+                            onSelectRoute={(routeId) => updateSelectedRoute(routeId === selectedRouteId ? null : routeId)}
                             isActive={selectedBusId === bus.id}
                             minHour={timelineRange.min}
                             maxHour={timelineRange.max}
@@ -2101,8 +2089,8 @@ export function UnifiedWorkspace({
                                 isSelected ? 'bg-cyan-500/10' : 'hover:bg-[#112335]/50'
                               }`}
                               onClick={() => {
-                                setSelectedBusId(row.busId);
-                                setSelectedRouteId(row.route.id);
+                                updateSelectedBus(row.busId);
+                                updateSelectedRoute(row.route.id);
                               }}
                             >
                               <td className="px-2 py-2 font-semibold text-cyan-300">{row.busId}</td>
@@ -2246,8 +2234,8 @@ export function UnifiedWorkspace({
                             key={`${incident.day}-${incident.bus_id}-${incident.route_a}-${incident.route_b}-${idx}`}
                             className="border-b border-slate-800/60 hover:bg-slate-800/30 cursor-pointer"
                             onClick={() => {
-                              if (incident.bus_id) setSelectedBusId(incident.bus_id);
-                              if (incident.route_a) setSelectedRouteId(incident.route_a);
+                              if (incident.bus_id) updateSelectedBus(incident.bus_id);
+                              if (incident.route_a) updateSelectedRoute(incident.route_a);
                             }}
                           >
                             <td className="px-2 py-1 text-slate-300">{incident.day || '-'}</td>
