@@ -5,6 +5,7 @@ Provides async task processing for route optimization jobs.
 """
 
 from celery_app import celery_app
+from fastapi.encoders import jsonable_encoder
 from typing import List, Dict, Any, Callable, Optional
 from datetime import datetime
 import logging
@@ -121,10 +122,10 @@ def _publish_to_redis(job_id: str, phase: str, progress: int, message: str) -> b
         }
         
         # Publish to channel specific to this job
-        client.publish(f"job_progress:{job_id}", json.dumps(data))
+        client.publish(f"job_progress:{job_id}", json.dumps(jsonable_encoder(data), ensure_ascii=False))
         
         # Also publish to general progress channel
-        client.publish("job_progress:all", json.dumps(data))
+        client.publish("job_progress:all", json.dumps(jsonable_encoder(data), ensure_ascii=False))
         
         return True
         
@@ -149,8 +150,9 @@ def _publish_dict_to_redis(job_id: str, data: Dict[str, Any]) -> bool:
         payload = dict(data)
         payload["job_id"] = job_id
         payload.setdefault("timestamp", datetime.utcnow().isoformat())
-        client.publish(f"job_progress:{job_id}", json.dumps(payload))
-        client.publish("job_progress:all", json.dumps(payload))
+        safe_payload = jsonable_encoder(payload)
+        client.publish(f"job_progress:{job_id}", json.dumps(safe_payload, ensure_ascii=False))
+        client.publish("job_progress:all", json.dumps(safe_payload, ensure_ascii=False))
         return True
     except Exception as e:
         logger.debug(f"Redis publish payload error: {e}")
@@ -233,8 +235,8 @@ def optimize_task(
                 job = db.query(OptimizationJob).filter(OptimizationJob.id == job_id).first()
                 if job:
                     job.status = "completed"
-                    job.result = result
-                    job.stats = stats
+                    job.result = jsonable_encoder(result)
+                    job.stats = jsonable_encoder(stats)
                     job.completed_at = datetime.utcnow()
                     db.commit()
             except Exception as e:
@@ -267,7 +269,10 @@ def optimize_task(
                     "message": error_message,
                     "timestamp": datetime.utcnow().isoformat()
                 }
-                client.publish(f"job_progress:{job_id}", json.dumps(error_data))
+                client.publish(
+                    f"job_progress:{job_id}",
+                    json.dumps(jsonable_encoder(error_data), ensure_ascii=False),
+                )
         except Exception:
             pass
         
@@ -448,8 +453,8 @@ def optimize_advanced_task(
                 job = db.query(OptimizationJob).filter(OptimizationJob.id == job_id).first()
                 if job:
                     job.status = "completed"
-                    job.result = result
-                    job.stats = stats
+                    job.result = jsonable_encoder(result)
+                    job.stats = jsonable_encoder(stats)
                     job.completed_at = datetime.utcnow()
                     db.commit()
             except Exception as e:
@@ -482,7 +487,10 @@ def optimize_advanced_task(
                     "message": error_message,
                     "timestamp": datetime.utcnow().isoformat()
                 }
-                client.publish(f"job_progress:{job_id}", json.dumps(error_data))
+                client.publish(
+                    f"job_progress:{job_id}",
+                    json.dumps(jsonable_encoder(error_data), ensure_ascii=False),
+                )
         except Exception:
             pass
         
@@ -595,8 +603,8 @@ def optimize_pipeline_task(
                 job = db.query(OptimizationJob).filter(OptimizationJob.id == job_id).first()
                 if job:
                     job.status = "completed"
-                    job.result = result
-                    job.stats = result.get("summary_metrics")
+                    job.result = jsonable_encoder(result)
+                    job.stats = jsonable_encoder(result.get("summary_metrics"))
                     job.completed_at = datetime.utcnow()
                     db.commit()
             except Exception as e:

@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Body, Query, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -235,9 +236,9 @@ def _persist_job_update(
         if status is not None:
             job.status = status
         if result is not None:
-            job.result = result
+            job.result = jsonable_encoder(result)
         if stats is not None:
-            job.stats = stats
+            job.stats = jsonable_encoder(stats)
         if error_message is not None:
             job.error_message = error_message
         if started_at is not None:
@@ -376,7 +377,7 @@ async def _emit_ws_message(job_id: str, message: Dict[str, Any]) -> None:
     try:
         await manager.send_progress(job_id, message)
     except Exception as e:
-        logger.debug(f"[Pipeline] Failed WS emit for job {job_id}: {e}")
+        logger.warning(f"[Pipeline] Failed WS emit for job {job_id}: {e}")
 
 
 async def _run_local_pipeline_job(
@@ -466,12 +467,14 @@ async def _run_local_pipeline_job(
             config=config_obj,
             progress_callback=progress_callback,
         )
+        safe_result = jsonable_encoder(pipeline_result)
+        safe_stats = jsonable_encoder(pipeline_result.get("summary_metrics"))
 
         _persist_job_update(
             job_id,
             status="completed",
-            result=pipeline_result,
-            stats=pipeline_result.get("summary_metrics"),
+            result=safe_result,
+            stats=safe_stats,
             completed_at=datetime.utcnow(),
         )
         _update_local_job_state(
@@ -481,13 +484,13 @@ async def _run_local_pipeline_job(
             stage="completed",
             progress=100,
             message="Pipeline completado",
-            result=pipeline_result,
-            stats=pipeline_result.get("summary_metrics"),
+            result=safe_result,
+            stats=safe_stats,
             completed_at=datetime.utcnow(),
         )
         await _emit_ws_message(
             job_id,
-            build_completed_message(job_id, pipeline_result, pipeline_result.get("summary_metrics")),
+            build_completed_message(job_id, safe_result, safe_stats),
         )
     except asyncio.CancelledError:
         _persist_job_update(job_id, status="cancelled", completed_at=datetime.utcnow())
@@ -1947,7 +1950,7 @@ async def optimize_async(
                 job = db.query(OptimizationJob).filter(OptimizationJob.id == job_id).first()
                 if job:
                     job.status = "completed"
-                    job.result = result
+                    job.result = jsonable_encoder(result)
                     job.completed_at = datetime.utcnow()
                     db.commit()
             finally:
@@ -2102,7 +2105,7 @@ async def optimize_async_advanced(
                 job = db.query(OptimizationJob).filter(OptimizationJob.id == job_id).first()
                 if job:
                     job.status = "completed"
-                    job.result = result
+                    job.result = jsonable_encoder(result)
                     job.completed_at = datetime.utcnow()
                     db.commit()
             finally:

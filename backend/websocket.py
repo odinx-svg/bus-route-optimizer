@@ -6,6 +6,7 @@ FastAPI's native WebSocket support.
 """
 
 from fastapi import WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from typing import Dict, Set, Optional, Any
 import json
 import asyncio
@@ -13,6 +14,11 @@ import logging
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_json_dumps(data: Dict[str, Any]) -> str:
+    """Serialize WS payloads with support for datetime/time and nested models."""
+    return json.dumps(jsonable_encoder(data), ensure_ascii=False)
 
 
 class ConnectionManager:
@@ -92,7 +98,7 @@ class ConnectionManager:
             
             connections = self.active_connections[job_id].copy()
         
-        message = json.dumps(data)
+        message = _safe_json_dumps(data)
         disconnected: Set[WebSocket] = set()
         sent_count = 0
         
@@ -127,7 +133,7 @@ class ConnectionManager:
             True if message was sent successfully
         """
         try:
-            await websocket.send_json(data)
+            await websocket.send_text(_safe_json_dumps(data))
             return True
         except Exception as e:
             logger.debug(f"Failed to send to specific WebSocket: {e}")
