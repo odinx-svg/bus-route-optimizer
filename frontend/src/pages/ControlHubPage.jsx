@@ -42,11 +42,13 @@ export default function ControlHubPage({
   }, [workspaces]);
 
   return (
-    <div className="h-full w-full overflow-auto control-panel rounded-[14px] p-4 md:p-5 space-y-4">
-      <div className="flex items-end justify-between">
+    <div className="h-full w-full overflow-auto control-panel rounded-[16px] p-4 md:p-5 space-y-4">
+      <div className="flex items-end justify-between border-b border-[#2a4056] pb-3">
         <div>
-          <p className="text-[12px] uppercase tracking-[0.14em] text-cyan-300 data-mono">Control Hub</p>
-          <h2 className="text-[20px] font-semibold text-[#e7f0f8] mt-1">Optimizaciones Guardadas</h2>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Control Hub</p>
+          <h2 className="text-[22px] font-semibold text-[#ecf4fb] mt-1" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+            Optimizaciones Guardadas
+          </h2>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -67,27 +69,27 @@ export default function ControlHubPage({
       </div>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <div className="control-card rounded-[12px] p-3 border border-[#2f465d]">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Total</p>
+        <div className="control-card rounded-[14px] p-3.5 border border-[#304a62]">
+          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Total</p>
           <p className="text-[24px] font-semibold data-mono text-slate-100 mt-1">{metrics.total}</p>
         </div>
-        <div className="control-card rounded-[12px] p-3 border border-[#2f465d]">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Activas</p>
+        <div className="control-card rounded-[14px] p-3.5 border border-[#304a62]">
+          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Activas</p>
           <p className="text-[24px] font-semibold data-mono text-emerald-300 mt-1">{metrics.active}</p>
         </div>
-        <div className="control-card rounded-[12px] p-3 border border-[#2f465d]">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Borradores</p>
+        <div className="control-card rounded-[14px] p-3.5 border border-[#304a62]">
+          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Borradores</p>
           <p className="text-[24px] font-semibold data-mono text-amber-300 mt-1">{metrics.drafts}</p>
         </div>
-        <div className="control-card rounded-[12px] p-3 border border-[#2f465d]">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Flota Activa</p>
+        <div className="control-card rounded-[14px] p-3.5 border border-[#304a62]">
+          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Flota Activa</p>
           <p className="text-[24px] font-semibold data-mono text-cyan-300 mt-1">{fleetSummary?.active ?? 0}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
         {workspaces.length === 0 && (
-          <div className="control-card rounded-[12px] p-6 border border-[#2f465d] text-center text-slate-500">
+          <div className="control-card rounded-[14px] p-6 border border-[#304a62] text-center text-slate-400">
             No hay optimizaciones creadas todavia
           </div>
         )}
@@ -99,12 +101,12 @@ export default function ControlHubPage({
           return (
             <div
               key={workspace.id}
-              className={`control-card rounded-[12px] p-4 border ${selected ? 'border-cyan-500/50' : 'border-[#2f465d]'}`}
+              className={`control-card rounded-[14px] p-4 border transition-colors ${selected ? 'border-cyan-400/55' : 'border-[#304a62]'}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[14px] font-semibold text-slate-100">{workspace.name}</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
+                  <p className="text-[15px] font-semibold text-slate-100">{workspace.name}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
                     {workspace.city_label || 'Sin ciudad'} | v{workspace.working_version_number || 0}
                   </p>
                 </div>
@@ -112,7 +114,7 @@ export default function ControlHubPage({
                   {statusCfg.text}
                 </span>
               </div>
-              <div className="mt-3 flex items-center gap-4 text-[11px] text-slate-400">
+              <div className="mt-3 flex items-center gap-4 text-[11px] text-slate-300">
                 <span className="flex items-center gap-1">
                   <Bus className="w-3.5 h-3.5" />
                   {buses} buses

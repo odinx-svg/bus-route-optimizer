@@ -151,7 +151,7 @@ const createRouteOrderIcon = (order, highlighted = false) => {
       line-height: 18px;
       text-align: center;
       box-shadow: 0 1px 6px rgba(0,0,0,0.45);
-      font-family: 'Inter', sans-serif;
+      font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
     ">${order}</div>`,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
