@@ -13,9 +13,11 @@ Phase 1: Foundation (CSS + Components base)
 - [x] 1.4 EmptyState component  
 - [x] 1.5 AvatarStack component
 - [x] 1.6 Index exports
+- [x] 1.7 Verificación de build ✅
+- [x] 1.8 Commit de Fase 1 ✅
 
 ## In Progress
-- [ ] 1.7 Verificación de build
+- [ ] 2.0 Demo/integración visual
 
 ## Pending
 - [ ] 1.8 Commit de Fase 1
