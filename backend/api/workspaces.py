@@ -358,6 +358,54 @@ async def restore_workspace(workspace_id: str) -> schemas.WorkspaceResponse:
         db.close()
 
 
+@router.post("/{workspace_id}/delete", response_model=schemas.WorkspaceDeleteResponse)
+async def delete_workspace_hard(
+    workspace_id: str,
+    payload: schemas.WorkspaceDeleteRequest = Body(...),
+) -> schemas.WorkspaceDeleteResponse:
+    """Permanently delete workspace after explicit name confirmation."""
+    if not is_database_available() or SessionLocal is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    _ensure_tables_ready()
+
+    db = SessionLocal()
+    try:
+        workspace = db_crud.get_workspace(db, workspace_id)
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        expected_name = str(workspace.name or "").strip()
+        received_name = str(payload.confirm_name or "").strip()
+        if received_name != expected_name:
+            raise HTTPException(
+                status_code=409,
+                detail="Workspace confirmation name does not match",
+            )
+
+        deleted_name = db_crud.delete_workspace_hard(db, workspace_id)
+        if deleted_name is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        meta = db_crud.get_app_meta(db, "last_open_workspace_id")
+        current_last_open = None
+        if meta:
+            value = meta.value
+            if isinstance(value, dict):
+                current_last_open = str(value.get("workspace_id") or "").strip() or None
+            elif value is not None:
+                current_last_open = str(value).strip() or None
+        if current_last_open == workspace_id:
+            db_crud.set_app_meta(db, "last_open_workspace_id", None)
+
+        return schemas.WorkspaceDeleteResponse(
+            success=True,
+            workspace_id=workspace_id,
+            deleted_name=deleted_name,
+        )
+    finally:
+        db.close()
+
+
 @router.post("/migrate-legacy", response_model=schemas.LegacyMigrationResponse)
 async def migrate_legacy_workspaces() -> schemas.LegacyMigrationResponse:
     """Idempotent migration bootstrap from legacy jobs/manual schedules."""

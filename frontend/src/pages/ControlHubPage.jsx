@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, ArchiveRestore, Bus, FolderOpen, Plus, RefreshCw } from 'lucide-react';
+import { Activity, AlertTriangle, ArchiveRestore, Bus, FolderOpen, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { fetchFleetVehicles } from '../services/fleetService';
+import { notifications } from '../services/notifications';
 
 const STATUS_LABEL = {
   active: { text: 'Activa', cls: 'text-emerald-300 border-emerald-500/35 bg-emerald-500/10' },
@@ -16,8 +17,15 @@ export default function ControlHubPage({
   onRefresh,
   onArchiveWorkspace,
   onRestoreWorkspace,
+  onDeleteWorkspace,
 }) {
   const [fleetSummary, setFleetSummary] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({
+    open: false,
+    workspace: null,
+    typedName: '',
+  });
+  const [deletingWorkspaceId, setDeletingWorkspaceId] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +48,45 @@ export default function ControlHubPage({
     const inactive = workspaces.filter((ws) => ws.status === 'inactive').length;
     return { total, active, drafts, inactive };
   }, [workspaces]);
+
+  const expectedDeleteName = String(deleteDialog.workspace?.name || '');
+  const canConfirmDelete = expectedDeleteName.length > 0 && deleteDialog.typedName.trim() === expectedDeleteName;
+
+  const openDeleteDialog = (workspace) => {
+    setDeleteDialog({
+      open: true,
+      workspace,
+      typedName: '',
+    });
+  };
+
+  const closeDeleteDialog = () => {
+    if (deletingWorkspaceId) return;
+    setDeleteDialog({
+      open: false,
+      workspace: null,
+      typedName: '',
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    const target = deleteDialog.workspace;
+    if (!target || !canConfirmDelete || deletingWorkspaceId) return;
+    setDeletingWorkspaceId(String(target.id));
+    try {
+      await onDeleteWorkspace?.(target.id, expectedDeleteName);
+      notifications.success('Optimizacion eliminada', `${expectedDeleteName} se borro de forma permanente`);
+      setDeleteDialog({
+        open: false,
+        workspace: null,
+        typedName: '',
+      });
+    } catch (error) {
+      notifications.error('No se pudo borrar', error?.message || 'Error al eliminar la optimizacion');
+    } finally {
+      setDeletingWorkspaceId(null);
+    }
+  };
 
   return (
     <div className="h-full w-full overflow-auto control-panel rounded-[16px] p-4 md:p-5 space-y-4">
@@ -149,11 +196,89 @@ export default function ControlHubPage({
                     Restaurar
                   </button>
                 )}
+                <button
+                  onClick={() => openDeleteDialog(workspace)}
+                  className="px-2.5 py-1.5 rounded-md text-[11px] border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 flex items-center gap-1"
+                  title="Borrar optimizacion de forma permanente"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Borrar
+                </button>
               </div>
             </div>
           );
         })}
       </div>
+
+      {deleteDialog.open && (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={closeDeleteDialog} />
+          <div className="relative w-full max-w-md rounded-xl border border-rose-500/35 bg-[#0b141f] p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-rose-300 data-mono">Borrado permanente</p>
+                <h3 className="mt-1 text-[16px] font-semibold text-white">Confirmar eliminacion</h3>
+              </div>
+              <button
+                onClick={closeDeleteDialog}
+                className="rounded-md border border-slate-600/50 p-1.5 text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                aria-label="Cerrar modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mt-3 rounded-md border border-rose-500/25 bg-rose-500/10 px-3 py-2 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-300 mt-0.5" />
+              <p className="text-[12px] text-rose-100 leading-relaxed">
+                Esta accion elimina la optimizacion y todas sus versiones guardadas. No se puede deshacer.
+              </p>
+            </div>
+
+            <p className="mt-3 text-[12px] text-slate-300">
+              Escribe el nombre exacto para confirmar:
+              <span className="ml-1 font-semibold text-white">"{expectedDeleteName}"</span>
+            </p>
+
+            <input
+              type="text"
+              value={deleteDialog.typedName}
+              onChange={(event) => setDeleteDialog((prev) => ({ ...prev, typedName: event.target.value }))}
+              placeholder={expectedDeleteName}
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  closeDeleteDialog();
+                }
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleConfirmDelete();
+                }
+              }}
+              className="mt-2 w-full rounded-md border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[13px] text-white outline-none transition focus:border-rose-400/70"
+            />
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDeleteDialog}
+                className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={!canConfirmDelete || Boolean(deletingWorkspaceId)}
+                className="rounded-md border border-rose-500/45 bg-rose-500/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-rose-100 transition hover:bg-rose-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingWorkspaceId ? 'Borrando...' : 'Borrar para siempre'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

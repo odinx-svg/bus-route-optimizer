@@ -84,6 +84,15 @@ export async function restoreWorkspace(workspaceId) {
   return parseResponse(response);
 }
 
+export async function deleteWorkspace(workspaceId, confirmName) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm_name: confirmName }),
+  });
+  return parseResponse(response);
+}
+
 export async function migrateLegacyWorkspaces() {
   const response = await fetch(`${API_BASE_URL}/api/workspaces/migrate-legacy`, {
     method: 'POST',

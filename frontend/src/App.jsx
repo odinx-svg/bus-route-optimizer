@@ -11,6 +11,7 @@ import { buildRouteCapacityMap, getItemCapacityNeeded } from './utils/capacity';
 import {
   archiveWorkspace,
   createWorkspace,
+  deleteWorkspace,
   getWorkspace,
   getWorkspacePreferences,
   listWorkspaces,
@@ -1090,6 +1091,17 @@ function App() {
                 }}
                 onRestoreWorkspace={async (workspaceId) => {
                   await restoreWorkspace(workspaceId);
+                  await refreshWorkspaces();
+                }}
+                onDeleteWorkspace={async (workspaceId, workspaceName) => {
+                  await deleteWorkspace(workspaceId, workspaceName);
+                  if (String(activeWorkspaceId || '') === String(workspaceId || '')) {
+                    setActiveWorkspaceId(null);
+                    setViewMode('dashboard');
+                    setWorkspaceMode('create');
+                    setSelectedBusId(null);
+                    setSelectedRouteId(null);
+                  }
                   await refreshWorkspaces();
                 }}
               />

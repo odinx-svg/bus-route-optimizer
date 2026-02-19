@@ -951,6 +951,23 @@ def set_workspace_archived(
     return workspace
 
 
+def delete_workspace_hard(
+    db: Session,
+    workspace_id: str,
+) -> Optional[str]:
+    """Permanently delete workspace and all version snapshots."""
+    workspace = db.query(models.OptimizationWorkspaceModel).filter(
+        models.OptimizationWorkspaceModel.id == workspace_id
+    ).first()
+    if workspace is None:
+        return None
+
+    deleted_name = str(workspace.name or "")
+    db.delete(workspace)
+    db.commit()
+    return deleted_name
+
+
 def _extract_latest_completed_job_seed(
     db: Session,
 ) -> Tuple[Optional[List[Dict[str, Any]]], Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str]]:

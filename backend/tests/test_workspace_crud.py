@@ -110,3 +110,32 @@ def test_legacy_migration_is_idempotent_and_overrides_manual_day():
         assert details2.get("reason") in {"already_migrated", "workspaces_already_exist"}
     finally:
         db.close()
+
+
+def test_workspace_hard_delete_removes_versions():
+    db = _make_test_session()
+    try:
+        workspace = crud.create_workspace(
+            db,
+            schemas.WorkspaceCreateRequest(
+                name="Eliminar-Me",
+                routes_payload=[{"id": "R1"}],
+                schedule_by_day={"L": {"schedule": [{"bus_id": "B001", "items": [{"route_id": "R1"}]}]}},
+            ),
+        )
+        workspace_id = str(workspace.id)
+        assert crud.get_workspace(db, workspace_id) is not None
+
+        versions_before = crud.get_workspace_versions(db, workspace_id)
+        assert len(versions_before) >= 1
+
+        deleted_name = crud.delete_workspace_hard(db, workspace_id)
+        assert deleted_name == "Eliminar-Me"
+        assert crud.get_workspace(db, workspace_id) is None
+
+        versions_after = db.query(models.OptimizationWorkspaceVersionModel).filter(
+            models.OptimizationWorkspaceVersionModel.workspace_id == workspace_id
+        ).all()
+        assert versions_after == []
+    finally:
+        db.close()

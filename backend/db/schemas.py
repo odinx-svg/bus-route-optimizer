@@ -316,6 +316,11 @@ class WorkspaceRenameRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
 
 
+class WorkspaceDeleteRequest(BaseModel):
+    """Hard delete workspace request with explicit confirmation."""
+    confirm_name: str = Field(..., min_length=1, max_length=120)
+
+
 class WorkspaceVersionResponse(BaseModel):
     """Workspace snapshot metadata."""
     id: str
@@ -375,6 +380,13 @@ class LegacyMigrationResponse(BaseModel):
     workspace_id: Optional[str] = None
     workspace_name: Optional[str] = None
     details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkspaceDeleteResponse(BaseModel):
+    """Workspace hard-delete response."""
+    success: bool
+    workspace_id: str
+    deleted_name: str
 
 
 # =============================================================================
