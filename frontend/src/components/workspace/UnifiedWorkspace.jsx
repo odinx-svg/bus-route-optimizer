@@ -66,9 +66,12 @@ import { TransferZone } from './TransferZone';
 
 const STORAGE_KEY_DRAFT = 'unified_workspace_draft';
 const STORAGE_KEY_STATUS = 'unified_workspace_status';
+const STORAGE_KEY_AUTO_REASSIGN = 'unified_workspace_auto_reassign_critical_v1';
 const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
 const ALL_DAYS = ['L', 'M', 'Mc', 'X', 'V'];
 const TIMELINE_BUS_INFO_WIDTH = 118;
+const CRITICAL_GLOBAL_ISSUE_TYPES = new Set(['INSUFFICIENT_TIME', 'OVERLAPPING_ROUTES', 'INVALID_TIME_RANGE']);
+const CRITICAL_LOCAL_ISSUE_TYPES = new Set(['positioning_infeasible', 'overlap']);
 
 const BUS_COLORS = [
   '#6366F1', '#10B981', '#8B5CF6', '#F59E0B', '#EC4899',
@@ -180,6 +183,24 @@ function sortRoutesByTime(routes = []) {
 
     return String(a?.code || a?.id || '').localeCompare(String(b?.code || b?.id || ''));
   });
+}
+
+function getRouteId(route = {}) {
+  return String(route?.id || route?.route_id || '').trim();
+}
+
+function routeMatchesId(route = {}, routeId = '') {
+  const normalizedRouteId = String(routeId || '').trim();
+  if (!normalizedRouteId) return false;
+  return getRouteId(route) === normalizedRouteId;
+}
+
+function generateNextBusIdFromList(busList = []) {
+  const existingNumbers = (busList || [])
+    .map((b) => getBusOrderValue(normalizeBusId(b?.id), NaN))
+    .filter((n) => Number.isFinite(n));
+  const maxNum = Math.max(0, ...existingNumbers);
+  return `B${String(maxNum + 1).padStart(3, '0')}`;
 }
 
 function extractContractFromRoute(route = {}) {
@@ -632,6 +653,12 @@ export function UnifiedWorkspace({
   const [pendingValidations, setPendingValidations] = useState(new Set());
   const [isInitialized, setIsInitialized] = useState(false);
   const [globalValidationRunning, setGlobalValidationRunning] = useState(false);
+  const [reassignRunning, setReassignRunning] = useState(false);
+  const [autoReassignCritical, setAutoReassignCritical] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(STORAGE_KEY_AUTO_REASSIGN) === '1';
+  });
+  const [lastReassignSummary, setLastReassignSummary] = useState(null);
   const [positioningRefreshRunning, setPositioningRefreshRunning] = useState(false);
   const [positioningRefreshStats, setPositioningRefreshStats] = useState({ done: 0, total: 0 });
   const [globalValidationReport, setGlobalValidationReport] = useState(validationReport || null);
@@ -684,6 +711,11 @@ export function UnifiedWorkspace({
       refreshTimerRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(STORAGE_KEY_AUTO_REASSIGN, autoReassignCritical ? '1' : '0');
+  }, [autoReassignCritical]);
 
   // Efecto para sincronizar con initialSchedule cuando cambia (post-optimizacion)
   useEffect(() => {
@@ -1313,6 +1345,319 @@ export function UnifiedWorkspace({
     return sA < eB && eA > sB;
   };
 
+  const getCriticalReassignTargets = useCallback((reportOverride = null, includeLocal = true) => {
+    const targets = new Map();
+
+    const pushTarget = ({
+      busId = '',
+      routeId = '',
+      fallbackRouteId = '',
+      prevRouteId = '',
+      source = 'local',
+      issueType = '',
+      reason = '',
+    }) => {
+      const normalizedBus = String(busId || '').trim();
+      const normalizedRoute = String(routeId || '').trim();
+      if (!normalizedBus || !normalizedRoute) return;
+      const key = `${normalizedBus}|${normalizedRoute}`;
+      if (targets.has(key)) return;
+      targets.set(key, {
+        busId: normalizedBus,
+        routeId: normalizedRoute,
+        fallbackRouteId: String(fallbackRouteId || '').trim() || null,
+        prevRouteId: String(prevRouteId || '').trim() || null,
+        source,
+        issueType: String(issueType || '').trim(),
+        reason: String(reason || '').trim(),
+      });
+    };
+
+    const report = reportOverride || globalValidationReport;
+    const incidents = Array.isArray(report?.incidents) ? report.incidents : [];
+    incidents.forEach((incident) => {
+      const severity = String(incident?.severity || '').toLowerCase();
+      if (severity !== 'error') return;
+      if (incident?.day && String(incident.day).trim() !== String(activeDay).trim()) return;
+
+      const issueType = String(incident?.issue_type || '').toUpperCase();
+      if (!CRITICAL_GLOBAL_ISSUE_TYPES.has(issueType)) return;
+
+      pushTarget({
+        busId: incident?.bus_id,
+        routeId: incident?.route_b,
+        fallbackRouteId: incident?.route_a,
+        prevRouteId: incident?.route_a,
+        source: 'global',
+        issueType,
+        reason: incident?.message,
+      });
+    });
+
+    if (includeLocal) {
+      Object.entries(validationResults || {}).forEach(([busId, busValidation]) => {
+        const errors = Array.isArray(busValidation?.errors) ? busValidation.errors : [];
+        errors.forEach((error) => {
+          const issueType = String(error?.type || '').toLowerCase();
+          if (!CRITICAL_LOCAL_ISSUE_TYPES.has(issueType)) return;
+          pushTarget({
+            busId,
+            routeId: error?.routeId,
+            fallbackRouteId: error?.prevRouteId,
+            prevRouteId: error?.prevRouteId,
+            source: 'local',
+            issueType,
+            reason: error?.message,
+          });
+        });
+      });
+    }
+
+    return Array.from(targets.values());
+  }, [activeDay, globalValidationReport, validationResults]);
+
+  const routeOverlapsBus = useCallback((route, busRoutes = []) => (
+    (busRoutes || []).some((existingRoute) => (
+      checkOverlap(
+        route?.startTime || route?.start_time,
+        route?.endTime || route?.end_time,
+        existingRoute?.startTime || existingRoute?.start_time,
+        existingRoute?.endTime || existingRoute?.end_time,
+      )
+    ))
+  ), []);
+
+  const evaluatePlacementScore = useCallback((route, targetRoutes = []) => {
+    const simulated = sortRoutesByTime([...(targetRoutes || []), route]);
+    const idx = simulated.findIndex((item) => routeMatchesId(item, getRouteId(route)));
+    if (idx < 0) return -9999;
+
+    const prev = idx > 0 ? simulated[idx - 1] : null;
+    const next = idx < simulated.length - 1 ? simulated[idx + 1] : null;
+
+    const beforeWindow = prev
+      ? Math.max(0, toMinutesSafe(route?.startTime || route?.start_time) - toMinutesSafe(prev?.endTime || prev?.end_time))
+      : 999;
+    const afterWindow = next
+      ? Math.max(0, toMinutesSafe(next?.startTime || next?.start_time) - toMinutesSafe(route?.endTime || route?.end_time))
+      : 999;
+
+    const slack = Math.min(beforeWindow, afterWindow);
+    const loadPenalty = (targetRoutes?.length || 0) * 0.35;
+    return slack - loadPenalty;
+  }, []);
+
+  const runCriticalReassignment = useCallback(async ({
+    trigger = 'manual',
+    silent = false,
+    reportOverride = null,
+    includeLocal = true,
+  } = {}) => {
+    if (reassignRunning) {
+      return null;
+    }
+
+    if (!wsConnected) {
+      if (!silent) {
+        notifications.warning('OSRM no conectado', 'La reasignacion requiere validacion OSRM activa');
+      }
+      return { moved: 0, created: 0, unresolved: 0, skipped: 0, unresolvedItems: [] };
+    }
+
+    const targets = getCriticalReassignTargets(reportOverride, includeLocal);
+    if (!targets.length) {
+      if (!silent) {
+        notifications.info('Sin incidencias criticas', 'No hay errores que requieran reasignacion');
+      }
+      return { moved: 0, created: 0, unresolved: 0, skipped: 0, unresolvedItems: [] };
+    }
+
+    setReassignRunning(true);
+
+    try {
+      const workingBuses = (busesRef.current || []).map((bus) => ({
+        ...bus,
+        routes: [...(bus?.routes || [])],
+      }));
+
+      const movedRouteIds = new Set();
+      const affectedBusIds = new Set();
+      const movedItems = [];
+      const unresolvedItems = [];
+      let createdBuses = 0;
+
+      for (const target of targets) {
+        const sourceBus = workingBuses.find((bus) => String(bus?.id || '').trim() === target.busId);
+        if (!sourceBus || !Array.isArray(sourceBus.routes) || sourceBus.routes.length === 0) {
+          unresolvedItems.push({ ...target, reason: 'Bus origen no encontrado' });
+          continue;
+        }
+
+        const routeIdx = sourceBus.routes.findIndex((route) => (
+          routeMatchesId(route, target.routeId) || routeMatchesId(route, target.fallbackRouteId)
+        ));
+
+        if (routeIdx < 0) {
+          unresolvedItems.push({ ...target, reason: 'Ruta conflictiva no encontrada en bus origen' });
+          continue;
+        }
+
+        const route = sourceBus.routes[routeIdx];
+        const routeId = getRouteId(route);
+        if (!routeId || movedRouteIds.has(routeId)) {
+          continue;
+        }
+
+        let bestPlacement = null;
+
+        for (const candidateBus of workingBuses) {
+          if (String(candidateBus?.id || '').trim() === String(sourceBus?.id || '').trim()) continue;
+          if ((candidateBus?.routes || []).some((candidateRoute) => routeMatchesId(candidateRoute, routeId))) continue;
+          if (routeOverlapsBus(route, candidateBus?.routes || [])) continue;
+
+          let feasibility = null;
+          try {
+            feasibility = await canAssignRoute(route, candidateBus?.routes || []);
+          } catch (error) {
+            console.warn('[Workspace] Reassign feasibility check failed', {
+              route_id: routeId,
+              source_bus: sourceBus?.id,
+              candidate_bus: candidateBus?.id,
+              error: error?.message || String(error),
+            });
+            continue;
+          }
+
+          if (!feasibility?.feasible) continue;
+
+          const score = evaluatePlacementScore(route, candidateBus?.routes || []);
+          if (!bestPlacement || score > bestPlacement.score) {
+            bestPlacement = {
+              busId: candidateBus.id,
+              score,
+              created: false,
+            };
+          }
+        }
+
+        if (!bestPlacement) {
+          const newBusId = generateNextBusIdFromList(workingBuses);
+          bestPlacement = {
+            busId: newBusId,
+            score: -1000,
+            created: true,
+          };
+        }
+
+        const [movedRoute] = sourceBus.routes.splice(routeIdx, 1);
+        let destinationBus = workingBuses.find((bus) => String(bus?.id || '').trim() === String(bestPlacement.busId));
+        if (!destinationBus) {
+          destinationBus = {
+            id: bestPlacement.busId,
+            routes: [],
+            type: 'standard',
+          };
+          workingBuses.push(destinationBus);
+        }
+
+        destinationBus.routes = sortRoutesByTime([...(destinationBus.routes || []), movedRoute]);
+        sourceBus.routes = sortRoutesByTime(sourceBus.routes || []);
+
+        movedRouteIds.add(routeId);
+        affectedBusIds.add(String(sourceBus.id));
+        affectedBusIds.add(String(destinationBus.id));
+        if (bestPlacement.created) createdBuses += 1;
+
+        movedItems.push({
+          routeId,
+          routeCode: movedRoute?.code || routeId,
+          fromBus: String(sourceBus.id),
+          toBus: String(destinationBus.id),
+          issueType: target.issueType || 'critical_incident',
+        });
+      }
+
+      const normalizedBuses = sortBusesById(ensureUniqueBusIds(
+        workingBuses.map((bus) => ({
+          ...bus,
+          routes: sortRoutesByTime(bus?.routes || []),
+        })),
+      ));
+
+      if (movedItems.length > 0) {
+        setBuses(normalizedBuses);
+        setHasUnsavedChanges(true);
+        requestPositioningRefresh(Array.from(affectedBusIds), 0);
+      }
+
+      let postIncidentsTotal = null;
+      if (movedItems.length > 0) {
+        try {
+          const revalidationPayload = buildValidationDaysPayload(normalizedBuses);
+          const postReport = await validateAllBuses(revalidationPayload, false);
+          setGlobalValidationReport(postReport);
+          if (typeof onValidationReportChange === 'function') {
+            onValidationReportChange(postReport);
+          }
+          postIncidentsTotal = Number(postReport?.summary?.incidents_total || 0);
+        } catch (error) {
+          console.warn('[Workspace] Post-reassignment global validation failed', error);
+        }
+      }
+
+      const summary = {
+        moved: movedItems.length,
+        created: createdBuses,
+        unresolved: unresolvedItems.length,
+        skipped: targets.length - movedItems.length - unresolvedItems.length,
+        trigger,
+        postIncidentsTotal,
+        movedItems,
+        unresolvedItems,
+      };
+
+      setLastReassignSummary(summary);
+
+      if (!silent) {
+        if (movedItems.length > 0) {
+          const postLabel = Number.isFinite(postIncidentsTotal)
+            ? ` | incidencias tras reasignacion: ${postIncidentsTotal}`
+            : '';
+          notifications.success(
+            'Reasignacion aplicada',
+            `${movedItems.length} movimiento(s), ${createdBuses} bus(es) nuevo(s), ${unresolvedItems.length} pendiente(s)${postLabel}`,
+          );
+        } else {
+          notifications.warning(
+            'Sin movimientos aplicados',
+            `No se encontro una reasignacion viable para ${targets.length} incidencia(s) critica(s)`,
+          );
+        }
+      }
+
+      return summary;
+    } catch (error) {
+      console.error('[Workspace] runCriticalReassignment failed', error);
+      if (!silent) {
+        notifications.error('Error al reasignar', error?.message || 'No se pudo completar la reasignacion');
+      }
+      return null;
+    } finally {
+      setReassignRunning(false);
+    }
+  }, [
+    reassignRunning,
+    wsConnected,
+    getCriticalReassignTargets,
+    canAssignRoute,
+    routeOverlapsBus,
+    evaluatePlacementScore,
+    requestPositioningRefresh,
+    buildValidationDaysPayload,
+    validateAllBuses,
+    onValidationReportChange,
+  ]);
+
   // handleDropRoute con insercion por horario y validacion de solapamiento
   const handleDropRoute = useCallback(async (route, busId) => {
     const targetBus = buses.find((b) => b.id === busId);
@@ -1826,12 +2171,14 @@ export function UnifiedWorkspace({
     };
   }, []);
 
-  const buildValidationDaysPayload = useCallback(() => {
+  const buildValidationDaysPayload = useCallback((overrideActiveDayBuses = null) => {
+    const activeDayBuses = Array.isArray(overrideActiveDayBuses) ? overrideActiveDayBuses : buses;
+
     if (scheduleByDay && typeof scheduleByDay === 'object') {
       return ALL_DAYS.map((day) => {
         const shouldUseLiveWorkspace = day === activeDay;
         const daySchedule = shouldUseLiveWorkspace
-          ? buses.map((bus) => ({
+          ? activeDayBuses.map((bus) => ({
             bus_id: bus.id,
             items: bus.routes.map((route) => ({
               route_id: route.route_id || route.id,
@@ -1870,7 +2217,7 @@ export function UnifiedWorkspace({
 
     return [{
       day: activeDay,
-      buses: buses.map((bus) => ({
+      buses: activeDayBuses.map((bus) => ({
         bus_id: bus.id,
         routes: bus.routes.map((route) => ({
           id: route.id || route.route_id,
@@ -1887,7 +2234,7 @@ export function UnifiedWorkspace({
   }, [scheduleByDay, activeDay, buses, normalizeTime, transformRoutes, extractItemLocations]);
 
   const handleValidateAllBuses = useCallback(async () => {
-    if (globalValidationRunning) return;
+    if (globalValidationRunning || reassignRunning) return;
     setGlobalValidationRunning(true);
     try {
       const daysPayload = buildValidationDaysPayload();
@@ -1898,16 +2245,39 @@ export function UnifiedWorkspace({
       }
       const refreshResult = await refreshPositioningMinutes();
       const summary = result?.summary || {};
+      let autoSummary = null;
+      if (autoReassignCritical && Number(summary.incidents_error || 0) > 0) {
+        autoSummary = await runCriticalReassignment({
+          trigger: 'auto',
+          silent: true,
+          reportOverride: result,
+          includeLocal: false,
+        });
+      }
+
+      const autoText = autoSummary && autoSummary.moved > 0
+        ? ` | auto-reasignadas ${autoSummary.moved} incidencia(s)`
+        : '';
+
       notifications.success(
         'Validacion global completada',
-        `${summary.incidents_total || 0} incidencias en ${summary.total_buses || 0} buses | Pos. OSRM actualizada en ${refreshResult?.updated || 0} buses`
+        `${summary.incidents_total || 0} incidencias en ${summary.total_buses || 0} buses | Pos. OSRM actualizada en ${refreshResult?.updated || 0} buses${autoText}`
       );
     } catch (error) {
       notifications.error('Error de validacion global', error.message || 'No se pudo validar todo');
     } finally {
       setGlobalValidationRunning(false);
     }
-  }, [globalValidationRunning, buildValidationDaysPayload, validateAllBuses, onValidationReportChange, refreshPositioningMinutes]);
+  }, [
+    globalValidationRunning,
+    reassignRunning,
+    buildValidationDaysPayload,
+    validateAllBuses,
+    onValidationReportChange,
+    refreshPositioningMinutes,
+    autoReassignCritical,
+    runCriticalReassignment,
+  ]);
 
   const incidents = useMemo(() => (
     Array.isArray(globalValidationReport?.incidents) ? globalValidationReport.incidents : []
@@ -1949,6 +2319,14 @@ export function UnifiedWorkspace({
     downloadIncidentsAsJson(globalValidationReport);
     notifications.success('Incidencias descargadas', 'Se descargaron CSV y JSON');
   }, [globalValidationReport]);
+
+  const handleManualReassign = useCallback(async () => {
+    await runCriticalReassignment({
+      trigger: 'manual',
+      silent: false,
+      reportOverride: globalValidationReport,
+    });
+  }, [runCriticalReassignment, globalValidationReport]);
 
   const getListSortIndicator = useCallback((key) => {
     if (listSort.key !== key) return '↕';
@@ -2062,7 +2440,7 @@ export function UnifiedWorkspace({
 
             <button
               onClick={handleValidateAllBuses}
-              disabled={globalValidationRunning || buses.length === 0}
+              disabled={globalValidationRunning || reassignRunning || buses.length === 0}
               className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
               title="Validar toda la planificacion por dia"
             >
@@ -2073,6 +2451,33 @@ export function UnifiedWorkspace({
               )}
               Comprobar todo
             </button>
+
+            <button
+              onClick={handleManualReassign}
+              disabled={globalValidationRunning || reassignRunning || buses.length === 0}
+              className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
+              title="Reasignar automaticamente incidencias criticas detectadas"
+            >
+              {reassignRunning ? (
+                <div className="w-3 h-3 border-2 border-slate-500 border-t-cyan-300 rounded-full animate-spin" />
+              ) : (
+                <GitBranch className="w-3 h-3" />
+              )}
+              Reasignar
+            </button>
+
+            <label
+              className="px-2 py-1 rounded-sm border border-[#2b4056] bg-[#101a26] text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-300 flex items-center gap-1.5 cursor-pointer select-none"
+              title="Si esta activo, al comprobar todo el sistema reasigna automaticamente errores criticos"
+            >
+              <input
+                type="checkbox"
+                checked={autoReassignCritical}
+                onChange={(event) => setAutoReassignCritical(Boolean(event.target.checked))}
+                className="accent-cyan-400"
+              />
+              Auto critico
+            </label>
 
             {positioningRefreshRunning && (
               <div
@@ -2460,8 +2865,13 @@ export function UnifiedWorkspace({
                     <div className="text-[11px] uppercase tracking-wider text-slate-300 font-semibold">
                       Panel Global de Incidencias OSRM
                     </div>
-                    <div className="text-[10px] font-mono text-slate-400">
-                      {globalValidationReport?.summary?.incidents_total || 0} incidencias | {globalValidationReport?.summary?.total_buses || 0} buses
+                    <div className="text-[10px] font-mono text-slate-400 text-right">
+                      <div>{globalValidationReport?.summary?.incidents_total || 0} incidencias | {globalValidationReport?.summary?.total_buses || 0} buses</div>
+                      {lastReassignSummary && (
+                        <div className="text-[9px] text-cyan-300">
+                          Reasignacion: {lastReassignSummary.moved} mov. | {lastReassignSummary.unresolved} pendientes
+                        </div>
+                      )}
                     </div>
                   </div>
 
