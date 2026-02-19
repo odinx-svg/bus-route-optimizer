@@ -896,6 +896,36 @@ function App() {
     notifications.error('Pipeline fallido', errorCode || 'Revisa logs del backend');
   }, []);
 
+  const latestPipelineEvent = pipelineEvents.length > 0
+    ? pipelineEvents[pipelineEvents.length - 1]
+    : null;
+
+  const isPipelineActive = Boolean(pipelineJobId) && ['starting', 'queued', 'running'].includes(pipelineStatus);
+  const pipelineProgressValue = (() => {
+    const eventProgress = Number(latestPipelineEvent?.progress);
+    if (Number.isFinite(eventProgress)) {
+      return Math.max(0, Math.min(100, Math.round(eventProgress)));
+    }
+    if (pipelineStatus === 'starting') return 5;
+    if (pipelineStatus === 'queued') return 2;
+    if (pipelineStatus === 'running') return 12;
+    return 0;
+  })();
+  const pipelineStageText = String(
+    latestPipelineEvent?.optimizerPhase
+    || latestPipelineEvent?.stage
+    || latestPipelineEvent?.phase
+    || (pipelineStatus === 'starting' ? 'starting' : (pipelineStatus === 'queued' ? 'queued' : 'running'))
+  );
+  const pipelineMessageText = String(
+    latestPipelineEvent?.message
+    || (pipelineStatus === 'starting'
+      ? 'Inicializando optimizacion...'
+      : (pipelineStatus === 'queued'
+        ? 'Trabajo en cola...'
+        : 'Optimizando rutas...'))
+  );
+
   return (
     <Layout
       stats={calculateStats()}
@@ -906,6 +936,51 @@ function App() {
       setViewMode={setViewMode}
       hasStudioAccess={Boolean(activeWorkspaceId)}
     >
+      {pipelineJobId && !ingestionPanelOpen && (
+        <div className="hidden" aria-hidden="true">
+          <OptimizationProgress
+            jobId={pipelineJobId}
+            onProgress={handlePipelineProgress}
+            onComplete={handlePipelineComplete}
+            onError={handlePipelineError}
+          />
+        </div>
+      )}
+
+      {isPipelineActive && (
+        <div className="fixed right-4 top-20 z-[900] w-[360px] max-w-[calc(100vw-2rem)] rounded-xl border border-[#2a4057] bg-[#081425]/95 p-3 shadow-2xl backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#58d5ff]">
+                Optimizacion en curso
+              </p>
+              <p className="mt-0.5 truncate text-[12px] text-slate-200">
+                {pipelineMessageText}
+              </p>
+              <p className="mt-1 text-[10px] font-mono text-slate-400">
+                {pipelineStageText}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIngestionPanelOpen(true)}
+              className="rounded-md border border-[#2a4057] px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-200 transition hover:bg-white/5"
+            >
+              Ver progreso
+            </button>
+          </div>
+          <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-cyan-400 transition-all duration-300"
+              style={{ width: `${pipelineProgressValue}%` }}
+            />
+          </div>
+          <div className="mt-1.5 text-right text-[10px] font-mono text-slate-300">
+            {pipelineProgressValue}%
+          </div>
+        </div>
+      )}
+
       {ingestionPanelOpen && (
         <div className="m-3 h-full">
           <Sidebar
