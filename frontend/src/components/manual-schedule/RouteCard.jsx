@@ -14,18 +14,18 @@ export function RouteCard({ route, isDragging: externalIsDragging, compatibility
 
   const colors = {
     entry: {
-      bg: 'bg-[#0f1722]',
-      border: 'border-[#35506a]',
-      shadow: 'shadow-[0_10px_26px_rgba(2,12,24,0.45)]',
-      badge: 'bg-cyan-500/12 text-cyan-200 border border-cyan-500/30',
-      accent: 'bg-cyan-400/80',
+      bg: 'bg-gt-card',
+      border: 'border-gt-info/30',
+      shadow: 'shadow-gt-glow',
+      badge: 'bg-gt-info/15 text-gt-info border border-gt-info/30',
+      accent: 'bg-gt-info',
     },
     exit: {
-      bg: 'bg-[#16140f]',
-      border: 'border-[#5f4b2c]',
-      shadow: 'shadow-[0_10px_26px_rgba(26,18,8,0.35)]',
-      badge: 'bg-amber-500/12 text-amber-200 border border-amber-500/30',
-      accent: 'bg-amber-300/85',
+      bg: 'bg-gt-card',
+      border: 'border-gt-warning/30',
+      shadow: 'shadow-[0_10px_26px_rgba(245,158,11,0.15)]',
+      badge: 'bg-gt-warning/15 text-gt-warning border border-gt-warning/30',
+      accent: 'bg-gt-warning',
     },
   };
 
@@ -48,32 +48,32 @@ export function RouteCard({ route, isDragging: externalIsDragging, compatibility
       {...listeners}
       {...attributes}
       className={`
-        relative w-44 min-h-[78px] rounded-md border px-2.5 py-2 select-none
+        relative w-44 min-h-[78px] rounded-xl border px-2.5 py-2 select-none
         ${theme.bg} ${theme.border} ${theme.shadow}
         cursor-grab active:cursor-grabbing transition-all duration-150 ease-out
-        ${isDragging ? 'opacity-95 scale-[1.01] border-cyan-400/55 shadow-[0_18px_42px_rgba(0,15,28,0.55)] z-50' : 'hover:border-slate-400/70'}
-        ${compatibility === 'incompatible' ? 'ring-1 ring-red-500/60' : ''}
-        ${compatibility === 'compatible' ? 'ring-1 ring-emerald-500/60' : ''}
+        ${isDragging ? 'opacity-95 scale-[1.01] border-gt-accent/50 shadow-gt-glow z-50' : 'hover:border-gt-text-muted/30'}
+        ${compatibility === 'incompatible' ? 'ring-1 ring-gt-danger/60' : ''}
+        ${compatibility === 'compatible' ? 'ring-1 ring-gt-success/60' : ''}
       `}
     >
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${theme.accent}`} />
 
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[12px] font-semibold text-slate-100 truncate tracking-[0.03em] data-mono">
+        <div className="text-[12px] font-semibold text-gt-text truncate tracking-[0.03em] data-mono">
           {route?.code || 'SIN-CODIGO'}
         </div>
-        <span className={`px-1.5 py-0.5 rounded-sm text-[9px] font-semibold uppercase tracking-[0.12em] data-mono ${theme.badge}`}>
+        <span className={`px-1.5 py-0.5 rounded-lg text-[9px] font-semibold uppercase tracking-[0.12em] data-mono ${theme.badge}`}>
           {route?.type === 'entry' ? 'ENT' : 'SAL'}
         </span>
       </div>
 
-      <div className="mt-1.5 text-[11px] text-slate-300 truncate">
+      <div className="mt-1.5 text-[11px] text-gt-text-muted truncate">
         {(route?.origin || '?')} {'->'} {(route?.destination || '?')}
       </div>
 
-      <div className="mt-2 pt-1.5 border-t border-slate-600/30 flex items-center justify-between text-[10px] text-slate-400 data-mono tabular-nums">
+      <div className="mt-2 pt-1.5 border-t border-gt-border flex items-center justify-between text-[10px] text-gt-text-muted data-mono tabular-nums">
         <span>{route?.startTime || '--:--'} | {route?.endTime || '--:--'}</span>
-        <span className="text-slate-300">{duration}m</span>
+        <span className="text-gt-text">{duration}m</span>
       </div>
     </div>
   );
@@ -81,11 +81,11 @@ export function RouteCard({ route, isDragging: externalIsDragging, compatibility
 
 export function RouteCardSkeleton() {
   return (
-    <div className="w-44 min-h-[78px] rounded-md border border-slate-700 bg-[#111822] animate-pulse">
+    <div className="w-44 min-h-[78px] rounded-xl border border-gt-border bg-gt-card animate-pulse">
       <div className="p-2 space-y-2">
-        <div className="h-3 bg-slate-700 rounded w-24"></div>
-        <div className="h-2 bg-slate-700 rounded w-32"></div>
-        <div className="h-2 bg-slate-700 rounded w-20"></div>
+        <div className="h-3 bg-gt-text-muted/20 rounded w-24"></div>
+        <div className="h-2 bg-gt-text-muted/20 rounded w-32"></div>
+        <div className="h-2 bg-gt-text-muted/20 rounded w-20"></div>
       </div>
     </div>
   );
@@ -94,14 +94,14 @@ export function RouteCardSkeleton() {
 export function RouteCardCompact({ route, className = '' }) {
   return (
     <div className={`
-      inline-flex items-center gap-2 px-2 py-1 rounded-sm border
+      inline-flex items-center gap-2 px-2 py-1 rounded-lg border
       ${route.type === 'entry'
-        ? 'bg-[#101a25] border-[#35506a] text-cyan-200'
-        : 'bg-[#17130f] border-[#5f4b2c] text-amber-200'}
+        ? 'bg-gt-info/10 border-gt-info/30 text-gt-info'
+        : 'bg-gt-warning/10 border-gt-warning/30 text-gt-warning'}
       ${className}
     `}>
       <span className="text-[10px] font-medium">{route.code}</span>
-      <span className="text-[9px] text-slate-400">{route.startTime}</span>
+      <span className="text-[9px] text-gt-text-muted">{route.startTime}</span>
     </div>
   );
 }
