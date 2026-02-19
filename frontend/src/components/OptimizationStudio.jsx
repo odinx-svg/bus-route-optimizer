@@ -88,8 +88,8 @@ export default function OptimizationStudio({
   }, [isDraggingSplit]);
 
   return (
-    <div className="h-full w-full min-h-0 flex flex-col gap-2">
-      <div className="control-card rounded-[10px] border border-[#2f465d] p-2 flex items-center gap-2">
+    <div className="h-full w-full min-h-0 flex flex-col gap-3">
+      <div className="gt-glass rounded-xl p-2 flex items-center gap-2">
         {STUDIO_TABS.map((tab) => {
           const active = studioTab === tab.id;
           return (
@@ -97,10 +97,10 @@ export default function OptimizationStudio({
               key={tab.id}
               type="button"
               onClick={() => setStudioTab(tab.id)}
-              className={`px-3 py-1.5 rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors ${
+              className={`px-4 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
                 active
-                  ? 'bg-[#214a63] text-[#d8edf8] border border-cyan-500/30'
-                  : 'text-slate-400 border border-[#2f465d] hover:text-slate-200 hover:bg-[#182432]'
+                  ? 'bg-gt-accent text-white shadow-gt-glow'
+                  : 'text-gt-text-muted hover:text-gt-text hover:bg-white/5'
               }`}
             >
               {tab.label}
@@ -111,8 +111,8 @@ export default function OptimizationStudio({
 
       <div className="flex-1 min-h-0">
         {studioTab === 'mixed' && (
-          <div className="h-full w-full min-h-0 grid" style={{ gridTemplateRows: `${splitPercent}% 8px calc(${100 - splitPercent}% - 8px)` }}>
-            <div className="min-h-0 rounded-[12px] border border-[#2f465d] overflow-hidden">
+          <div className="h-full w-full min-h-0 grid gap-3" style={{ gridTemplateRows: `${splitPercent}% 8px calc(${100 - splitPercent}% - 8px)` }}>
+            <div className="min-h-0 rounded-xl gt-panel overflow-hidden">
               <MapView
                 routes={routes}
                 schedule={mixedMapSchedule}
@@ -126,7 +126,7 @@ export default function OptimizationStudio({
 
             <div
               onMouseDown={onDividerMouseDown}
-              className="w-full bg-[#1a2a3a] hover:bg-[#21405c] transition-colors border-y border-[#2f465d] cursor-row-resize"
+              className="w-full gt-glass rounded-full cursor-row-resize hover:bg-gt-accent/20 transition-colors"
               title="Redimensionar mapa/workspace"
               role="separator"
               aria-orientation="horizontal"
@@ -158,7 +158,7 @@ export default function OptimizationStudio({
 
         {studioTab === 'map' && (
           <div className="h-full min-h-0 flex gap-3">
-            <div className="flex-1 min-w-0 rounded-[12px] border border-[#2f465d] overflow-hidden">
+            <div className="flex-1 min-w-0 rounded-xl gt-panel overflow-hidden">
               <MapView
                 routes={routes}
                 schedule={mapSchedule}
@@ -169,7 +169,7 @@ export default function OptimizationStudio({
                 onTogglePinBus={onTogglePinBus}
               />
             </div>
-            <div className="w-[320px] min-h-0">
+            <div className="w-[320px] min-h-0 gt-sidebar rounded-xl overflow-hidden">
               <BusListPanel
                 schedule={mapSchedule}
                 routes={routes}
