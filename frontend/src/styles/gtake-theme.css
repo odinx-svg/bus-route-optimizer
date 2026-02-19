@@ -1,0 +1,279 @@
+/* ============================================
+   TUTTI - G.TAKE THEME VARIABLES
+   Fase 1: Variables CSS base
+   ============================================ */
+
+:root {
+  /* BACKGROUNDS */
+  --gt-bg-primary: #0B1120;
+  --gt-bg-sidebar: #0D1321;
+  --gt-bg-card: rgba(30, 41, 59, 0.6);
+  --gt-bg-card-solid: #151E32;
+  --gt-bg-elevated: #1E293B;
+  --gt-bg-input: #0F172A;
+  --gt-bg-hover: rgba(51, 65, 85, 0.5);
+  
+  /* SURFACES */
+  --gt-surface-1: #0F172A;
+  --gt-surface-2: #1E293B;
+  --gt-surface-3: #334155;
+  --gt-surface-4: #475569;
+  
+  /* ACCENT COLORS */
+  --gt-primary: #3B82F6;
+  --gt-primary-light: #60A5FA;
+  --gt-primary-dark: #2563EB;
+  --gt-secondary: #8B5CF6;
+  --gt-success: #10B981;
+  --gt-warning: #F59E0B;
+  --gt-error: #EF4444;
+  --gt-info: #3B82F6;
+  
+  /* GLOW COLORS */
+  --gt-glow-primary: rgba(59, 130, 246, 0.3);
+  --gt-glow-secondary: rgba(139, 92, 246, 0.3);
+  --gt-glow-success: rgba(16, 185, 129, 0.3);
+  
+  /* TEXT COLORS */
+  --gt-text-primary: #F8FAFC;
+  --gt-text-secondary: #E2E8F0;
+  --gt-text-muted: #94A3B8;
+  --gt-text-subtle: #64748B;
+  --gt-text-disabled: #475569;
+  --gt-text-accent: #60A5FA;
+  
+  /* BORDERS */
+  --gt-border-subtle: rgba(255, 255, 255, 0.05);
+  --gt-border-default: rgba(255, 255, 255, 0.1);
+  --gt-border-strong: rgba(255, 255, 255, 0.15);
+  --gt-border-focus: #3B82F6;
+  --gt-border-primary: rgba(59, 130, 246, 0.3);
+  
+  /* SHADOWS */
+  --gt-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --gt-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --gt-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  --gt-shadow-glow: 0 0 20px rgba(59, 130, 246, 0.15);
+  --gt-shadow-glow-strong: 0 0 30px rgba(59, 130, 246, 0.25);
+  --gt-shadow-inner: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  
+  /* BLUR */
+  --gt-blur-sm: 8px;
+  --gt-blur-md: 12px;
+  --gt-blur-lg: 16px;
+  --gt-blur-xl: 24px;
+  
+  /* BORDER RADIUS */
+  --gt-radius-sm: 6px;
+  --gt-radius-md: 8px;
+  --gt-radius-lg: 12px;
+  --gt-radius-xl: 16px;
+  --gt-radius-2xl: 20px;
+  --gt-radius-full: 9999px;
+  
+  /* SPACING */
+  --gt-space-1: 4px;
+  --gt-space-2: 8px;
+  --gt-space-3: 12px;
+  --gt-space-4: 16px;
+  --gt-space-5: 20px;
+  --gt-space-6: 24px;
+  --gt-space-8: 32px;
+  --gt-space-10: 40px;
+  
+  /* SIDEBAR */
+  --gt-sidebar-width: 220px;
+  --gt-sidebar-bg: #0D1321;
+  --gt-sidebar-border: rgba(255, 255, 255, 0.05);
+  
+  /* GRADIENTS */
+  --gt-gradient-primary: linear-gradient(90deg, #3B82F6 0%, #8B5CF6 100%);
+  --gt-gradient-header: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, transparent 60%);
+  --gt-gradient-card: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+  --gt-gradient-glow: radial-gradient(ellipse at 50% 0%, rgba(59, 130, 246, 0.15) 0%, transparent 50%);
+  
+  /* TYPOGRAPHY */
+  --gt-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --gt-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  
+  /* TRANSITIONS */
+  --gt-transition-fast: 150ms ease-out;
+  --gt-transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --gt-transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Backgrounds */
+.gt-bg-primary { background-color: var(--gt-bg-primary); }
+.gt-bg-sidebar { background-color: var(--gt-bg-sidebar); }
+.gt-bg-card { background-color: var(--gt-bg-card); }
+.gt-bg-card-solid { background-color: var(--gt-bg-card-solid); }
+.gt-bg-elevated { background-color: var(--gt-bg-elevated); }
+
+/* Glassmorphism */
+.gt-glass {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gt-glass-card {
+  background: rgba(30, 41, 59, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+.gt-glass-panel {
+  background: rgba(21, 30, 50, 0.8);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+/* Text colors */
+.gt-text-primary { color: var(--gt-text-primary); }
+.gt-text-secondary { color: var(--gt-text-secondary); }
+.gt-text-muted { color: var(--gt-text-muted); }
+.gt-text-subtle { color: var(--gt-text-subtle); }
+.gt-text-accent { color: var(--gt-text-accent); }
+
+/* Gradient text */
+.gt-gradient-text {
+  background: linear-gradient(135deg, #60A5FA 0%, #A78BFA 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glows */
+.gt-glow {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+}
+
+.gt-glow-strong {
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.25);
+}
+
+.gt-glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+/* Borders */
+.gt-border-subtle { border: 1px solid rgba(255, 255, 255, 0.05); }
+.gt-border-default { border: 1px solid rgba(255, 255, 255, 0.1); }
+.gt-border-strong { border: 1px solid rgba(255, 255, 255, 0.15); }
+.gt-border-accent { border: 1px solid rgba(59, 130, 246, 0.3); }
+
+/* Gradients */
+.gt-gradient-bg {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.1) 50%, transparent 100%);
+}
+
+.gt-gradient-header {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, transparent 60%);
+}
+
+/* Interactive states */
+.gt-hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gt-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.2);
+}
+
+.gt-hover-glow:hover {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+/* Progress bar */
+.gt-progress-bar {
+  background: linear-gradient(90deg, #3B82F6 0%, #8B5CF6 100%);
+  border-radius: 9999px;
+  height: 100%;
+}
+
+/* Badges */
+.gt-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gt-badge-blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60A5FA;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.gt-badge-green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.gt-badge-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+/* Sidebar nav item */
+.gt-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #94A3B8;
+  transition: all 0.2s ease;
+}
+
+.gt-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #E2E8F0;
+}
+
+.gt-nav-item.active {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.2) 0%, transparent 100%);
+  border-left: 3px solid #3B82F6;
+  color: #F8FAFC;
+}
+
+.gt-nav-item.active svg {
+  color: #3B82F6;
+}
+
+/* Scrollbar styling */
+.gt-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.gt-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.gt-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 3px;
+}
+
+.gt-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
