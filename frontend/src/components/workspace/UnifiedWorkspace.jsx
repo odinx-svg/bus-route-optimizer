@@ -1653,7 +1653,6 @@ export function UnifiedWorkspace({
     routeOverlapsBus,
     evaluatePlacementScore,
     requestPositioningRefresh,
-    buildValidationDaysPayload,
     validateAllBuses,
     onValidationReportChange,
   ]);
