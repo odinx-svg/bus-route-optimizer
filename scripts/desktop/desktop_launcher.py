@@ -507,17 +507,27 @@ def _launch_installer_and_exit(installer_exe: Path) -> bool:
             command_line = subprocess.list2cmdline(installer_args)
             current_pid = os.getpid()
             script = f"""@echo off
-setlocal
+setlocal EnableDelayedExpansion
 set "TARGET_PID={current_pid}"
+set "WAIT_SEC=0"
 
 :wait_for_tutti_exit
 tasklist /FI "PID eq %TARGET_PID%" | findstr /I "%TARGET_PID%" >nul
 if not errorlevel 1 (
+    set /a WAIT_SEC+=1
+    if !WAIT_SEC! GEQ 30 goto force_kill
     timeout /t 1 /nobreak >nul
     goto wait_for_tutti_exit
 )
 
-taskkill /IM "Tutti Desktop.exe" /F >nul 2>&1
+goto run_installer
+
+:force_kill
+taskkill /PID %TARGET_PID% /T /F >nul 2>&1
+
+:run_installer
+taskkill /IM "Tutti Desktop.exe" /T /F >nul 2>&1
+timeout /t 1 /nobreak >nul
 
 start "" {command_line}
 exit /b 0
@@ -788,14 +798,6 @@ def _check_and_apply_update_if_available() -> bool:
         if update_mode == "installer":
             _log_update(
                 f"Installer update downloaded | tag={latest_tag} | asset={asset_name}"
-            )
-            _message_box(
-                (
-                    "La actualizacion se aplicara automaticamente.\n"
-                    "TUTTI se cerrara y el instalador continuara en segundo plano."
-                ),
-                "TUTTI - Actualizando",
-                kind="info",
             )
             return _launch_installer_and_exit(asset_path)
 
