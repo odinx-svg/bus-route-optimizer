@@ -32,7 +32,6 @@ PrivilegesRequired=admin
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#AppExeName}
 CloseApplications=yes
-ForceCloseApplications=yes
 RestartApplications=no
 
 [Languages]
