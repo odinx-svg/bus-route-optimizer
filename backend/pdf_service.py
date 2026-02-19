@@ -861,6 +861,10 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
     total_positioning = 0
     route_row_indices: List[int] = []
     transition_row_indices: List[int] = []
+    risk_route_row_indices: List[int] = []
+    warning_route_row_indices: List[int] = []
+    risk_transition_row_indices: List[int] = []
+    warning_transition_row_indices: List[int] = []
 
     transition_text_style = ParagraphStyle(
         'TransitionRowText',
@@ -869,6 +873,18 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
         fontSize=7,
         textColor=Colors.TEXT_MUTED,
         alignment=TA_LEFT,
+    )
+    transition_text_style_warning = ParagraphStyle(
+        'TransitionRowTextWarning',
+        parent=transition_text_style,
+        textColor=Colors.ALERT_AMBER,
+        fontName='Helvetica-BoldOblique',
+    )
+    transition_text_style_risk = ParagraphStyle(
+        'TransitionRowTextRisk',
+        parent=transition_text_style,
+        textColor=Colors.ALERT_RED,
+        fontName='Helvetica-BoldOblique',
     )
 
     def _safe_cell_text(value: Any, fallback: str = 'N/A', max_length: int = 30) -> str:
@@ -895,6 +911,15 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
         positioning_minutes = get_positioning_minutes(item) if i > 1 else 0
         if i > 1:
             total_positioning += positioning_minutes
+
+        incoming_margin: Optional[int] = None
+        if i > 1:
+            prev_item = ordered_items[i - 2]
+            incoming_window = calculate_route_duration(
+                prev_item.get('end_time'),
+                item.get('start_time'),
+            )
+            incoming_margin = incoming_window - positioning_minutes
         
         route_type = item.get('type', '')
         if route_type == 'entry':
@@ -926,7 +951,13 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
                 fontName='Helvetica-Bold',
             )),
         ]
-        route_row_indices.append(len(data))
+        current_row_index = len(data)
+        route_row_indices.append(current_row_index)
+        if incoming_margin is not None:
+            if incoming_margin < 0:
+                risk_route_row_indices.append(current_row_index)
+            elif incoming_margin <= 5:
+                warning_route_row_indices.append(current_row_index)
         data.append(row)
 
         if i < len(ordered_items):
@@ -938,10 +969,13 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
             required_positioning = get_positioning_minutes(next_item)
             margin = available_window - required_positioning
 
+            transition_style = transition_text_style
             if margin < 0:
                 status = "RIESGO"
+                transition_style = transition_text_style_risk
             elif margin <= 5:
                 status = "AJUSTADO"
+                transition_style = transition_text_style_warning
             else:
                 status = "OK"
 
@@ -951,9 +985,15 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
                 f"Ventana {available_window}m | Posicionamiento {required_positioning}m | "
                 f"Margen {margin:+d}m ({status})"
             )
+            transition_row_index = len(data)
+            if margin < 0:
+                risk_transition_row_indices.append(transition_row_index)
+            elif margin <= 5:
+                warning_transition_row_indices.append(transition_row_index)
+
             transition_row = [
                 Paragraph("", styles['table_cell']),
-                Paragraph(transition_text, transition_text_style),
+                Paragraph(transition_text, transition_style),
                 Paragraph("", styles['table_cell']),
                 Paragraph("", styles['table_cell']),
                 Paragraph("", styles['table_cell']),
@@ -1024,13 +1064,36 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
         bg = Colors.TABLE_EVEN if route_idx % 2 == 0 else Colors.TABLE_ODD
         table_styles.append(('BACKGROUND', (0, row_i), (-1, row_i), bg))
 
+    # Route rows with positioning risk/warning.
+    for row_i in warning_route_row_indices:
+        table_styles.extend([
+            ('BACKGROUND', (0, row_i), (-1, row_i), Colors.ALERT_AMBER_BG),
+            ('TEXTCOLOR', (6, row_i), (6, row_i), Colors.ALERT_AMBER),
+            ('FONTNAME', (6, row_i), (6, row_i), 'Helvetica-Bold'),
+        ])
+    for row_i in risk_route_row_indices:
+        table_styles.extend([
+            ('BACKGROUND', (0, row_i), (-1, row_i), Colors.ALERT_RED_BG),
+            ('TEXTCOLOR', (6, row_i), (6, row_i), Colors.ALERT_RED),
+            ('FONTNAME', (6, row_i), (6, row_i), 'Helvetica-Bold'),
+        ])
+
     # Inter-route rows with compact shared message
     for row_i in transition_row_indices:
+        if row_i in risk_transition_row_indices:
+            transition_bg = Colors.ALERT_RED_BG
+            transition_line = Colors.ALERT_RED
+        elif row_i in warning_transition_row_indices:
+            transition_bg = Colors.ALERT_AMBER_BG
+            transition_line = Colors.ALERT_AMBER
+        else:
+            transition_bg = colors.HexColor('#eef2ff')
+            transition_line = Colors.CARD_BORDER
         table_styles.extend([
             ('SPAN', (1, row_i), (7, row_i)),
-            ('BACKGROUND', (0, row_i), (-1, row_i), colors.HexColor('#eef2ff')),
-            ('LINEABOVE', (0, row_i), (-1, row_i), 0.4, Colors.CARD_BORDER),
-            ('LINEBELOW', (0, row_i), (-1, row_i), 0.4, Colors.CARD_BORDER),
+            ('BACKGROUND', (0, row_i), (-1, row_i), transition_bg),
+            ('LINEABOVE', (0, row_i), (-1, row_i), 0.4, transition_line),
+            ('LINEBELOW', (0, row_i), (-1, row_i), 0.4, transition_line),
             ('TOPPADDING', (0, row_i), (-1, row_i), 3),
             ('BOTTOMPADDING', (0, row_i), (-1, row_i), 3),
         ])

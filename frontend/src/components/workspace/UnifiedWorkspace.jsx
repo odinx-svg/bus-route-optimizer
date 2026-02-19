@@ -1137,8 +1137,13 @@ export function UnifiedWorkspace({
   useEffect(() => {
     const validations = {};
     buses.forEach(bus => {
-      const busValidations = { errors: [], warnings: [] };
+      const busValidations = { errors: [], warnings: [], routes: {} };
       bus.routes.forEach((route, index) => {
+        const routeKey = String(route?.id || route?.route_id || '');
+        if (routeKey && !busValidations.routes[routeKey]) {
+          busValidations.routes[routeKey] = { errors: [], warnings: [] };
+        }
+
         if (index === 0) return;
         const prevRoute = bus.routes[index - 1];
         const [endHour, endMin] = prevRoute.endTime.split(':').map(Number);
@@ -1146,19 +1151,55 @@ export function UnifiedWorkspace({
         const endTime = endHour * 60 + endMin;
         const startTime = startHour * 60 + startMin;
         const buffer = startTime - endTime;
+        const positioningMinutes = extractPositioningMinutes(route);
+        const realMargin = buffer - positioningMinutes;
         
         if (buffer < 0) {
-          busValidations.errors.push({
+          const issue = {
             type: 'overlap',
             message: `Solapamiento entre ${prevRoute.code} y ${route.code}`,
             routeIndex: index,
-          });
+            routeId: routeKey,
+            prevRouteId: String(prevRoute?.id || prevRoute?.route_id || ''),
+          };
+          busValidations.errors.push(issue);
+          if (routeKey) busValidations.routes[routeKey].errors.push(issue);
+        } else if (positioningMinutes > 0 && realMargin < 0) {
+          const issue = {
+            type: 'positioning_infeasible',
+            message: `No llega a tiempo: R ${positioningMinutes}m > V ${buffer}m (${realMargin}m)`,
+            routeIndex: index,
+            routeId: routeKey,
+            prevRouteId: String(prevRoute?.id || prevRoute?.route_id || ''),
+            windowMinutes: buffer,
+            positioningMinutes,
+            marginMinutes: realMargin,
+          };
+          busValidations.errors.push(issue);
+          if (routeKey) busValidations.routes[routeKey].errors.push(issue);
+        } else if (positioningMinutes > 0 && realMargin <= 5) {
+          const issue = {
+            type: 'positioning_tight',
+            message: `Margen de posicionamiento ajustado: ${realMargin}m`,
+            routeIndex: index,
+            routeId: routeKey,
+            prevRouteId: String(prevRoute?.id || prevRoute?.route_id || ''),
+            windowMinutes: buffer,
+            positioningMinutes,
+            marginMinutes: realMargin,
+          };
+          busValidations.warnings.push(issue);
+          if (routeKey) busValidations.routes[routeKey].warnings.push(issue);
         } else if (buffer < 10) {
-          busValidations.warnings.push({
+          const issue = {
             type: 'short_buffer',
             message: `Buffer corto (${buffer}min)`,
             routeIndex: index,
-          });
+            routeId: routeKey,
+            prevRouteId: String(prevRoute?.id || prevRoute?.route_id || ''),
+          };
+          busValidations.warnings.push(issue);
+          if (routeKey) busValidations.routes[routeKey].warnings.push(issue);
         }
       });
       validations[bus.id] = busValidations;

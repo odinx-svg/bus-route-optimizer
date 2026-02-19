@@ -970,8 +970,14 @@ export function TimelineBusRow({
     ? segments[segments.length - 1].end * (pixelsPerHour / 60)
     : (maxHour - minHour) * pixelsPerHour;
 
-  // Verificar si hay errores en alguna ruta
-  const hasAnyError = validations && Object.values(validations).some(v => v?.errors?.length > 0);
+  // Verificar si hay errores en alguna ruta (incluye incidencias R>V)
+  const hasAnyError = (Array.isArray(validations?.errors) ? validations.errors.length : 0) > 0;
+
+  const routeValidationById = useMemo(() => {
+    const routeMap = validations?.routes;
+    if (!routeMap || typeof routeMap !== 'object') return {};
+    return routeMap;
+  }, [validations]);
 
   const routeCodeById = useMemo(() => {
     const map = new Map();
@@ -1240,7 +1246,7 @@ export function TimelineBusRow({
                 busId={bus.id}
                 onRemove={() => onRemoveRoute?.(route.id)}
                 onSelect={() => onSelectRoute?.(route.id)}
-                validation={validations?.[route.id]}
+                validation={routeValidationById[String(route?.id || route?.route_id || '')]}
                 minHour={minHour}
                 pixelsPerHour={pixelsPerHour}
                 segments={segments}
