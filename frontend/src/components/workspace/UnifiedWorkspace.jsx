@@ -152,6 +152,24 @@ function extractPositioningMinutes(item = {}) {
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
 }
 
+function withPositioningMinutes(route = {}, minutes = 0) {
+  const normalized = Number.isFinite(Number(minutes)) ? Math.max(0, Math.round(Number(minutes))) : 0;
+  return {
+    ...route,
+    positioningMinutes: normalized,
+    positioning_minutes: normalized,
+    deadheadMinutes: normalized,
+    deadhead_minutes: normalized,
+    deadhead: normalized,
+    rawRoute: {
+      ...(route?.rawRoute || {}),
+      positioning_minutes: normalized,
+      deadhead_minutes: normalized,
+      deadhead: normalized,
+    },
+  };
+}
+
 function sortRoutesByTime(routes = []) {
   return [...routes].sort((a, b) => {
     const startDiff = toMinutesSafe(a?.startTime || a?.start_time) - toMinutesSafe(b?.startTime || b?.start_time);
@@ -407,6 +425,7 @@ export function UnifiedWorkspace({
   onValidationReportChange = null,
   onSave,
   onPublish,
+  onExport = null,
   onLiveScheduleChange = null,
   selectedBusIdExternal = null,
   selectedRouteIdExternal = null,
@@ -613,6 +632,8 @@ export function UnifiedWorkspace({
   const [pendingValidations, setPendingValidations] = useState(new Set());
   const [isInitialized, setIsInitialized] = useState(false);
   const [globalValidationRunning, setGlobalValidationRunning] = useState(false);
+  const [positioningRefreshRunning, setPositioningRefreshRunning] = useState(false);
+  const [positioningRefreshStats, setPositioningRefreshStats] = useState({ done: 0, total: 0 });
   const [globalValidationReport, setGlobalValidationReport] = useState(validationReport || null);
   const [globalFilter, setGlobalFilter] = useState({
     severity: 'all',
@@ -631,6 +652,11 @@ export function UnifiedWorkspace({
     mode: 'edit', // 'edit', 'create', 'duplicate'
     route: null,
   });
+  const busesRef = useRef(buses);
+  const refreshRunIdRef = useRef(0);
+  const refreshTimerRef = useRef(null);
+  const refreshPendingAllRef = useRef(false);
+  const refreshPendingBusIdsRef = useRef(new Set());
 
   const updateSelectedBus = useCallback((nextBusId) => {
     const value = nextBusId || null;
@@ -647,6 +673,17 @@ export function UnifiedWorkspace({
       onRouteSelect(value);
     }
   }, [onRouteSelect]);
+
+  useEffect(() => {
+    busesRef.current = buses;
+  }, [buses]);
+
+  useEffect(() => () => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  }, []);
 
   // Efecto para sincronizar con initialSchedule cuando cambia (post-optimizacion)
   useEffect(() => {
@@ -756,6 +793,134 @@ export function UnifiedWorkspace({
   const osrmBadgeState = connectionState === 'connected'
     ? 'connected'
     : (connectionState === 'connecting' || connectionState === 'reconnecting' ? 'reconnecting' : 'disconnected');
+
+  const recomputePositioningForBus = useCallback(async (bus) => {
+    if (!bus || !Array.isArray(bus.routes) || bus.routes.length === 0) {
+      return { bus, changed: false };
+    }
+
+    const orderedRoutes = sortRoutesByTime(bus.routes);
+    const nextRoutes = orderedRoutes.map((route, idx) => (
+      idx === 0 ? withPositioningMinutes(route, 0) : withPositioningMinutes(route, extractPositioningMinutes(route))
+    ));
+
+    let changed = false;
+
+    for (let i = 1; i < nextRoutes.length; i += 1) {
+      const prevRoute = nextRoutes[i - 1];
+      const currRoute = nextRoutes[i];
+      try {
+        const validation = await validateConnection(prevRoute, currRoute);
+        const travelMinutes = Number(validation?.travel_time);
+        if (Number.isFinite(travelMinutes) && travelMinutes >= 0) {
+          const normalized = Math.max(0, Math.round(travelMinutes));
+          if (extractPositioningMinutes(currRoute) !== normalized) {
+            nextRoutes[i] = withPositioningMinutes(currRoute, normalized);
+            changed = true;
+          }
+        }
+      } catch (error) {
+        console.warn('[Workspace] OSRM positioning recompute failed', {
+          bus_id: bus.id,
+          route_a: prevRoute?.id || prevRoute?.route_id,
+          route_b: currRoute?.id || currRoute?.route_id,
+          error: error?.message || String(error),
+        });
+      }
+    }
+
+    const orderChanged = orderedRoutes.some((route, idx) => {
+      const original = bus.routes[idx];
+      return String(route?.id || route?.route_id || '') !== String(original?.id || original?.route_id || '');
+    });
+
+    return {
+      bus: (changed || orderChanged) ? { ...bus, routes: nextRoutes } : bus,
+      changed: changed || orderChanged,
+    };
+  }, [validateConnection]);
+
+  const refreshPositioningMinutes = useCallback(async (targetBusIds = null) => {
+    const runId = Date.now();
+    refreshRunIdRef.current = runId;
+
+    const idSet = Array.isArray(targetBusIds) && targetBusIds.length > 0
+      ? new Set(targetBusIds.map((id) => String(id || '').trim()).filter(Boolean))
+      : null;
+
+    const sourceBuses = busesRef.current || [];
+    const busesToRefresh = idSet
+      ? sourceBuses.filter((bus) => idSet.has(String(bus?.id || '').trim()))
+      : sourceBuses;
+
+    if (!busesToRefresh.length) {
+      return { refreshed: 0, updated: 0 };
+    }
+
+    setPositioningRefreshRunning(true);
+    setPositioningRefreshStats({ done: 0, total: busesToRefresh.length });
+
+    const updatesByBusId = new Map();
+    let processed = 0;
+
+    try {
+      for (const bus of busesToRefresh) {
+        const { bus: updatedBus, changed } = await recomputePositioningForBus(bus);
+        if (refreshRunIdRef.current !== runId) {
+          return { refreshed: processed, updated: updatesByBusId.size, cancelled: true };
+        }
+        if (changed && updatedBus?.id) {
+          updatesByBusId.set(String(updatedBus.id), updatedBus);
+        }
+        processed += 1;
+        setPositioningRefreshStats({ done: processed, total: busesToRefresh.length });
+      }
+
+      if (updatesByBusId.size > 0) {
+        setBuses((prev) => prev.map((bus) => updatesByBusId.get(String(bus?.id || '')) || bus));
+      }
+
+      return { refreshed: processed, updated: updatesByBusId.size };
+    } finally {
+      if (refreshRunIdRef.current === runId) {
+        setPositioningRefreshRunning(false);
+        setPositioningRefreshStats({ done: 0, total: 0 });
+      }
+    }
+  }, [recomputePositioningForBus]);
+
+  const requestPositioningRefresh = useCallback((targetBusIds = null, delayMs = 120) => {
+    if (Array.isArray(targetBusIds) && targetBusIds.length > 0) {
+      targetBusIds.forEach((id) => {
+        const normalized = String(id || '').trim();
+        if (normalized) refreshPendingBusIdsRef.current.add(normalized);
+      });
+    } else {
+      refreshPendingAllRef.current = true;
+      refreshPendingBusIdsRef.current.clear();
+    }
+
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+    }
+
+    refreshTimerRef.current = setTimeout(() => {
+      const refreshAll = refreshPendingAllRef.current;
+      const ids = refreshAll ? null : Array.from(refreshPendingBusIdsRef.current);
+      refreshPendingAllRef.current = false;
+      refreshPendingBusIdsRef.current.clear();
+      refreshTimerRef.current = null;
+      refreshPositioningMinutes(ids).catch((error) => {
+        console.error('[Workspace] Failed to refresh positioning minutes', error);
+      });
+    }, delayMs);
+  }, [refreshPositioningMinutes]);
+
+  const handleValidateBus = useCallback(async (bus) => {
+    const result = await validateBus(bus);
+    requestPositioningRefresh([bus?.id], 0);
+    return result;
+  }, [requestPositioningRefresh, validateBus]);
 
   // Calcular rutas asignadas
   const assignedRouteIds = useMemo(() => {
@@ -1167,6 +1332,7 @@ export function UnifiedWorkspace({
         newRoutes.splice(insertPosition, 0, route);
         return { ...bus, routes: newRoutes };
       }));
+      requestPositioningRefresh([busId]);
 
       notifications.success('Ruta asignada', `${route.code} -> ${busId} (posicion ${insertPosition + 1})`);
       return { success: true };
@@ -1184,7 +1350,7 @@ export function UnifiedWorkspace({
         return next;
       });
     }
-  }, [buses, canAssignRoute]);
+  }, [buses, canAssignRoute, requestPositioningRefresh]);
 
   // handleDragEnd definido DESPUES de handleDropRoute
   const handleDragEnd = useCallback(async (event) => {
@@ -1263,7 +1429,9 @@ export function UnifiedWorkspace({
             if (bus.id !== sourceBusId) return bus;
             return { ...bus, routes: bus.routes.filter((r) => r.id !== route.id) };
           }));
+          requestPositioningRefresh([sourceBusId]);
         }
+        requestPositioningRefresh([busId]);
         return;
       } 
       
@@ -1271,6 +1439,7 @@ export function UnifiedWorkspace({
       if (overId === 'workspace' || overData?.type === 'workspace') {
         const newId = generateBusId();
         setBuses((prev) => [...prev, { id: newId, routes: [route], type: 'standard' }]);
+        requestPositioningRefresh([newId]);
 
         // Solo removemos origen despues de crear destino.
         if (source === 'transfer') {
@@ -1280,6 +1449,7 @@ export function UnifiedWorkspace({
             if (bus.id !== sourceBusId) return bus;
             return { ...bus, routes: bus.routes.filter((r) => r.id !== route.id) };
           }));
+          requestPositioningRefresh([sourceBusId]);
         }
 
         notifications.success('Nuevo bus creado', `${route.code} asignado a ${newId}`);
@@ -1289,14 +1459,15 @@ export function UnifiedWorkspace({
       // Si llegamos aqui, no se reconocio la zona de drop
       console.warn('[DnD] Zona de drop no reconocida:', overId, overData);
     }
-  }, [generateBusId, handleDropRoute]);
+  }, [generateBusId, handleDropRoute, requestPositioningRefresh]);
 
   const handleRemoveRoute = useCallback((busId, routeId) => {
     setBuses(prev => prev.map(bus => {
       if (bus.id !== busId) return bus;
       return { ...bus, routes: bus.routes.filter(r => r.id !== routeId) };
     }));
-  }, []);
+    requestPositioningRefresh([busId]);
+  }, [requestPositioningRefresh]);
 
   const handleClearAll = useCallback(() => {
     if (!confirm('Limpiar todo el horario?')) return;
@@ -1429,7 +1600,20 @@ export function UnifiedWorkspace({
     }
   }, [buildScheduleData, onPublish, onSave, validationResults]);
 
+  const handleExportPdf = useCallback(() => {
+    if (typeof onExport !== 'function') {
+      notifications.warning('Exportacion no disponible', 'No hay handler de exportacion configurado');
+      return;
+    }
+    onExport({
+      schedule: buildScheduleData().buses,
+      day: activeDay,
+      source: 'workspace',
+    });
+  }, [activeDay, buildScheduleData, onExport]);
+
   const hasErrors = Object.values(validationResults).some(v => v.errors?.length > 0);
+  const hasRoutesAssigned = buses.some((bus) => Array.isArray(bus?.routes) && bus.routes.length > 0);
 
   const dropAnimation = {
     sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: '0.5' } } }),
@@ -1556,10 +1740,11 @@ export function UnifiedWorkspace({
           ))
         }))
       );
+      requestPositioningRefresh();
       notifications.success('Ruta actualizada', `La ruta ${savedRoute.code} ha sido modificada`);
     }
     setHasUnsavedChanges(true);
-  }, [routeEditModal.mode]);
+  }, [requestPositioningRefresh, routeEditModal.mode]);
 
   const normalizeTime = useCallback((value) => {
     if (!value) return '00:00';
@@ -1602,7 +1787,23 @@ export function UnifiedWorkspace({
   const buildValidationDaysPayload = useCallback(() => {
     if (scheduleByDay && typeof scheduleByDay === 'object') {
       return ALL_DAYS.map((day) => {
-        const daySchedule = scheduleByDay?.[day]?.schedule || [];
+        const shouldUseLiveWorkspace = day === activeDay;
+        const daySchedule = shouldUseLiveWorkspace
+          ? buses.map((bus) => ({
+            bus_id: bus.id,
+            items: bus.routes.map((route) => ({
+              route_id: route.route_id || route.id,
+              id: route.id || route.route_id,
+              start_time: normalizeTime(route.startTime || route.start_time),
+              end_time: normalizeTime(route.endTime || route.end_time),
+              type: route.type || 'entry',
+              school_name: route.school || route.school_name || null,
+              start_location: route.start_location || route.start_loc || route?.rawRoute?.start_location || route?.rawRoute?.start_loc || [0, 0],
+              end_location: route.end_location || route.end_loc || route?.rawRoute?.end_location || route?.rawRoute?.end_loc || [0, 0],
+              stops: Array.isArray(route.stops) ? route.stops : [],
+            })),
+          }))
+          : (scheduleByDay?.[day]?.schedule || []);
         const busesPayload = daySchedule.map((bus) => {
           const busId = bus.bus_id || bus.id || 'unknown';
           const items = Array.isArray(bus.items) ? bus.items : (bus.routes || []);
@@ -1653,17 +1854,18 @@ export function UnifiedWorkspace({
       if (onValidationReportChange) {
         onValidationReportChange(result);
       }
+      const refreshResult = await refreshPositioningMinutes();
       const summary = result?.summary || {};
       notifications.success(
         'Validacion global completada',
-        `${summary.incidents_total || 0} incidencias en ${summary.total_buses || 0} buses`
+        `${summary.incidents_total || 0} incidencias en ${summary.total_buses || 0} buses | Pos. OSRM actualizada en ${refreshResult?.updated || 0} buses`
       );
     } catch (error) {
       notifications.error('Error de validacion global', error.message || 'No se pudo validar todo');
     } finally {
       setGlobalValidationRunning(false);
     }
-  }, [globalValidationRunning, buildValidationDaysPayload, validateAllBuses, onValidationReportChange]);
+  }, [globalValidationRunning, buildValidationDaysPayload, validateAllBuses, onValidationReportChange, refreshPositioningMinutes]);
 
   const incidents = useMemo(() => (
     Array.isArray(globalValidationReport?.incidents) ? globalValidationReport.incidents : []
@@ -1830,6 +2032,16 @@ export function UnifiedWorkspace({
               Comprobar todo
             </button>
 
+            {positioningRefreshRunning && (
+              <div
+                className="px-2 py-1 rounded-sm border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 text-[9px] font-semibold tracking-[0.08em] uppercase flex items-center gap-1"
+                title="Actualizando tiempos reales de posicionamiento con OSRM"
+              >
+                <div className="w-2.5 h-2.5 border border-cyan-300/50 border-t-cyan-200 rounded-full animate-spin" />
+                R OSRM {positioningRefreshStats.done}/{positioningRefreshStats.total || '?'}
+              </div>
+            )}
+
             <button
               onClick={handleExportIncidents}
               disabled={!globalValidationReport}
@@ -1838,6 +2050,16 @@ export function UnifiedWorkspace({
             >
               <Download className="w-3 h-3" />
               Incidencias
+            </button>
+
+            <button
+              onClick={handleExportPdf}
+              disabled={!hasRoutesAssigned}
+              className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
+              title="Exportar PDF del horario actual (estado vivo)"
+            >
+              <Download className="w-3 h-3" />
+              Exportar PDF
             </button>
 
             <div className="w-px h-5 bg-slate-700 mx-0.5" />
@@ -2003,7 +2225,7 @@ export function UnifiedWorkspace({
                             pixelsPerHour={effectiveTimelineZoom}
                             segments={compressedSegments}
                             selectedRouteId={selectedRouteId}
-                            onValidateBus={validateBus}
+                            onValidateBus={handleValidateBus}
                             isPinned={pinnedBusIdSet.has(String(bus.id || ''))}
                             onTogglePin={onTogglePinBus}
                           />

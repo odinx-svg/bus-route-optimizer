@@ -636,8 +636,59 @@ function App() {
     }
   };
 
-  const handleExport = async () => {
-    if (schedule.length === 0) {
+  const normalizeScheduleForExport = useCallback((scheduleInput = []) => {
+    const safeSchedule = Array.isArray(scheduleInput) ? scheduleInput : [];
+    return safeSchedule.map((bus, busIndex) => {
+      const busId = bus?.bus_id || bus?.id || `B${String(busIndex + 1).padStart(3, '0')}`;
+      const rawItems = Array.isArray(bus?.items)
+        ? bus.items
+        : (Array.isArray(bus?.routes) ? bus.routes : []);
+
+      const normalizedItems = rawItems.map((item, itemIndex) => {
+        const routeId = item?.route_id || item?.id || item?.code || `R${itemIndex + 1}`;
+        const routeCode = item?.route_code || item?.code || routeId;
+        const rawPositioning = Number(
+          item?.positioning_minutes ??
+          item?.positioningMinutes ??
+          item?.deadhead_minutes ??
+          item?.deadheadMinutes ??
+          item?.deadhead ??
+          0
+        );
+        const positioningMinutes = Number.isFinite(rawPositioning)
+          ? Math.max(0, Math.round(rawPositioning))
+          : 0;
+
+        return {
+          ...item,
+          route_id: routeId,
+          route_code: routeCode,
+          start_time: item?.start_time || item?.startTime || '00:00',
+          end_time: item?.end_time || item?.endTime || '00:00',
+          origin: item?.origin || '',
+          destination: item?.destination || '',
+          school_name: item?.school_name || item?.school || null,
+          type: item?.type || 'entry',
+          stops: Array.isArray(item?.stops) ? item.stops : [],
+          start_location: item?.start_location || item?.start_loc || item?.startLocation || item?.rawRoute?.start_location || null,
+          end_location: item?.end_location || item?.end_loc || item?.endLocation || item?.rawRoute?.end_location || null,
+          order: Number.isFinite(Number(item?.order)) ? Number(item.order) : itemIndex,
+          positioning_minutes: positioningMinutes,
+          deadhead_minutes: positioningMinutes,
+        };
+      });
+
+      return {
+        ...bus,
+        bus_id: busId,
+        items: normalizedItems,
+      };
+    });
+  }, []);
+
+  const handleExport = useCallback(async ({ schedule: scheduleOverride = null, day: dayOverride = null } = {}) => {
+    const exportSchedule = Array.isArray(scheduleOverride) ? scheduleOverride : schedule;
+    if (!Array.isArray(exportSchedule) || exportSchedule.length === 0) {
       notifications.warning('No hay resultados', 'Optimiza las rutas primero');
       return;
     }
@@ -646,9 +697,11 @@ function App() {
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const dayName = DAY_LABELS[activeDay] || activeDay;
+      const dayCode = dayOverride || activeDay;
+      const dayName = DAY_LABELS[dayCode] || dayCode;
       const routeCapacityById = buildRouteCapacityMap(routes);
-      const scheduleForPdf = (schedule || []).map((bus) => ({
+      const normalizedSchedule = normalizeScheduleForExport(exportSchedule);
+      const scheduleForPdf = normalizedSchedule.map((bus) => ({
         ...bus,
         items: (bus.items || []).map((item) => ({
           ...item,
@@ -693,7 +746,7 @@ function App() {
       notifications.dismiss(loadingToast);
       notifications.error('Error al exportar PDF', error.message);
     }
-  };
+  }, [activeDay, normalizeScheduleForExport, routes, schedule]);
 
   const handleDayChange = useCallback((day) => {
     setActiveDay(day);

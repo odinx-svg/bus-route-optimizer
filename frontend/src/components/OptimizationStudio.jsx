@@ -59,6 +59,18 @@ export default function OptimizationStudio({
     }));
   }, [activeDay]);
 
+  const handleExportCurrentDay = useCallback((payload = {}) => {
+    if (typeof onExport !== 'function') return;
+    const schedulePayload = Array.isArray(payload?.schedule)
+      ? payload.schedule
+      : (Array.isArray(mapSchedule) ? mapSchedule : []);
+    onExport({
+      schedule: schedulePayload,
+      day: activeDay,
+      source: payload?.source || studioTab,
+    });
+  }, [activeDay, mapSchedule, onExport, studioTab]);
+
   const onDividerMouseDown = () => {
     if (studioTab !== 'mixed') return;
     setIsDraggingSplit(true);
@@ -151,6 +163,7 @@ export default function OptimizationStudio({
                 visibleBusIds={effectivePinnedBusIds}
                 pinnedBusIds={effectivePinnedBusIds}
                 onTogglePinBus={onTogglePinBus}
+                onExport={handleExportCurrentDay}
               />
             </div>
           </div>
@@ -177,7 +190,7 @@ export default function OptimizationStudio({
                 selectedRouteId={selectedRouteId}
                 onBusSelect={onBusSelect}
                 onRouteSelect={onRouteSelect}
-                onExport={onExport}
+                onExport={() => handleExportCurrentDay({ schedule: mapSchedule, source: 'map' })}
                 activeDay={activeDay}
               />
             </div>
@@ -203,6 +216,7 @@ export default function OptimizationStudio({
               onRouteSelect={onRouteSelect}
               pinnedBusIds={effectivePinnedBusIds}
               onTogglePinBus={onTogglePinBus}
+              onExport={handleExportCurrentDay}
             />
           </div>
         )}
