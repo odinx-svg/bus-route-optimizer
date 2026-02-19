@@ -142,11 +142,11 @@ export default function FileUpload({ onUploadSuccess }) {
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
         className={`
-          relative border border-dashed rounded-[14px] p-6 text-center
+          relative border-2 border-dashed rounded-xl p-6 text-center
           transition-all duration-200 cursor-pointer
           ${dragActive
-            ? 'border-indigo-500/50 bg-indigo-500/[0.06]'
-            : 'border-white/[0.1] hover:border-white/[0.2] hover:bg-white/[0.02]'
+            ? 'border-gt-accent/50 bg-gt-accent/10 shadow-gt-glow'
+            : 'border-gt-border hover:border-gt-accent/30 hover:bg-white/[0.02]'
           }
           ${uploading ? 'pointer-events-none opacity-50' : ''}
         `}
@@ -162,16 +162,16 @@ export default function FileUpload({ onUploadSuccess }) {
         />
         <div className="space-y-3">
           <div className={`
-            w-12 h-12 mx-auto rounded-[12px] flex items-center justify-center transition-colors
-            ${dragActive ? 'bg-indigo-500/[0.1]' : 'bg-white/[0.04]'}
+            w-12 h-12 mx-auto rounded-xl flex items-center justify-center transition-colors
+            ${dragActive ? 'bg-gt-accent/20' : 'gt-glass'}
           `}>
-            <Upload className={`w-5 h-5 ${dragActive ? 'text-indigo-400' : 'text-zinc-500'}`} />
+            <Upload className={`w-5 h-5 ${dragActive ? 'text-gt-accent' : 'text-gt-text-muted'}`} />
           </div>
           <div>
-            <p className="text-[13px] font-medium text-zinc-300">
+            <p className="text-[13px] font-medium text-gt-text">
               {dragActive ? 'Suelta los archivos aquí' : 'Arrastra archivos Excel o examinar'}
             </p>
-            <p className="text-[11px] text-zinc-600 mt-1">
+            <p className="text-[11px] text-gt-text-muted mt-1">
               Formatos .xlsx y .xls
             </p>
           </div>
@@ -180,17 +180,17 @@ export default function FileUpload({ onUploadSuccess }) {
 
       {/* Selected Files */}
       {selectedFiles.length > 0 && (
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-[14px] p-3 animate-fadeIn">
+        <div className="gt-glass rounded-xl p-3 animate-fadeIn">
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-medium text-zinc-400">
+            <span className="text-[11px] font-medium text-gt-text-muted">
               {selectedFiles.length} archivo{selectedFiles.length > 1 ? 's' : ''}
             </span>
             {!uploading && (
               <button
                 onClick={clearFiles}
-                className="p-1 hover:bg-white/[0.06] rounded-md transition-colors"
+                className="p-1 hover:bg-white/5 rounded-lg transition-colors"
               >
-                <X className="w-3.5 h-3.5 text-zinc-500 hover:text-red-400" />
+                <X className="w-3.5 h-3.5 text-gt-text-muted hover:text-gt-danger" />
               </button>
             )}
           </div>
@@ -199,19 +199,19 @@ export default function FileUpload({ onUploadSuccess }) {
             {selectedFiles.map((file, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-2.5 p-2 bg-white/[0.03] rounded-[10px] group hover:bg-white/[0.05] transition-colors"
+                className="flex items-center gap-2.5 p-2 gt-stat-card rounded-lg group hover:bg-white/[0.03] transition-colors"
               >
-                <FileSpreadsheet className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                <FileSpreadsheet className="w-4 h-4 text-gt-success flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] text-zinc-300 truncate">{file.name}</p>
-                  <p className="text-[10px] text-zinc-600">{formatFileSize(file.size)}</p>
+                  <p className="text-[12px] text-gt-text truncate">{file.name}</p>
+                  <p className="text-[10px] text-gt-text-muted">{formatFileSize(file.size)}</p>
                 </div>
                 {!uploading && (
                   <button
                     onClick={(e) => { e.stopPropagation(); removeFile(idx); }}
-                    className="p-1 hover:bg-red-500/[0.1] rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                    className="p-1 hover:bg-gt-danger/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                   >
-                    <X className="w-3 h-3 text-zinc-500 hover:text-red-400" />
+                    <X className="w-3 h-3 text-gt-text-muted hover:text-gt-danger" />
                   </button>
                 )}
               </div>
@@ -222,9 +222,9 @@ export default function FileUpload({ onUploadSuccess }) {
 
       {/* Error */}
       {error && (
-        <div className="flex items-start gap-2.5 p-3 bg-red-500/[0.06] border border-red-500/[0.12] rounded-[12px] animate-shake">
-          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-          <p className="text-[12px] text-red-400">{error}</p>
+        <div className="flex items-start gap-2.5 p-3 bg-gt-danger/10 border border-gt-danger/20 rounded-xl animate-shake">
+          <AlertCircle className="w-4 h-4 text-gt-danger flex-shrink-0 mt-0.5" />
+          <p className="text-[12px] text-gt-danger">{error}</p>
         </div>
       )}
 
@@ -234,13 +234,9 @@ export default function FileUpload({ onUploadSuccess }) {
           onClick={uploading ? undefined : handleUpload}
           disabled={uploading}
           className={`
-            w-full py-3 font-medium rounded-[12px] transition-colors text-[13px]
+            gt-btn-primary w-full py-3 font-medium text-[13px]
             flex items-center justify-center gap-2
-            ${uploading
-              ? 'bg-indigo-600/50 cursor-not-allowed'
-              : 'bg-indigo-600 hover:bg-indigo-500'
-            }
-            text-white
+            ${uploading ? 'opacity-70 cursor-not-allowed' : ''}
           `}
         >
           {uploading ? (
@@ -260,9 +256,9 @@ export default function FileUpload({ onUploadSuccess }) {
 
       {/* Progress bar */}
       {uploading && (
-        <div className="h-[3px] bg-white/[0.06] rounded-full overflow-hidden">
+        <div className="h-1 bg-gt-card rounded-full overflow-hidden">
           <div
-            className="h-full bg-indigo-500 transition-all duration-300 ease-out rounded-full"
+            className="h-full bg-gt-accent transition-all duration-300 ease-out rounded-full"
             style={{ width: `${uploadProgress}%` }}
           />
         </div>
