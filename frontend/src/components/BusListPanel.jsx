@@ -12,8 +12,21 @@ const BUS_COLORS = [
   '#818CF8', '#22D3EE', '#A3E635', '#FB923C', '#E879F9',
 ];
 
+const normalizeBusId = (value) => String(value ?? '').trim();
+
+const getBusId = (bus = {}) => (
+  normalizeBusId(bus?.bus_id || bus?.id)
+);
+
+const getBusItems = (bus = {}) => {
+  if (Array.isArray(bus?.items)) return bus.items;
+  if (Array.isArray(bus?.routes)) return bus.routes;
+  return [];
+};
+
 const getBusColor = (id) => {
-  const num = parseInt(id.replace(/\D/g, ''), 10) || 0;
+  const busId = normalizeBusId(id);
+  const num = parseInt(busId.replace(/\D/g, ''), 10) || 0;
   return BUS_COLORS[num % BUS_COLORS.length];
 };
 
@@ -217,17 +230,18 @@ const ConnectionCard = ({ connection, isSelected, onClick }) => {
 };
 
 const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRouteSelect, onConnectionSelect, routeCapacityById }) => {
-  const color = getBusColor(bus.bus_id);
+  const busId = getBusId(bus);
+  const color = getBusColor(busId);
   const assignedVehicleCode = bus.assigned_vehicle_code || '';
   const assignedVehiclePlate = bus.assigned_vehicle_plate || '';
   const assignedSeatsMin = Number(bus.assigned_vehicle_seats_min || 0);
   const assignedSeatsMax = Number(bus.assigned_vehicle_seats_max || 0);
   const hasAssignedVehicle = Boolean(bus.uses_fleet_profile && (assignedVehicleCode || assignedVehiclePlate));
-  const displayBusId = hasAssignedVehicle ? (assignedVehicleCode || assignedVehiclePlate) : bus.bus_id;
-  const orderedItems = useMemo(() => sortItemsByTimeAndNumber(bus.items || []), [bus.items]);
+  const displayBusId = hasAssignedVehicle ? (assignedVehicleCode || assignedVehiclePlate) : (busId || 'BUS');
+  const orderedItems = useMemo(() => sortItemsByTimeAndNumber(getBusItems(bus)), [bus]);
   const entries = useMemo(() => orderedItems.filter(i => i.type === 'entry'), [orderedItems]);
   const exits = useMemo(() => orderedItems.filter(i => i.type === 'exit'), [orderedItems]);
-  const connections = useMemo(() => buildBusConnections(bus.bus_id, orderedItems), [bus.bus_id, orderedItems]);
+  const connections = useMemo(() => buildBusConnections(busId, orderedItems), [busId, orderedItems]);
   const minSeatsNeeded = useMemo(
     () => getBusMinSeats(orderedItems, routeCapacityById),
     [orderedItems, routeCapacityById]
@@ -258,7 +272,7 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
               <span className="text-[13px] font-medium text-gt-text truncate">{displayBusId}</span>
               {hasAssignedVehicle && (
                 <p className="text-[9px] text-gt-text-muted mt-0.5 truncate">
-                  Plan: {bus.bus_id}{assignedVehiclePlate ? ` · ${assignedVehiclePlate}` : ''}
+                  Plan: {busId}{assignedVehiclePlate ? ` · ${assignedVehiclePlate}` : ''}
                 </p>
               )}
             </div>
@@ -316,7 +330,7 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
                   isSelected={selectedRouteId === connections[idx].id}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onConnectionSelect?.(connections[idx].id, bus.bus_id);
+                    onConnectionSelect?.(connections[idx].id, busId);
                   }}
                 />
               )}
@@ -349,22 +363,26 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
 
   const filteredSchedule = useMemo(() => {
     const sortedByBus = [...schedule].sort((a, b) => {
-      const busDiff = getBusOrderValue(a?.bus_id || '') - getBusOrderValue(b?.bus_id || '');
+      const busDiff = getBusOrderValue(getBusId(a)) - getBusOrderValue(getBusId(b));
       if (busDiff !== 0) return busDiff;
-      return String(a?.bus_id || '').localeCompare(String(b?.bus_id || ''), 'es', { sensitivity: 'base', numeric: true });
+      return getBusId(a).localeCompare(getBusId(b), 'es', { sensitivity: 'base', numeric: true });
     });
 
     if (!searchQuery.trim()) return sortedByBus;
     const q = searchQuery.toLowerCase();
-    return sortedByBus.filter(bus =>
-      bus.bus_id.toLowerCase().includes(q) ||
-      (bus.assigned_vehicle_code || '').toLowerCase().includes(q) ||
-      (bus.assigned_vehicle_plate || '').toLowerCase().includes(q) ||
-      bus.items?.some(item =>
-        item.school_name?.toLowerCase().includes(q) ||
-        item.route_id?.toLowerCase().includes(q)
-      )
-    );
+    return sortedByBus.filter((bus) => {
+      const busId = getBusId(bus).toLowerCase();
+      const items = getBusItems(bus);
+      return (
+        busId.includes(q) ||
+        (bus.assigned_vehicle_code || '').toLowerCase().includes(q) ||
+        (bus.assigned_vehicle_plate || '').toLowerCase().includes(q) ||
+        items.some((item) => (
+          item.school_name?.toLowerCase().includes(q) ||
+          item.route_id?.toLowerCase().includes(q)
+        ))
+      );
+    });
   }, [schedule, searchQuery]);
 
   const routeCapacityById = useMemo(() => buildRouteCapacityMap(routes), [routes]);
@@ -445,19 +463,22 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
 
       {viewMode === 'list' ? (
         <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1.5">
-          {filteredSchedule.map((bus) => (
-            <BusCard
-              key={bus.bus_id}
-              bus={bus}
-              isSelected={selectedBusId === bus.bus_id}
-              isExpanded={expandedBus === bus.bus_id}
-              onToggle={() => toggleExpand(bus.bus_id)}
-              selectedRouteId={selectedRouteId}
-              onRouteSelect={onRouteSelect}
-              onConnectionSelect={handleConnectionSelect}
-              routeCapacityById={routeCapacityById}
-            />
-          ))}
+          {filteredSchedule.map((bus, idx) => {
+            const busId = getBusId(bus) || `bus-${idx}`;
+            return (
+              <BusCard
+                key={busId}
+                bus={bus}
+                isSelected={String(selectedBusId || '') === busId}
+                isExpanded={expandedBus === busId}
+                onToggle={() => toggleExpand(busId)}
+                selectedRouteId={selectedRouteId}
+                onRouteSelect={onRouteSelect}
+                onConnectionSelect={handleConnectionSelect}
+                routeCapacityById={routeCapacityById}
+              />
+            );
+          })}
           {filteredSchedule.length === 0 && searchQuery && (
             <p className="text-[12px] text-gt-text-muted text-center py-8">Sin resultados</p>
           )}

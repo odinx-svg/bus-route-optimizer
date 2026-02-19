@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import { CompareView } from './components/CompareView';
 import OptimizationStudio from './components/OptimizationStudio';
 import OptimizationProgress from './components/OptimizationProgress';
+import StudioErrorBoundary from './components/StudioErrorBoundary';
 import ControlHubPage from './pages/ControlHubPage';
 import { notifications } from './services/notifications';
 import { clearGeometryCache } from './services/RouteService';
@@ -1107,49 +1108,54 @@ function App() {
               />
             )}
             {viewMode === 'studio' && (
-              <OptimizationStudio
-                workspaceMode={workspaceMode}
-                routes={routes}
-                scheduleByDay={scheduleByDay}
-                activeDay={activeDay}
-                validationReport={validationReport}
-                onValidationReportChange={setValidationReport}
-                onSave={async (data) => {
-                  const promptResult = await openTextInputModal({
-                    title: 'Guardar version',
-                    description: 'Opcional: nombre de este guardado',
-                    placeholder: 'Ej: Ajuste buses lunes',
-                    confirmLabel: 'Guardar',
-                    cancelLabel: 'Cancelar',
-                    allowEmpty: true,
-                    defaultValue: '',
-                  });
-                  if (!promptResult?.confirmed) return;
-                  const checkpointName = String(promptResult?.value || '').trim();
-                  await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'save');
-                }}
-                onPublish={async (data) => {
-                  const promptResult = await openTextInputModal({
-                    title: 'Publicar version',
-                    description: 'Opcional: nombre para esta publicacion',
-                    placeholder: 'Ej: Operativo final semana',
-                    confirmLabel: 'Publicar',
-                    cancelLabel: 'Cancelar',
-                    allowEmpty: true,
-                    defaultValue: '',
-                  });
-                  if (!promptResult?.confirmed) return;
-                  const checkpointName = String(promptResult?.value || '').trim();
-                  await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'publish');
-                }}
-                selectedBusId={selectedBusId}
-                selectedRouteId={selectedRouteId}
-                onBusSelect={handleBusSelect}
-                onRouteSelect={handleRouteSelect}
-                onExport={handleExport}
-                pinnedBusIds={pinnedBusesByDay?.[activeDay] || []}
-                onTogglePinBus={handleTogglePinBus}
-              />
+              <StudioErrorBoundary
+                resetKey={`${activeWorkspaceId || ''}:${activeDay}:${routes.length}:${schedule.length}`}
+                onBackToControl={() => setViewMode('dashboard')}
+              >
+                <OptimizationStudio
+                  workspaceMode={workspaceMode}
+                  routes={routes}
+                  scheduleByDay={scheduleByDay}
+                  activeDay={activeDay}
+                  validationReport={validationReport}
+                  onValidationReportChange={setValidationReport}
+                  onSave={async (data) => {
+                    const promptResult = await openTextInputModal({
+                      title: 'Guardar version',
+                      description: 'Opcional: nombre de este guardado',
+                      placeholder: 'Ej: Ajuste buses lunes',
+                      confirmLabel: 'Guardar',
+                      cancelLabel: 'Cancelar',
+                      allowEmpty: true,
+                      defaultValue: '',
+                    });
+                    if (!promptResult?.confirmed) return;
+                    const checkpointName = String(promptResult?.value || '').trim();
+                    await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'save');
+                  }}
+                  onPublish={async (data) => {
+                    const promptResult = await openTextInputModal({
+                      title: 'Publicar version',
+                      description: 'Opcional: nombre para esta publicacion',
+                      placeholder: 'Ej: Operativo final semana',
+                      confirmLabel: 'Publicar',
+                      cancelLabel: 'Cancelar',
+                      allowEmpty: true,
+                      defaultValue: '',
+                    });
+                    if (!promptResult?.confirmed) return;
+                    const checkpointName = String(promptResult?.value || '').trim();
+                    await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'publish');
+                  }}
+                  selectedBusId={selectedBusId}
+                  selectedRouteId={selectedRouteId}
+                  onBusSelect={handleBusSelect}
+                  onRouteSelect={handleRouteSelect}
+                  onExport={handleExport}
+                  pinnedBusIds={pinnedBusesByDay?.[activeDay] || []}
+                  onTogglePinBus={handleTogglePinBus}
+                />
+              </StudioErrorBoundary>
             )}
           </div>
 

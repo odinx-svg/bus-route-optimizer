@@ -12,8 +12,21 @@ const BUS_COLORS = [
   '#818CF8', '#22D3EE', '#A3E635', '#FB923C', '#E879F9',
 ];
 
+const normalizeBusId = (value) => String(value ?? '').trim();
+
+const getBusId = (bus = {}) => (
+  normalizeBusId(bus?.bus_id || bus?.id)
+);
+
+const getBusItems = (bus = {}) => {
+  if (Array.isArray(bus?.items)) return bus.items;
+  if (Array.isArray(bus?.routes)) return bus.routes;
+  return [];
+};
+
 const getBusColor = (id) => {
-  const num = parseInt(id.replace(/\D/g, ''), 10) || 0;
+  const busId = normalizeBusId(id);
+  const num = parseInt(busId.replace(/\D/g, ''), 10) || 0;
   return BUS_COLORS[num % BUS_COLORS.length];
 };
 
@@ -189,6 +202,8 @@ const MapView = ({
   const [loading, setLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [deadheadPaths, setDeadheadPaths] = useState([]);
+  const safeRoutes = Array.isArray(routes) ? routes : [];
+  const safeSchedule = Array.isArray(schedule) ? schedule : [];
   const selectedConnection = useMemo(
     () => parseConnectionSelectionId(selectedRouteId),
     [selectedRouteId],
@@ -209,17 +224,20 @@ const MapView = ({
     : false;
 
   const busColors = useMemo(() => {
-    if (!schedule) return {};
     const colors = {};
-    schedule.forEach(bus => { colors[bus.bus_id] = getBusColor(bus.bus_id); });
+    safeSchedule.forEach((bus) => {
+      const busId = getBusId(bus);
+      if (!busId) return;
+      colors[busId] = getBusColor(busId);
+    });
     return colors;
-  }, [schedule]);
+  }, [safeSchedule]);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadRoutes = async () => {
-      if (!schedule || !routes || schedule.length === 0) {
+      if (!safeSchedule.length || !safeRoutes.length) {
         setMapRoutes([]);
         return;
       }
@@ -227,11 +245,12 @@ const MapView = ({
       // Count how many routes actually need fetching vs cached
       let needsFetch = 0;
       let totalItems = 0;
-      for (const bus of schedule) {
-        for (const item of bus.items || []) {
+      for (const bus of safeSchedule) {
+        const items = getBusItems(bus);
+        for (const item of items) {
           totalItems++;
-          const route = routes.find(r => r.id === item.route_id);
-            if (route?.stops?.length > 0 && !isGeometryCached(item.route_id, route.stops)) {
+          const route = safeRoutes.find((r) => String(r?.id || '') === String(item?.route_id || item?.id || ''));
+          if (route?.stops?.length > 0 && !isGeometryCached(item.route_id, route.stops)) {
             needsFetch++;
           }
         }
@@ -247,17 +266,20 @@ const MapView = ({
       const routeData = [];
       let loaded = 0;
 
-      for (const bus of schedule) {
-        const color = busColors[bus.bus_id];
-        for (const item of bus.items || []) {
-          const route = routes.find(r => r.id === item.route_id);
+      for (const bus of safeSchedule) {
+        const busId = getBusId(bus);
+        const color = busColors[busId] || getBusColor(busId);
+        const items = getBusItems(bus);
+        for (const item of items) {
+          const routeId = String(item?.route_id || item?.id || '');
+          const route = safeRoutes.find((r) => String(r?.id || '') === routeId);
           if (route?.stops?.length > 0) {
             try {
               // Pass routeId for caching
-              const positions = await fetchRouteGeometry(route.stops, item.route_id);
+              const positions = await fetchRouteGeometry(route.stops, routeId);
               if (isMounted && positions.length > 0) {
                 routeData.push({
-                  busId: bus.bus_id,
+                  busId,
                   routeId: route.id,
                   type: item.type,
                   color,
@@ -272,7 +294,7 @@ const MapView = ({
             } catch (e) {
               if (isMounted) {
                 routeData.push({
-                  busId: bus.bus_id,
+                  busId,
                   routeId: route.id,
                   type: item.type,
                   color,
@@ -301,7 +323,7 @@ const MapView = ({
 
     loadRoutes();
     return () => { isMounted = false; };
-  }, [routes, schedule, busColors]);
+  }, [safeRoutes, safeSchedule, busColors]);
 
   const displayedRoutes = useMemo(() => {
     // For connection focus, show ONLY the deadhead path (no route polylines).
@@ -311,7 +333,7 @@ const MapView = ({
       return mapRoutes.filter(r => String(r.routeId || '') === String(selectedRouteId));
     }
     // For bus focus, show ALL routes of that bus.
-    if (effectiveSelectedBusId) return mapRoutes.filter(r => r.busId === effectiveSelectedBusId);
+    if (effectiveSelectedBusId) return mapRoutes.filter((r) => String(r.busId || '') === String(effectiveSelectedBusId));
     // No focus => show all routes.
     return mapRoutes;
   }, [mapRoutes, selectedConnection, selectedRouteId, effectiveSelectedBusId]);
@@ -325,12 +347,13 @@ const MapView = ({
 
   const fallbackDeadheadPaths = useMemo(() => {
     if (!effectiveSelectedBusId) return [];
-    const bus = schedule?.find((b) => b.bus_id === effectiveSelectedBusId);
-    if (!bus?.items || bus.items.length < 2) return [];
+    const bus = safeSchedule.find((b) => String(getBusId(b)) === String(effectiveSelectedBusId));
+    const busItems = getBusItems(bus);
+    if (busItems.length < 2) return [];
 
-    const sortedItems = sortItemsByTimeAndNumber(bus.items || []);
+    const sortedItems = sortItemsByTimeAndNumber(busItems);
     const busRoutes = mapRoutes
-      .filter((route) => route.busId === effectiveSelectedBusId)
+      .filter((route) => String(route.busId || '') === String(effectiveSelectedBusId))
       .sort((a, b) => {
         const startDiff = parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime);
         if (startDiff !== 0) return startDiff;
@@ -366,7 +389,7 @@ const MapView = ({
     }
 
     return paths;
-  }, [effectiveSelectedBusId, schedule, mapRoutes]);
+  }, [effectiveSelectedBusId, safeSchedule, mapRoutes]);
 
   useEffect(() => {
     let isMounted = true;
@@ -377,15 +400,16 @@ const MapView = ({
         return;
       }
 
-      const bus = schedule?.find(b => b.bus_id === effectiveSelectedBusId);
-      if (!bus?.items || bus.items.length < 2) {
+      const bus = safeSchedule.find((b) => String(getBusId(b)) === String(effectiveSelectedBusId));
+      const busItems = getBusItems(bus);
+      if (busItems.length < 2) {
         if (isMounted) setDeadheadPaths([]);
         return;
       }
 
-      const sortedItems = sortItemsByTimeAndNumber(bus.items || []);
+      const sortedItems = sortItemsByTimeAndNumber(busItems);
       const busRoutes = mapRoutes
-        .filter(r => r.busId === effectiveSelectedBusId)
+        .filter((r) => String(r.busId || '') === String(effectiveSelectedBusId))
         .sort((a, b) => {
           const startDiff = parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime);
           if (startDiff !== 0) return startDiff;
@@ -449,18 +473,19 @@ const MapView = ({
 
     loadDeadheadPaths();
     return () => { isMounted = false; };
-  }, [effectiveSelectedBusId, schedule, mapRoutes]);
+  }, [effectiveSelectedBusId, safeSchedule, mapRoutes]);
 
   const routeOrderMarkers = useMemo(() => {
     if (!effectiveSelectedBusId) return [];
     if (selectedConnection?.id) return [];
     if (selectedRouteId && !String(selectedRouteId).startsWith('conn:')) return [];
-    const bus = schedule?.find(b => b.bus_id === effectiveSelectedBusId);
-    if (!bus?.items?.length) return [];
+    const bus = safeSchedule.find((b) => String(getBusId(b)) === String(effectiveSelectedBusId));
+    const busItems = getBusItems(bus);
+    if (!busItems.length) return [];
 
-    const sortedItems = sortItemsByTimeAndNumber(bus.items || []);
+    const sortedItems = sortItemsByTimeAndNumber(busItems);
     const busRoutes = mapRoutes
-      .filter(r => r.busId === effectiveSelectedBusId)
+      .filter((r) => String(r.busId || '') === String(effectiveSelectedBusId))
       .sort((a, b) => {
         const startDiff = parseTimeToMinutes(a.startTime) - parseTimeToMinutes(b.startTime);
         if (startDiff !== 0) return startDiff;
@@ -491,16 +516,18 @@ const MapView = ({
     }
 
     return markers;
-  }, [effectiveSelectedBusId, schedule, mapRoutes, selectedConnection, selectedRouteId]);
+  }, [effectiveSelectedBusId, safeSchedule, mapRoutes, selectedConnection, selectedRouteId]);
 
   const schoolMarkers = useMemo(() => {
     const schools = {};
     for (const route of displayedRoutes) {
       const schoolStop = route.stops?.find(s => s.is_school);
-      if (schoolStop && route.school) {
-        const key = `${schoolStop.lat.toFixed(4)},${schoolStop.lon.toFixed(4)}`;
+      const schoolLat = Number(schoolStop?.lat ?? schoolStop?.latitude);
+      const schoolLon = Number(schoolStop?.lon ?? schoolStop?.lng ?? schoolStop?.longitude);
+      if (Number.isFinite(schoolLat) && Number.isFinite(schoolLon) && route.school) {
+        const key = `${schoolLat.toFixed(4)},${schoolLon.toFixed(4)}`;
         if (!schools[key]) {
-          schools[key] = { lat: schoolStop.lat, lon: schoolStop.lon, name: route.school };
+          schools[key] = { lat: schoolLat, lon: schoolLon, name: route.school };
         }
       }
     }
@@ -696,7 +723,7 @@ const MapView = ({
           )}
           {!effectiveSelectedBusId && mapRoutes.length > 0 && (
             <p className="text-[10px] text-zinc-500 mt-0.5">
-              {mapRoutes.length} rutas | {schedule?.length || 0} buses
+              {mapRoutes.length} rutas | {safeSchedule.length} buses
             </p>
           )}
           {effectiveSelectedBusId && typeof onTogglePinBus === 'function' && (
