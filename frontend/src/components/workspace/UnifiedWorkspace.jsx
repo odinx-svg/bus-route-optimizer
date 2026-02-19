@@ -785,6 +785,7 @@ export function UnifiedWorkspace({
     isConnected: wsConnected, 
     connectionState,
     validating: osrmValidating,
+    validateConnection,
     canAssignRoute,
     validateBus,
     validateAllBuses
