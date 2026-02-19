@@ -45,32 +45,31 @@ export function TimelineZoomable({ schedule, selectedBusId, onBusSelect }) {
             onClick={handleZoomIn}
             disabled={!canZoomIn}
             className="
-              p-2 rounded-[10px] transition-all
-              bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06]
-              disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04]
+              p-2 rounded-xl transition-all gt-glass
+              hover:bg-white/5
+              disabled:opacity-30 disabled:cursor-not-allowed
             "
             title="Acercar"
           >
-            <ZoomIn className="w-4 h-4 text-zinc-300" />
+            <ZoomIn className="w-4 h-4 text-gt-text" />
           </button>
           <button
             onClick={handleZoomOut}
             disabled={!canZoomOut}
             className="
-              p-2 rounded-[10px] transition-all
-              bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06]
-              disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04]
+              p-2 rounded-xl transition-all gt-glass
+              hover:bg-white/5
+              disabled:opacity-30 disabled:cursor-not-allowed
             "
             title="Alejar"
           >
-            <ZoomOut className="w-4 h-4 text-zinc-300" />
+            <ZoomOut className="w-4 h-4 text-gt-text" />
           </button>
           <button
             onClick={resetZoom}
             className="
-              px-3 py-2 text-[11px] font-medium rounded-[10px] transition-all
-              bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06]
-              text-zinc-300 flex items-center gap-1.5
+              px-3 py-2 text-[11px] font-medium rounded-xl transition-all gt-glass
+              text-gt-text flex items-center gap-1.5 hover:bg-white/5
             "
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -78,12 +77,12 @@ export function TimelineZoomable({ schedule, selectedBusId, onBusSelect }) {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+        <div className="flex items-center gap-2 text-[11px] text-gt-text-muted gt-glass px-3 py-1.5 rounded-lg">
           <Clock className="w-3.5 h-3.5" />
           <span className="tabular-nums">
             {hourRange[0]}:00 - {hourRange[1]}:00
           </span>
-          <span className="text-zinc-600">
+          <span className="text-gt-text-muted/60">
             ({hourRange[1] - hourRange[0]}h)
           </span>
         </div>

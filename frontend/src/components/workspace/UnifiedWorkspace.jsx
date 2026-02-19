@@ -244,17 +244,17 @@ function StatusBadge({ mode, isDirty, hasErrors, hasUnsavedChanges }) {
     create: {
       icon: Plus,
       label: 'Modo Manual',
-      color: 'bg-[#123149]/70 text-cyan-200 border-cyan-500/35'
+      color: 'bg-gt-info/10 text-gt-info border-gt-info/30'
     },
     edit: {
       icon: FileEdit,
       label: 'Modo Edicion',
-      color: 'bg-[#223041]/70 text-slate-200 border-slate-500/35'
+      color: 'bg-gt-text-muted/10 text-gt-text border-gt-border'
     },
     optimize: {
       icon: Clock,
       label: 'Modo Borrador',
-      color: 'bg-[#3a2a13]/70 text-amber-200 border-amber-500/35'
+      color: 'bg-gt-warning/10 text-gt-warning border-gt-warning/30'
     },
   };
 
@@ -262,14 +262,14 @@ function StatusBadge({ mode, isDirty, hasErrors, hasUnsavedChanges }) {
   const Icon = config.icon;
 
   return (
-    <div className={`control-card data-mono flex items-center gap-2 px-3 py-1.5 rounded-md border ${config.color}`}>
+    <div className={`gt-glass data-mono flex items-center gap-2 px-3 py-1.5 rounded-lg border ${config.color}`}>
       <Icon className="w-3.5 h-3.5" />
       <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{config.label}</span>
       {hasUnsavedChanges && (
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="Cambios sin guardar" />
+        <span className="w-1.5 h-1.5 rounded-full bg-gt-warning animate-pulse" title="Cambios sin guardar" />
       )}
       {hasErrors && (
-        <AlertCircle className="w-3.5 h-3.5 text-rose-300" title="Tiene errores" />
+        <AlertCircle className="w-3.5 h-3.5 text-gt-danger" title="Tiene errores" />
       )}
     </div>
   );
@@ -351,8 +351,8 @@ function WorkspaceArea({ children, isOverWorkspace }) {
     <div 
       ref={setNodeRef}
       className={`
-        h-full rounded-md bg-[#0a121c] border border-dashed overflow-auto
-        ${isActive ? 'border-cyan-400/60 bg-cyan-500/5' : 'border-[#2a3f54]'}
+        h-full rounded-xl gt-stat-card border border-dashed overflow-auto
+        ${isActive ? 'border-gt-accent/60 bg-gt-accent/5' : 'border-gt-border'}
         transition-all duration-200 p-3
       `}
       style={{ minWidth: 'fit-content' }}
@@ -361,9 +361,9 @@ function WorkspaceArea({ children, isOverWorkspace }) {
       
       {/* Indicador visual de drop zone */}
       {isActive && (
-        <div className="absolute inset-0 bg-cyan-500/5 border border-cyan-400/40 rounded-md flex items-center justify-center pointer-events-none z-50">
-          <div className="bg-[#101925] px-4 py-2 rounded-sm border border-cyan-400/30">
-            <span className="text-[11px] font-semibold tracking-wider text-cyan-300 uppercase">Insertar en nuevo bus</span>
+        <div className="absolute inset-0 bg-gt-accent/5 border border-gt-accent/40 rounded-xl flex items-center justify-center pointer-events-none z-50">
+          <div className="gt-glass px-4 py-2 rounded-lg border border-gt-accent/30">
+            <span className="text-[11px] font-semibold tracking-wider text-gt-accent uppercase">Insertar en nuevo bus</span>
           </div>
         </div>
       )}
@@ -377,14 +377,14 @@ function WorkspaceArea({ children, isOverWorkspace }) {
 function EmptyWorkspace({ onAddBus }) {
   return (
     <div className="flex flex-col items-center justify-center h-48 text-center">
-      <div className="w-12 h-12 rounded-md bg-[#111d2a] border border-[#2a4157] flex items-center justify-center mb-3">
-        <LayoutList className="w-6 h-6 text-slate-500" />
+      <div className="w-12 h-12 rounded-xl gt-glass flex items-center justify-center mb-3">
+        <LayoutList className="w-6 h-6 text-gt-text-muted" />
       </div>
-      <h3 className="text-sm font-medium text-slate-200 mb-1 uppercase tracking-[0.08em]">Sin buses asignados</h3>
-      <p className="text-xs text-slate-500 mb-3">Crea una unidad para iniciar el plan operativo</p>
+      <h3 className="text-sm font-medium text-gt-text mb-1 uppercase tracking-[0.08em]">Sin buses asignados</h3>
+      <p className="text-xs text-gt-text-muted mb-3">Crea una unidad para iniciar el plan operativo</p>
       <button
         onClick={onAddBus}
-        className="px-3 py-1.5 control-btn rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5"
+        className="gt-btn-secondary px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
       >
         <Plus className="w-3.5 h-3.5" />
         Anadir bus

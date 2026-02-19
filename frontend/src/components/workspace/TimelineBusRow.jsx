@@ -275,26 +275,26 @@ function timeToCompressedPx(time, segments, pixelsPerHour) {
 
 export function TimelineControls({ zoom, onZoomChange, onReset }) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-[#09111a] border-b border-[#2a4056] data-mono">
+    <div className="flex items-center justify-between px-4 py-2 gt-glass data-mono rounded-xl mb-3">
       <div className="flex items-center gap-3">
-        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.16em]">Zoom</span>
-        <div className="flex items-center bg-[#101a26] rounded-md border border-[#2b4056]">
+        <span className="text-[10px] font-semibold text-gt-text-muted uppercase tracking-[0.16em]">Zoom</span>
+        <div className="flex items-center gt-stat-card rounded-lg">
           <button onClick={() => onZoomChange(Math.max(CONFIG.MIN_ZOOM, zoom - 60))}
-            className="p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-800/70 rounded-l-md transition-all">
+            className="p-2 text-gt-text-muted hover:text-gt-text hover:bg-white/5 rounded-l-lg transition-all">
             <ZoomOut className="w-3.5 h-3.5" />
           </button>
-          <span className="px-3 py-1.5 text-[11px] font-semibold text-slate-200 tabular-nums border-x border-slate-700/60 min-w-[56px] text-center">
+          <span className="px-3 py-1.5 text-[11px] font-semibold text-gt-text tabular-nums border-x border-gt-border min-w-[56px] text-center">
             {zoom}
           </span>
           <button onClick={() => onZoomChange(Math.min(CONFIG.MAX_ZOOM, zoom + 60))}
-            className="p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-800/70 rounded-r-md transition-all">
+            className="p-2 text-gt-text-muted hover:text-gt-text hover:bg-white/5 rounded-r-lg transition-all">
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
       <button onClick={onReset}
-        className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 hover:text-cyan-200 transition-colors px-3 py-1.5 hover:bg-[#152332] rounded-md">
+        className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gt-text-muted hover:text-gt-accent transition-colors px-3 py-1.5 hover:bg-white/5 rounded-lg">
         Reset
       </button>
     </div>
@@ -435,11 +435,11 @@ export function TimelineScale({ minHour, maxHour, pixelsPerHour, segments, leftO
   marks.push(...rawMarks);
 
   return (
-    <div className="relative h-9 bg-[#0a0f16] select-none border-b border-[#2a4056]/70" style={{ width: renderedWidth }}>
+    <div className="relative h-9 gt-stat-card select-none border-b border-gt-border/50" style={{ width: renderedWidth }}>
       {/* Base line */}
-      <div className="absolute bottom-3 right-0 h-[2px] bg-cyan-900/50" style={{ left: leftOffset }} />
+      <div className="absolute bottom-3 right-0 h-[2px] bg-gt-accent/20" style={{ left: leftOffset }} />
       {leftOffset > 0 && (
-        <div className="absolute top-0 bottom-0 w-px bg-slate-700/50" style={{ left: leftOffset }} />
+        <div className="absolute top-0 bottom-0 w-px bg-gt-border" style={{ left: leftOffset }} />
       )}
 
       {/* Visual gaps (compressed mode only) */}
@@ -461,17 +461,17 @@ export function TimelineScale({ minHour, maxHour, pixelsPerHour, segments, leftO
       {/* Time marks */}
       {marks.map(m => {
         let markHeight = 'h-1';
-        let markColor = 'bg-gray-700';
+        let markColor = 'bg-gt-text-muted/30';
 
         if (m.isHour) {
           markHeight = 'h-3';
-          markColor = 'bg-gray-300';
+          markColor = 'bg-gt-text-muted';
         } else if (m.isHalfHour) {
           markHeight = 'h-2';
-          markColor = 'bg-gray-500';
+          markColor = 'bg-gt-text-muted/60';
         } else if (m.isQuarter) {
           markHeight = 'h-1.5';
-          markColor = 'bg-gray-600';
+          markColor = 'bg-gt-text-muted/40';
         }
 
         const markMinute = (m.h * 60) + m.min;
@@ -488,7 +488,7 @@ export function TimelineScale({ minHour, maxHour, pixelsPerHour, segments, leftO
             <div className={`absolute bottom-0.5 w-[2px] ${markHeight} ${markColor}`} />
             {m.showLabel && (
               <span
-                className={`absolute bottom-2 font-medium text-gray-300 tabular-nums ${m.isHour ? 'text-[10px]' : 'text-[9px]'}`}
+                className={`absolute bottom-2 font-medium text-gt-text-muted tabular-nums ${m.isHour ? 'text-[10px]' : 'text-[9px]'}`}
                 style={labelStyle}
               >
                 {m.label}
