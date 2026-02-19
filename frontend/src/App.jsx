@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Layout from './components/Layout';
 import Sidebar from './components/Sidebar';
 import { CompareView } from './components/CompareView';
@@ -127,6 +127,73 @@ const savePdfWithDesktopDialog = async (blob, filename) => {
   return { handled: true, path: result?.path || '' };
 };
 
+function TextInputModal({
+  open = false,
+  title = '',
+  description = '',
+  value = '',
+  placeholder = '',
+  confirmLabel = 'Aceptar',
+  cancelLabel = 'Cancelar',
+  allowEmpty = true,
+  onChange,
+  onCancel,
+  onConfirm,
+}) {
+  if (!open) return null;
+
+  const normalizedValue = String(value || '');
+  const disabled = !allowEmpty && normalizedValue.trim().length === 0;
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#020611]/80 backdrop-blur-[2px]" onClick={onCancel} />
+      <div className="relative w-full max-w-md rounded-xl border border-[#253a4f] bg-[#0b141f] p-4 shadow-2xl">
+        <h3 className="text-[15px] font-semibold text-white">{title}</h3>
+        {description ? (
+          <p className="mt-1 text-[12px] text-[#8ba3bd]">{description}</p>
+        ) : null}
+        <input
+          type="text"
+          autoFocus
+          value={normalizedValue}
+          placeholder={placeholder}
+          onChange={(event) => onChange?.(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              onCancel?.();
+              return;
+            }
+            if (event.key === 'Enter' && !disabled) {
+              event.preventDefault();
+              onConfirm?.();
+            }
+          }}
+          className="mt-3 w-full rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[13px] text-white outline-none transition focus:border-[#4ecbff]/70"
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={disabled}
+            className="rounded-md bg-[#2ab5e8] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [routes, setRoutes] = useState([]);
   const [parseReport, setParseReport] = useState(null);
@@ -152,6 +219,17 @@ function App() {
   const [pipelineStatus, setPipelineStatus] = useState('idle');
   const [pipelineEvents, setPipelineEvents] = useState([]);
   const [pipelineMetrics, setPipelineMetrics] = useState(null);
+  const [textInputModal, setTextInputModal] = useState({
+    open: false,
+    title: '',
+    description: '',
+    placeholder: '',
+    confirmLabel: 'Aceptar',
+    cancelLabel: 'Cancelar',
+    allowEmpty: true,
+    value: '',
+  });
+  const textInputResolverRef = useRef(null);
 
   const studioSetWorkspaceId = useWorkspaceStudioStore((state) => state.setActiveWorkspaceId);
   const studioSetRoutes = useWorkspaceStudioStore((state) => state.setRoutes);
@@ -162,6 +240,38 @@ function App() {
   const studioSetDirty = useWorkspaceStudioStore((state) => state.setDirty);
   const studioMarkSaved = useWorkspaceStudioStore((state) => state.markSaved);
   const studioReset = useWorkspaceStudioStore((state) => state.resetStudio);
+
+  const closeTextInputModal = useCallback((result = { confirmed: false, value: '' }) => {
+    setTextInputModal((prev) => ({ ...prev, open: false }));
+    const resolver = textInputResolverRef.current;
+    textInputResolverRef.current = null;
+    if (typeof resolver === 'function') {
+      resolver(result);
+    }
+  }, []);
+
+  const openTextInputModal = useCallback((config = {}) => (
+    new Promise((resolve) => {
+      textInputResolverRef.current = resolve;
+      setTextInputModal({
+        open: true,
+        title: config.title || 'Introduce un valor',
+        description: config.description || '',
+        placeholder: config.placeholder || '',
+        confirmLabel: config.confirmLabel || 'Aceptar',
+        cancelLabel: config.cancelLabel || 'Cancelar',
+        allowEmpty: Boolean(config.allowEmpty ?? true),
+        value: String(config.defaultValue || ''),
+      });
+    })
+  ), []);
+
+  useEffect(() => () => {
+    if (typeof textInputResolverRef.current === 'function') {
+      textInputResolverRef.current({ confirmed: false, value: '' });
+      textInputResolverRef.current = null;
+    }
+  }, []);
 
   const refreshWorkspaces = useCallback(async () => {
     const data = await listWorkspaces().catch(() => ({ items: [] }));
@@ -205,10 +315,21 @@ function App() {
 
   const createWorkspaceAndOpen = useCallback(async (seed = {}) => {
     const suggestedName = seed?.name || `Optimizacion ${new Date().toLocaleDateString()}`;
-    const name = window.prompt('Nombre de la optimizacion:', suggestedName);
-    if (!name) return null;
+    const promptResult = await openTextInputModal({
+      title: 'Nueva optimizacion',
+      description: 'Introduce un nombre para identificar esta optimizacion',
+      placeholder: 'Ej: Vigo - Semana 12',
+      confirmLabel: 'Crear',
+      cancelLabel: 'Cancelar',
+      allowEmpty: true,
+      defaultValue: suggestedName,
+    });
+    if (!promptResult?.confirmed) {
+      return { id: null, cancelled: true };
+    }
+    const normalizedName = String(promptResult?.value || '').trim() || suggestedName;
     const created = await createWorkspace({
-      name: String(name).trim(),
+      name: normalizedName,
       city_label: seed?.city_label || null,
       routes_payload: seed?.routes_payload || null,
       parse_report: seed?.parse_report || null,
@@ -218,7 +339,7 @@ function App() {
     await refreshWorkspaces();
     await openWorkspaceById(created?.id, { switchToStudio: true });
     return created;
-  }, [openWorkspaceById, refreshWorkspaces]);
+  }, [openTextInputModal, openWorkspaceById, refreshWorkspaces]);
 
   const startNewWorkspaceFlow = useCallback(() => {
     setViewMode('dashboard');
@@ -334,7 +455,7 @@ function App() {
   ) => {
     if (!routesInput || routesInput.length === 0) {
       notifications.warning('No hay datos', 'Sube archivos Excel primero');
-      return;
+      return { status: 'empty' };
     }
 
     setOptimizing(true);
@@ -391,10 +512,12 @@ function App() {
         setOptimizing(false);
         notifications.success('Pipeline completado', 'Resultado final disponible en Workspace');
         refreshWorkspaces().catch(() => {});
+        return { status: 'completed', jobId: null };
       } else {
         setPipelineJobId(data.job_id || null);
         setPipelineStatus(data.status || 'queued');
         notifications.info('Pipeline en ejecucion', 'Mostrando progreso en tiempo real');
+        return { status: data.status || 'queued', jobId: data.job_id || null };
       }
     } catch (error) {
       console.error('Error optimizing:', error);
@@ -405,6 +528,7 @@ function App() {
       );
       setOptimizing(false);
       setPipelineStatus('error');
+      return { status: 'error', error };
     }
   };
 
@@ -441,9 +565,9 @@ function App() {
       }
     }
 
-    try {
-      let workspaceId = activeWorkspaceId;
-      if (!workspaceId || createFlowMode) {
+    let workspaceId = activeWorkspaceId;
+    if (!workspaceId || createFlowMode) {
+      try {
         const created = await createWorkspaceAndOpen({
           name: `Optimizacion ${new Date().toLocaleDateString()}`,
           routes_payload: uploadedRoutes,
@@ -451,20 +575,36 @@ function App() {
           schedule_by_day: createEmptyScheduleByDay(),
         });
         workspaceId = created?.id || null;
-      } else {
-        await saveWorkspaceVersion(workspaceId, {
-          save_kind: 'save',
-          checkpoint_name: 'upload-routes',
-          routes_payload: uploadedRoutes,
-          parse_report: uploadReport,
-        }).catch(() => null);
+        if (created?.cancelled) {
+          notifications.info(
+            'Nombre omitido',
+            'Seguimos sin guardado inicial para no bloquear la carga'
+          );
+        }
+      } catch (_error) {
+        workspaceId = null;
+        notifications.warning(
+          'No se pudo crear la optimizacion',
+          'Continuamos la carga sin guardado inicial'
+        );
       }
+    } else {
+      await saveWorkspaceVersion(workspaceId, {
+        save_kind: 'save',
+        checkpoint_name: 'upload-routes',
+        routes_payload: uploadedRoutes,
+        parse_report: uploadReport,
+      }).catch(() => null);
+    }
+
+    if (workspaceId) {
       await refreshWorkspaces();
-      await startAutoPipeline(uploadedRoutes, uploadReport, workspaceId);
+    }
+
+    const pipelineStart = await startAutoPipeline(uploadedRoutes, uploadReport, workspaceId);
+    setCreateFlowMode(false);
+    if (pipelineStart?.status === 'completed') {
       setIngestionPanelOpen(false);
-      setCreateFlowMode(false);
-    } catch (error) {
-      notifications.error('No se pudo preparar la optimizacion', error.message || 'Error creando workspace');
     }
   };
 
@@ -734,6 +874,8 @@ function App() {
         await openWorkspaceById(activeWorkspaceId, { switchToStudio: false });
       }
       studioMarkSaved();
+      setIngestionPanelOpen(false);
+      setCreateFlowMode(false);
       notifications.success('Pipeline completado', 'Resultado final cargado');
     } catch (error) {
       notifications.error('Resultado invalido', error.message);
@@ -833,11 +975,31 @@ function App() {
                 validationReport={validationReport}
                 onValidationReportChange={setValidationReport}
                 onSave={async (data) => {
-                  const checkpointName = window.prompt('Nombre del guardado (opcional):', '') || '';
+                  const promptResult = await openTextInputModal({
+                    title: 'Guardar version',
+                    description: 'Opcional: nombre de este guardado',
+                    placeholder: 'Ej: Ajuste buses lunes',
+                    confirmLabel: 'Guardar',
+                    cancelLabel: 'Cancelar',
+                    allowEmpty: true,
+                    defaultValue: '',
+                  });
+                  if (!promptResult?.confirmed) return;
+                  const checkpointName = String(promptResult?.value || '').trim();
                   await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'save');
                 }}
                 onPublish={async (data) => {
-                  const checkpointName = window.prompt('Nombre de publicacion (opcional):', '') || '';
+                  const promptResult = await openTextInputModal({
+                    title: 'Publicar version',
+                    description: 'Opcional: nombre para esta publicacion',
+                    placeholder: 'Ej: Operativo final semana',
+                    confirmLabel: 'Publicar',
+                    cancelLabel: 'Cancelar',
+                    allowEmpty: true,
+                    defaultValue: '',
+                  });
+                  if (!promptResult?.confirmed) return;
+                  const checkpointName = String(promptResult?.value || '').trim();
                   await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'publish');
                 }}
                 selectedBusId={selectedBusId}
@@ -868,6 +1030,22 @@ function App() {
           )}
         </div>
       </section>
+
+      <TextInputModal
+        open={textInputModal.open}
+        title={textInputModal.title}
+        description={textInputModal.description}
+        value={textInputModal.value}
+        placeholder={textInputModal.placeholder}
+        confirmLabel={textInputModal.confirmLabel}
+        cancelLabel={textInputModal.cancelLabel}
+        allowEmpty={textInputModal.allowEmpty}
+        onChange={(value) => {
+          setTextInputModal((prev) => ({ ...prev, value }));
+        }}
+        onCancel={() => closeTextInputModal({ confirmed: false, value: '' })}
+        onConfirm={() => closeTextInputModal({ confirmed: true, value: textInputModal.value })}
+      />
     </Layout>
   );
 }

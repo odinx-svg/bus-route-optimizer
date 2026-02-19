@@ -475,12 +475,58 @@ exit /b 1
     return True
 
 
+def _build_installer_update_args(installer_exe: Path) -> list[str]:
+    args = [str(installer_exe)]
+    silent_update_enabled = _env_flag("TUTTI_DESKTOP_UPDATE_SILENT", "1")
+    if not silent_update_enabled:
+        return args
+
+    installer_log_path = _resolve_update_log_path().parent / "installer-update.log"
+    args.extend(
+        [
+            "/SP-",
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NOCANCEL",
+            "/NORESTART",
+            "/CLOSEAPPLICATIONS",
+            "/FORCECLOSEAPPLICATIONS",
+            f"/LOG={installer_log_path}",
+        ]
+    )
+    return args
+
+
 def _launch_installer_and_exit(installer_exe: Path) -> bool:
     try:
+        installer_args = _build_installer_update_args(installer_exe)
+        _log_update(f"Launching installer update | args={' '.join(installer_args[1:]) or '(interactive)'}")
+
         if os.name == "nt":
-            os.startfile(str(installer_exe))  # type: ignore[attr-defined]
+            runner_bat = Path(tempfile.gettempdir()) / "tutti_desktop_installer_update.bat"
+            command_line = subprocess.list2cmdline(installer_args)
+            current_pid = os.getpid()
+            script = f"""@echo off
+setlocal
+set "TARGET_PID={current_pid}"
+
+:wait_for_tutti_exit
+tasklist /FI "PID eq %TARGET_PID%" | findstr /I "%TARGET_PID%" >nul
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto wait_for_tutti_exit
+)
+
+taskkill /IM "Tutti Desktop.exe" /F >nul 2>&1
+
+start "" {command_line}
+exit /b 0
+"""
+            runner_bat.write_text(script, encoding="utf-8")
+            creation_flags = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
+            subprocess.Popen(["cmd", "/c", str(runner_bat)], creationflags=creation_flags)
         else:
-            subprocess.Popen([str(installer_exe)])
+            subprocess.Popen(installer_args)
         return True
     except Exception as exc:
         _log_update(f"Installer launch failed ({exc})")
@@ -745,8 +791,8 @@ def _check_and_apply_update_if_available() -> bool:
             )
             _message_box(
                 (
-                    "Se abrira el instalador de actualizacion.\n"
-                    "Sigue el asistente y, al terminar, abre TUTTI manualmente."
+                    "La actualizacion se aplicara automaticamente.\n"
+                    "TUTTI se cerrara y el instalador continuara en segundo plano."
                 ),
                 "TUTTI - Actualizando",
                 kind="info",
