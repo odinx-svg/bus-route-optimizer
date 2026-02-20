@@ -67,7 +67,6 @@ import { TransferZone } from './TransferZone';
 const STORAGE_KEY_DRAFT = 'unified_workspace_draft';
 const STORAGE_KEY_STATUS = 'unified_workspace_status';
 const STORAGE_KEY_AUTO_REASSIGN = 'unified_workspace_auto_reassign_critical_v1';
-const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
 const ALL_DAYS = ['L', 'M', 'Mc', 'X', 'V'];
 const TIMELINE_BUS_INFO_WIDTH = 118;
 const CRITICAL_GLOBAL_ISSUE_TYPES = new Set(['INSUFFICIENT_TIME', 'OVERLAPPING_ROUTES', 'INVALID_TIME_RANGE']);
@@ -2243,6 +2242,9 @@ export function UnifiedWorkspace({
         onValidationReportChange(result);
       }
       const refreshResult = await refreshPositioningMinutes();
+      if (Number(refreshResult?.updated || 0) > 0) {
+        setHasUnsavedChanges(true);
+      }
       const summary = result?.summary || {};
       let autoSummary = null;
       if (autoReassignCritical && Number(summary.incidents_error || 0) > 0) {
@@ -2342,9 +2344,9 @@ export function UnifiedWorkspace({
     >
       <div className="control-panel flex flex-col h-full rounded-[10px] border border-[#2b4055]">
         {/* Toolbar consolidada */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[#2a3f54] bg-[#0d1723]/95 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#2a3f54] bg-[#0d1723]/95 backdrop-blur-sm">
           {/* Izquierda: Estado, dias y vista */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-wrap">
             {/* Modo */}
             <StatusBadge 
               mode={mode} 
@@ -2352,25 +2354,6 @@ export function UnifiedWorkspace({
               hasErrors={hasErrors}
               hasUnsavedChanges={hasUnsavedChanges}
             />
-            
-            {/* Selector de dia */}
-            <div className="flex items-center gap-0.5 bg-[#101a26] rounded-md p-0.5 border border-[#2b4056]">
-              {ALL_DAYS.map(day => (
-                <button
-                  key={day}
-                  onClick={() => setActiveDay(day)}
-                  className={`
-                    px-2 py-0.5 rounded-sm text-[10px] font-semibold tracking-wide transition-all
-                    ${activeDay === day 
-                      ? 'bg-[#214a63] text-[#d8edf8] border border-cyan-400/30' : 'text-slate-500 hover:text-slate-200 hover:bg-[#1a2837]'
-                    }
-                  `}
-                  title={DAY_LABELS[day]}
-                >
-                  {day}
-                </button>
-              ))}
-            </div>
 
             <div className="w-px h-5 bg-slate-700" />
 
@@ -2411,7 +2394,7 @@ export function UnifiedWorkspace({
           </div>
 
           {/* Derecha: Acciones */}
-          <div className="flex items-center gap-1.5 data-mono">
+          <div className="flex items-center gap-1.5 data-mono ml-auto flex-wrap justify-end">
             {/* OSRM */}
             <div 
               className={`flex items-center gap-1 px-1.5 py-1 rounded-sm border text-[9px] font-semibold tracking-wider ${

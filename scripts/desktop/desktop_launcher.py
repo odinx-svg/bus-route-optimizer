@@ -425,8 +425,12 @@ def _launch_updater_and_exit(current_exe: Path, new_exe: Path, backup_exe: Optio
     4. On failure, restores from backup if available.
     5. Auto-restarts the app when TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE=1.
     """
-    auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "0")
-    start_cmd = f'start "" "{current_exe}"' if auto_restart else 'echo Actualizacion aplicada. Abre TUTTI manualmente.'
+    auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
+    start_cmd = (
+        f'timeout /t 2 /nobreak >nul\nstart "" "{current_exe}"'
+        if auto_restart
+        else 'echo Actualizacion aplicada. Abre TUTTI manualmente.'
+    )
     backup_line = ""
     if backup_exe and backup_exe.exists():
         backup_line = f"""
@@ -497,8 +501,10 @@ def _build_installer_update_args(installer_exe: Path) -> list[str]:
     return args
 
 
-def _launch_installer_and_exit(installer_exe: Path) -> bool:
+def _launch_installer_and_exit(installer_exe: Path, expected_exe: Optional[Path] = None) -> bool:
     try:
+        auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
+        target_exe = (expected_exe or Path(sys.executable)).resolve()
         installer_args = _build_installer_update_args(installer_exe)
         _log_update(f"Launching installer update | args={' '.join(installer_args[1:]) or '(interactive)'}")
 
@@ -509,7 +515,9 @@ def _launch_installer_and_exit(installer_exe: Path) -> bool:
             script = f"""@echo off
 setlocal EnableDelayedExpansion
 set "TARGET_PID={current_pid}"
+set "TARGET_EXE={target_exe}"
 set "WAIT_SEC=0"
+set "AUTO_RESTART={1 if auto_restart else 0}"
 
 :wait_for_tutti_exit
 tasklist /FI "PID eq %TARGET_PID%" | findstr /I "%TARGET_PID%" >nul
@@ -529,7 +537,24 @@ taskkill /PID %TARGET_PID% /T /F >nul 2>&1
 taskkill /IM "Tutti Desktop.exe" /T /F >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-start "" {command_line}
+start /wait "" {command_line}
+if not errorlevel 1 (
+    if "%AUTO_RESTART%"=="1" (
+        set "TRY=0"
+        :wait_target
+        if exist "%TARGET_EXE%" goto start_target
+        set /a TRY+=1
+        if !TRY! GEQ 12 goto done
+        timeout /t 1 /nobreak >nul
+        goto wait_target
+
+        :start_target
+        timeout /t 2 /nobreak >nul
+        start "" "%TARGET_EXE%"
+    )
+)
+
+:done
 exit /b 0
 """
             runner_bat.write_text(script, encoding="utf-8")
@@ -795,11 +820,17 @@ def _check_and_apply_update_if_available() -> bool:
         return False
 
     try:
+        auto_restart_after_update = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
+        restart_hint = (
+            "TUTTI se abrira automaticamente al finalizar."
+            if auto_restart_after_update
+            else "Al terminar, abre TUTTI manualmente."
+        )
         if update_mode == "installer":
             _log_update(
                 f"Installer update downloaded | tag={latest_tag} | asset={asset_name}"
             )
-            return _launch_installer_and_exit(asset_path)
+            return _launch_installer_and_exit(asset_path, expected_exe=current_exe)
 
         if str(asset_name).lower().endswith(".zip"):
             updated_exe = _extract_exe_from_zip(asset_path, work_dir)
@@ -820,7 +851,7 @@ def _check_and_apply_update_if_available() -> bool:
             (
                 "Actualizacion descargada y verificada.\n"
                 "La app se cerrara para aplicar cambios.\n"
-                "Al terminar, abre TUTTI manualmente."
+                f"{restart_hint}"
             ),
             "TUTTI - Actualizando",
             kind="info",
