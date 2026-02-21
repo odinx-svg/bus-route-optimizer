@@ -9,6 +9,7 @@ for %%I in ("%ROOT%") do set "ROOT=%%~fI"
 set "BACKEND=%ROOT%\backend"
 set "FRONTEND=%ROOT%\frontend"
 set "LAUNCHER=%ROOT%\scripts\desktop\desktop_launcher.py"
+set "APP_ICON=%ROOT%\scripts\desktop\assets\tutti-symbol.ico"
 set "DESKTOP_REQ=%ROOT%\scripts\desktop\requirements-desktop.txt"
 set "VENV=%ROOT%\.venv"
 set "VENV_PYTHON=%VENV%\Scripts\python.exe"
@@ -98,6 +99,7 @@ echo  [5/6] Building onefile executable...
 set "PYI=%VENV%\Scripts\pyinstaller.exe"
 "%PYI%" --noconfirm --clean --windowed --onefile ^
   --name "%BUILD_EXE_NAME%" ^
+  --icon "%APP_ICON%" ^
   --distpath "%PYI_DIST%" ^
   --workpath "%PYI_WORK%" ^
   --specpath "%PYI_SPEC%" ^

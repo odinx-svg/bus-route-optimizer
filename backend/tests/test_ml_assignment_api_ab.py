@@ -54,8 +54,16 @@ def test_optimize_v6_forwards_use_ml_assignment_flag(monkeypatch):
 
     captured: Dict[str, Any] = {"use_ml_assignment": None}
 
-    def fake_optimize_v6(routes, progress_callback=None, use_ml_assignment=True):
+    def fake_optimize_v6(
+        routes,
+        progress_callback=None,
+        use_ml_assignment=True,
+        balance_load=True,
+        load_balance_hard_spread_limit=2,
+        load_balance_target_band=1,
+    ):
         captured["use_ml_assignment"] = bool(use_ml_assignment)
+        captured["balance_load"] = bool(balance_load)
         return []
 
     monkeypatch.setattr(optimizer_v6, "optimize_v6", fake_optimize_v6)
@@ -66,6 +74,7 @@ def test_optimize_v6_forwards_use_ml_assignment_flag(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert captured["use_ml_assignment"] is False
+    assert captured["balance_load"] is True
     assert data["optimization_options"]["use_ml_assignment"] is False
 
 
@@ -73,7 +82,14 @@ def test_optimize_v6_ab_returns_deltas_and_recommendation(monkeypatch):
     from main import app
     import optimizer_v6
 
-    def fake_optimize_v6(routes, progress_callback=None, use_ml_assignment=True):
+    def fake_optimize_v6(
+        routes,
+        progress_callback=None,
+        use_ml_assignment=True,
+        balance_load=True,
+        load_balance_hard_spread_limit=2,
+        load_balance_target_band=1,
+    ):
         if use_ml_assignment:
             return _make_schedule(1)
         return _make_schedule(2)

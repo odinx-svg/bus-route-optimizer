@@ -23,6 +23,17 @@ from optimizer_v6 import (
 )
 
 
+def _schedule_spread(schedule: List[BusSchedule]) -> int:
+    counts = sorted(len(bus.items) for bus in schedule if getattr(bus, "items", None))
+    if not counts:
+        return 0
+    return int(counts[-1] - counts[0])
+
+
+def _assigned_route_ids(schedule: List[BusSchedule]) -> List[str]:
+    return sorted(item.route_id for bus in schedule for item in bus.items)
+
+
 # ============================================================
 # UTILITY FUNCTION TESTS
 # ============================================================
@@ -309,6 +320,24 @@ class TestOptimizer:
         result2 = optimize_routes_v6(optimizer_test_routes)
         
         assert len(result1) == len(result2)
+
+    def test_rebalance_preserves_bus_count(self, optimizer_test_routes):
+        """Load rebalance must not increase bus count."""
+        baseline = optimize_v6(optimizer_test_routes, balance_load=False)
+        rebalanced = optimize_v6(optimizer_test_routes, balance_load=True)
+        assert len(rebalanced) <= len(baseline)
+
+    def test_rebalance_preserves_all_routes(self, optimizer_test_routes):
+        """Load rebalance must not lose or duplicate routes."""
+        baseline = optimize_v6(optimizer_test_routes, balance_load=False)
+        rebalanced = optimize_v6(optimizer_test_routes, balance_load=True)
+        assert _assigned_route_ids(rebalanced) == _assigned_route_ids(baseline)
+
+    def test_rebalance_reduces_or_keeps_spread(self, optimizer_test_routes):
+        """Load rebalance should improve or keep route spread across buses."""
+        baseline = optimize_v6(optimizer_test_routes, balance_load=False)
+        rebalanced = optimize_v6(optimizer_test_routes, balance_load=True)
+        assert _schedule_spread(rebalanced) <= _schedule_spread(baseline)
 
     def test_match_blocks_ilp_uses_greedy_fallback_when_solver_crashes(self, monkeypatch):
         """Cross-block matching must remain stable even if ILP solver raises."""

@@ -7,12 +7,13 @@
 ## 📋 Índice
 
 1. [Inicio Rápido](#inicio-rápido)
-2. [Arquitectura del Proyecto](#arquitectura-del-proyecto)
-3. [Cuándo Actualizar `start-tutti.bat`](#cuándo-actualizar-start-tuttibat)
-4. [Checklist de Cambios Importantes](#checklist-de-cambios-importantes)
-5. [Estructura del Proyecto](#estructura-del-proyecto)
-6. [Convenciones de Código](#convenciones-de-código)
-7. [Solución de Problemas Comunes](#solución-de-problemas-comunes)
+2. [Skills del Proyecto](#skills-del-proyecto)
+3. [Arquitectura del Proyecto](#arquitectura-del-proyecto)
+4. [Cuándo Actualizar `start-tutti.bat`](#cuándo-actualizar-start-tuttibat)
+5. [Checklist de Cambios Importantes](#checklist-de-cambios-importantes)
+6. [Estructura del Proyecto](#estructura-del-proyecto)
+7. [Convenciones de Código](#convenciones-de-código)
+8. [Solución de Problemas Comunes](#solución-de-problemas-comunes)
 
 ---
 
@@ -27,6 +28,25 @@ Backend:   http://localhost:8000
 Frontend:  http://localhost:5173
 API Docs:  http://localhost:8000/docs
 ```
+
+---
+
+## 🎓 Skills del Proyecto
+
+El proyecto incluye skills especializadas en `.agents/skills/` para facilitar el desarrollo:
+
+| Skill | Descripción | Cuándo Usar |
+|-------|-------------|-------------|
+| `tutti-architecture` | Arquitectura completa del sistema | Entender estructura, flujos de datos |
+| `tutti-backend-dev` | Desarrollo backend FastAPI/Python | Crear endpoints, optimizadores, modelos |
+| `tutti-frontend-dev` | Desarrollo frontend React | Componentes UI, stores, hooks |
+| `tutti-frontend-design` | Diseño UI/UX y estilos | Paleta de colores, animaciones, responsive |
+| `image-ui-analyzer` | Análisis de imágenes UI | Extraer diseño de screenshots para replicar |
+| `tutti-build-deploy` | Build y deployment | Generar EXE, releases, landing |
+| `tutti-debug-troubleshoot` | Debugging y troubleshooting | Diagnosticar errores, logs |
+| `tutti-testing` | Testing y calidad | Escribir tests, cobertura |
+
+Estas skills se activan automáticamente según el contexto y proporcionan conocimiento especializado para cada área del proyecto.
 
 ---
 

@@ -52,15 +52,39 @@ const buildScheduleStats = (buses = []) => {
   const totalRoutes = allItems.length;
   const totalEntries = allItems.filter((item) => item?.type === 'entry').length;
   const totalExits = allItems.filter((item) => item?.type === 'exit').length;
+  const routesPerBus = (buses || [])
+    .map((bus) => getBusItems(bus).length)
+    .filter((count) => Number.isFinite(count) && count > 0);
   const avgRoutesPerBus = totalBuses > 0
     ? Math.round((totalRoutes / totalBuses) * 10) / 10
     : 0;
+  const sortedCounts = [...routesPerBus].sort((a, b) => a - b);
+  const minRoutes = sortedCounts.length > 0 ? sortedCounts[0] : 0;
+  const maxRoutes = sortedCounts.length > 0 ? sortedCounts[sortedCounts.length - 1] : 0;
+  const spread = Math.max(0, maxRoutes - minRoutes);
+  const mid = Math.floor(sortedCounts.length / 2);
+  const medianRoutes = sortedCounts.length === 0
+    ? 0
+    : (
+        sortedCounts.length % 2 === 0
+          ? (sortedCounts[mid - 1] + sortedCounts[mid]) / 2
+          : sortedCounts[mid]
+      );
+  const absDev = sortedCounts.length === 0
+    ? 0
+    : sortedCounts.reduce((sum, value) => sum + Math.abs(value - medianRoutes), 0);
 
   return {
     total_buses: totalBuses,
     total_entries: totalEntries,
     total_exits: totalExits,
     avg_routes_per_bus: avgRoutesPerBus,
+    median_routes_per_bus: Number(medianRoutes.toFixed(2)),
+    min_routes_per_bus: minRoutes,
+    max_routes_per_bus: maxRoutes,
+    load_spread_routes: spread,
+    load_abs_dev_sum: Number(absDev.toFixed(2)),
+    load_balanced: spread <= 2,
   };
 };
 
@@ -482,6 +506,9 @@ function App() {
             max_duration_sec: 300,
             max_iterations: 2,
             invalid_rows_dropped: Number(parseReportInput?.rows_dropped_invalid || 0),
+            balance_load: true,
+            load_balance_hard_spread_limit: 2,
+            load_balance_target_band: 1,
           },
         });
       } else {
@@ -497,6 +524,9 @@ function App() {
               max_duration_sec: 300,
               max_iterations: 2,
               invalid_rows_dropped: Number(parseReportInput?.rows_dropped_invalid || 0),
+              balance_load: true,
+              load_balance_hard_spread_limit: 2,
+              load_balance_target_band: 1,
             },
           }),
         });

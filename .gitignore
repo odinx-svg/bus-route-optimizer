@@ -21,6 +21,8 @@ backend/osrm_cache.json
 osrm_cache.json
 backend/data/
 *.db
+backend/benchmarks/results/*.json
+nul
 
 # Node.js
 node_modules/

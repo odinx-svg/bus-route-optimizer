@@ -31,6 +31,7 @@ from typing import List, Dict, Tuple, Optional, Set, Any
 from datetime import time
 from dataclasses import dataclass, field
 from copy import deepcopy
+from statistics import median
 
 import pulp
 
@@ -78,6 +79,12 @@ ILP_TIME_LIMIT: int = 15        # seconds per ILP solve (exits/block4 only)
 LOCAL_SEARCH_TIME_LIMIT: int = 30  # seconds for local search phase
 ILP_ENTRY_TIME_LIMIT: int = 60  # more time for entries with time constraints
 MIN_START_HOUR: int = 6          # earliest bus can start (6:00 AM)
+
+DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT: int = 2
+DEFAULT_LOAD_BALANCE_TARGET_BAND: int = 1
+DEFAULT_LOAD_BALANCE_MAX_PASSES: int = 30
+DEFAULT_LOAD_BALANCE_MAX_MOVES_PER_PASS: int = 200
+DEFAULT_LOAD_BALANCE_MAX_SWAP_ATTEMPTS_PER_PASS: int = 80
 
 
 def _resolve_cbc_executable() -> Optional[str]:
@@ -507,6 +514,104 @@ class ChainedBus:
     def has_block(self, block: int) -> bool:
         """Check if bus has routes in a specific block."""
         return block in self.block_chains and len(self.block_chains[block]) > 0
+
+
+@dataclass
+class LoadBalanceConfig:
+    """Configuration for route-load rebalancing without increasing bus count."""
+
+    enabled: bool = True
+    hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT
+    target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND
+    max_passes: int = DEFAULT_LOAD_BALANCE_MAX_PASSES
+    max_moves_per_pass: int = DEFAULT_LOAD_BALANCE_MAX_MOVES_PER_PASS
+    max_swap_attempts_per_pass: int = DEFAULT_LOAD_BALANCE_MAX_SWAP_ATTEMPTS_PER_PASS
+
+
+@dataclass
+class LoadBalanceResult:
+    """Outcome metadata for load rebalance phase."""
+
+    applied: bool = False
+    unresolved: bool = False
+    passes: int = 0
+    moves: int = 0
+    swaps: int = 0
+    elapsed_ms: int = 0
+    before_metrics: Dict[str, Any] = field(default_factory=dict)
+    after_metrics: Dict[str, Any] = field(default_factory=dict)
+    reason: str = ""
+
+
+def _routes_per_bus_counts_from_buses(buses: List[ChainedBus]) -> List[int]:
+    """Get route count per chained bus."""
+    return [int(bus.total_routes()) for bus in buses if bus and bus.total_routes() > 0]
+
+
+def _routes_per_bus_counts_from_schedule(schedules: List[BusSchedule]) -> List[int]:
+    """Get route count per built schedule."""
+    return [int(len(s.items)) for s in schedules if s and getattr(s, "items", None)]
+
+
+def _load_metrics_from_counts(counts: List[int]) -> Dict[str, Any]:
+    """Compute load-distribution metrics from routes-per-bus counts."""
+    if not counts:
+        return {
+            "routes_per_bus_sorted": [],
+            "median_routes_per_bus": 0.0,
+            "min_routes_per_bus": 0,
+            "max_routes_per_bus": 0,
+            "load_spread_routes": 0,
+            "load_abs_dev_sum": 0.0,
+            "load_balanced": True,
+        }
+    ordered = sorted(int(v) for v in counts)
+    med = float(median(ordered))
+    min_v = int(ordered[0])
+    max_v = int(ordered[-1])
+    spread = int(max_v - min_v)
+    abs_dev_sum = float(sum(abs(float(v) - med) for v in ordered))
+    return {
+        "routes_per_bus_sorted": ordered,
+        "median_routes_per_bus": round(med, 2),
+        "min_routes_per_bus": min_v,
+        "max_routes_per_bus": max_v,
+        "load_spread_routes": spread,
+        "load_abs_dev_sum": round(abs_dev_sum, 2),
+        "load_balanced": spread <= DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
+    }
+
+
+def _compute_load_metrics_for_buses(buses: List[ChainedBus]) -> Dict[str, Any]:
+    """Compute load metrics for chained buses."""
+    return _load_metrics_from_counts(_routes_per_bus_counts_from_buses(buses))
+
+
+def _compute_load_metrics_for_schedules(schedules: List[BusSchedule]) -> Dict[str, Any]:
+    """Compute load metrics for final schedules."""
+    return _load_metrics_from_counts(_routes_per_bus_counts_from_schedule(schedules))
+
+
+def _load_metric_tuple(metrics: Dict[str, Any]) -> Tuple[int, float, int]:
+    """Lexicographic tuple used for local acceptance of load improvements."""
+    return (
+        int(metrics.get("load_spread_routes", 0)),
+        float(metrics.get("load_abs_dev_sum", 0.0)),
+        int(metrics.get("max_routes_per_bus", 0)),
+    )
+
+
+def _dynamic_accumulation_limit(buses: List[ChainedBus], config: LoadBalanceConfig) -> int:
+    """
+    Compute dynamic upper bound for route accumulation.
+
+    Replaces fixed hard-coded limits with a median-based threshold.
+    """
+    metrics = _compute_load_metrics_for_buses(buses)
+    med = float(metrics.get("median_routes_per_bus", 0.0))
+    spread = int(metrics.get("load_spread_routes", 0))
+    dynamic = int(math.ceil(med + max(1, config.target_band) + max(config.hard_spread_limit, spread // 2)))
+    return max(4, dynamic)
 
 
 # ============================================================
@@ -1780,6 +1885,7 @@ def local_search_improve(
     buses: List[ChainedBus],
     block_jobs: Dict[int, List[RouteJob]],
     block_tt: Dict[int, Dict[Tuple[int, int], int]],
+    load_balance_config: Optional[LoadBalanceConfig] = None,
 ) -> List[ChainedBus]:
     """
     Iterative local search to reduce bus count.
@@ -1795,9 +1901,12 @@ def local_search_improve(
     initial_count = len(buses)
     improvements = 0
 
+    cfg = load_balance_config or LoadBalanceConfig()
+
     while time_module.time() - start_time < LOCAL_SEARCH_TIME_LIMIT:
         improved = False
         buses = [b for b in buses if not b.is_empty()]
+        accumulation_limit = _dynamic_accumulation_limit(buses, cfg)
 
         # Sort buses by total route count (smallest first = easiest to empty)
         bus_order = sorted(range(len(buses)), key=lambda i: buses[i].total_routes())
@@ -1811,7 +1920,7 @@ def local_search_improve(
             
             # BUG FIX: Also skip buses that already have many routes
             # This prevents accumulation of routes in a single bus
-            if buses[src_idx].total_routes() >= 12:
+            if buses[src_idx].total_routes() >= accumulation_limit:
                 continue
             if time_module.time() - start_time > LOCAL_SEARCH_TIME_LIMIT:
                 break
@@ -1849,7 +1958,7 @@ def local_search_improve(
                         
                         # BUG FIX: Don't add routes to buses that already have many routes
                         # This prevents accumulation of routes in a single bus
-                        if tgt.total_routes() >= 12:
+                        if tgt.total_routes() >= accumulation_limit:
                             continue
                         if not _ranges_overlap(tgt_window[0], tgt_window[1], route_window[0], route_window[1]):
                             continue
@@ -1936,6 +2045,300 @@ def local_search_improve(
         print(f"    Local search: no improvements found ({elapsed:.1f}s)")
 
     return buses
+
+
+# ============================================================
+# PHASE 4.5: LOAD REBALANCING (WITHOUT INCREASING BUS COUNT)
+# ============================================================
+
+def _iter_route_candidates(chain: List[int]) -> List[int]:
+    """Prioritize edge routes first, then middle routes."""
+    if len(chain) <= 2:
+        return list(chain)
+    middle = chain[1:-1]
+    return [chain[0], chain[-1]] + middle
+
+
+def _chain_insert_candidates(chain: List[int], route_idx: int) -> List[List[int]]:
+    """Generate insertion alternatives for a route in a chain."""
+    if not chain:
+        return [[route_idx]]
+    candidates = [[route_idx] + chain, chain + [route_idx]]
+    for pos in range(1, len(chain)):
+        candidates.append(chain[:pos] + [route_idx] + chain[pos:])
+    return candidates
+
+
+def _route_time_anchor(job: RouteJob) -> int:
+    """Anchor route in minutes for deterministic ordering."""
+    if job.route_type == "entry" and job.route.arrival_time is not None:
+        return to_minutes(job.route.arrival_time)
+    if job.route_type == "exit" and job.route.departure_time is not None:
+        return to_minutes(job.route.departure_time)
+    return int(job.time_minutes)
+
+
+def _build_block_chain_map(bus: ChainedBus, block_jobs: Dict[int, List[RouteJob]]) -> Dict[int, List[Tuple[int, int]]]:
+    """Map each block route to (route_idx, position) for quick lookup."""
+    by_block: Dict[int, List[Tuple[int, int]]] = {}
+    for block, chain in bus.block_chains.items():
+        jobs = block_jobs.get(block, [])
+        if not chain or not jobs:
+            continue
+        entries: List[Tuple[int, int]] = []
+        for pos, route_idx in enumerate(chain):
+            if route_idx < 0 or route_idx >= len(jobs):
+                continue
+            entries.append((route_idx, pos))
+        entries.sort(key=lambda item: _route_time_anchor(jobs[item[0]]))
+        by_block[block] = entries
+    return by_block
+
+
+def _attempt_relocate_move(
+    buses: List[ChainedBus],
+    block_jobs: Dict[int, List[RouteJob]],
+    block_tt: Dict[int, Dict[Tuple[int, int], int]],
+    current_metrics: Dict[str, Any],
+    config: LoadBalanceConfig,
+) -> bool:
+    """Try a single improving relocate move."""
+    counts = [bus.total_routes() for bus in buses]
+    if len(counts) <= 1:
+        return False
+    med = float(current_metrics.get("median_routes_per_bus", 0.0))
+    low_threshold = max(1.0, med - max(0, config.target_band))
+    high_threshold = med + max(0, config.target_band)
+
+    over_idx = sorted(
+        [i for i, c in enumerate(counts) if c > high_threshold and c > 1],
+        key=lambda idx: counts[idx],
+        reverse=True,
+    )
+    under_idx = sorted(
+        [i for i, c in enumerate(counts) if c < low_threshold],
+        key=lambda idx: counts[idx],
+    )
+
+    if not over_idx:
+        max_count = max(counts)
+        over_idx = [i for i, c in enumerate(counts) if c == max_count and c > 1]
+    if not under_idx:
+        min_count = min(counts)
+        under_idx = [i for i, c in enumerate(counts) if c == min_count]
+
+    if not over_idx or not under_idx:
+        return False
+
+    best_before = _load_metric_tuple(current_metrics)
+    best_tuple = best_before
+    best_move: Optional[Tuple[int, int, int, List[int], List[int]]] = None
+    move_budget = 0
+    stop_search = False
+    for src_idx in over_idx:
+        src = buses[src_idx]
+        src_by_block = _build_block_chain_map(src, block_jobs)
+        if not src_by_block:
+            continue
+        for tgt_idx in under_idx:
+            if src_idx == tgt_idx:
+                continue
+            tgt = buses[tgt_idx]
+            tgt_window = _get_bus_capacity_window(tgt, block_jobs)
+            for block, indexed_routes in src_by_block.items():
+                src_chain = list(src.get_chain(block))
+                jobs = block_jobs.get(block, [])
+                if not src_chain or not jobs:
+                    continue
+                tt = block_tt.get(block, {})
+                is_entry = block in (1, 3)
+                verify_fn = _verify_entry_chain if is_entry else _verify_exit_chain
+                for route_idx, pos in indexed_routes:
+                    move_budget += 1
+                    if move_budget > max(1, int(config.max_moves_per_pass)):
+                        stop_search = True
+                        break
+                    if counts[src_idx] <= 1:
+                        break
+                    route_window = _job_capacity_range(jobs[route_idx])
+                    if route_window == (0, 0):
+                        continue
+                    if not _ranges_overlap(tgt_window[0], tgt_window[1], route_window[0], route_window[1]):
+                        continue
+
+                    base_tgt_chain = list(tgt.get_chain(block)) if tgt.has_block(block) else []
+                    for new_tgt_chain in _chain_insert_candidates(base_tgt_chain, route_idx):
+                        if not _chain_capacity_consistent(new_tgt_chain, jobs):
+                            continue
+                        if not verify_fn(new_tgt_chain, jobs, tt):
+                            continue
+
+                        new_src_chain = src_chain[:pos] + src_chain[pos + 1:]
+                        if new_src_chain:
+                            if not _chain_capacity_consistent(new_src_chain, jobs):
+                                continue
+                            if not verify_fn(new_src_chain, jobs, tt):
+                                continue
+
+                        candidate_counts = list(counts)
+                        candidate_counts[src_idx] -= 1
+                        candidate_counts[tgt_idx] += 1
+                        candidate_metrics = _load_metrics_from_counts(candidate_counts)
+                        candidate_tuple = _load_metric_tuple(candidate_metrics)
+                        if candidate_tuple >= best_before:
+                            continue
+
+                        if candidate_tuple < best_tuple:
+                            best_tuple = candidate_tuple
+                            best_move = (src_idx, tgt_idx, block, new_src_chain, new_tgt_chain)
+                if stop_search:
+                    break
+            if stop_search:
+                break
+        if stop_search:
+            break
+
+    if best_move is None:
+        return False
+
+    src_idx, tgt_idx, block, new_src_chain, new_tgt_chain = best_move
+    src = buses[src_idx]
+    tgt = buses[tgt_idx]
+    src.set_chain(block, new_src_chain)
+    tgt.set_chain(block, new_tgt_chain)
+    return True
+
+    return False
+
+
+def _attempt_swap_move(
+    buses: List[ChainedBus],
+    block_jobs: Dict[int, List[RouteJob]],
+    block_tt: Dict[int, Dict[Tuple[int, int], int]],
+    current_metrics: Dict[str, Any],
+    config: LoadBalanceConfig,
+) -> bool:
+    """Try a single improving 1x1 swap move for stubborn imbalance."""
+    counts = [bus.total_routes() for bus in buses]
+    if len(counts) <= 1:
+        return False
+    med = float(current_metrics.get("median_routes_per_bus", 0.0))
+    high_threshold = med + max(0, config.target_band)
+    low_threshold = max(1.0, med - max(0, config.target_band))
+    over_idx = sorted([i for i, c in enumerate(counts) if c > high_threshold], key=lambda idx: counts[idx], reverse=True)
+    under_idx = sorted([i for i, c in enumerate(counts) if c < low_threshold], key=lambda idx: counts[idx])
+    if not over_idx or not under_idx:
+        return False
+
+    attempts = 0
+    for src_idx in over_idx:
+        src = buses[src_idx]
+        for tgt_idx in under_idx:
+            if src_idx == tgt_idx:
+                continue
+            tgt = buses[tgt_idx]
+            shared_blocks = sorted(set(src.block_chains.keys()).intersection(set(tgt.block_chains.keys())))
+            for block in shared_blocks:
+                src_chain = list(src.get_chain(block))
+                tgt_chain = list(tgt.get_chain(block))
+                jobs = block_jobs.get(block, [])
+                if not src_chain or not tgt_chain or not jobs:
+                    continue
+                tt = block_tt.get(block, {})
+                is_entry = block in (1, 3)
+                verify_fn = _verify_entry_chain if is_entry else _verify_exit_chain
+                for src_pos, src_route_idx in enumerate(_iter_route_candidates(src_chain)):
+                    for tgt_pos, tgt_route_idx in enumerate(_iter_route_candidates(tgt_chain)):
+                        attempts += 1
+                        if attempts > max(1, int(config.max_swap_attempts_per_pass)):
+                            return False
+                        # translate route_idx back to actual position in chain
+                        try:
+                            real_src_pos = src_chain.index(src_route_idx)
+                            real_tgt_pos = tgt_chain.index(tgt_route_idx)
+                        except ValueError:
+                            continue
+
+                        new_src_chain = list(src_chain)
+                        new_tgt_chain = list(tgt_chain)
+                        new_src_chain[real_src_pos] = tgt_route_idx
+                        new_tgt_chain[real_tgt_pos] = src_route_idx
+
+                        if not _chain_capacity_consistent(new_src_chain, jobs):
+                            continue
+                        if not _chain_capacity_consistent(new_tgt_chain, jobs):
+                            continue
+                        if not verify_fn(new_src_chain, jobs, tt):
+                            continue
+                        if not verify_fn(new_tgt_chain, jobs, tt):
+                            continue
+
+                        src.set_chain(block, new_src_chain)
+                        tgt.set_chain(block, new_tgt_chain)
+                        return True
+
+    return False
+
+
+def rebalance_route_load(
+    buses: List[ChainedBus],
+    block_jobs: Dict[int, List[RouteJob]],
+    block_tt: Dict[int, Dict[Tuple[int, int], int]],
+    config: Optional[LoadBalanceConfig] = None,
+) -> Tuple[List[ChainedBus], LoadBalanceResult]:
+    """Rebalance routes-per-bus without increasing bus count or breaking feasibility."""
+    cfg = config or LoadBalanceConfig()
+    started = time_module.perf_counter()
+    result = LoadBalanceResult(applied=False)
+
+    if not cfg.enabled or len(buses) <= 1:
+        result.reason = "disabled_or_single_bus"
+        result.before_metrics = _compute_load_metrics_for_buses(buses)
+        result.after_metrics = dict(result.before_metrics)
+        result.elapsed_ms = int((time_module.perf_counter() - started) * 1000)
+        return buses, result
+
+    working = deepcopy(buses)
+    before_metrics = _compute_load_metrics_for_buses(working)
+    current_metrics = dict(before_metrics)
+    before_tuple = _load_metric_tuple(current_metrics)
+    result.before_metrics = dict(before_metrics)
+
+    passes = 0
+    moves = 0
+    swaps = 0
+    improved_any = False
+
+    while passes < max(1, int(cfg.max_passes)):
+        passes += 1
+        if _load_metric_tuple(current_metrics)[0] <= int(cfg.hard_spread_limit):
+            break
+
+        relocated = _attempt_relocate_move(working, block_jobs, block_tt, current_metrics, cfg)
+        if relocated:
+            moves += 1
+            improved_any = True
+            current_metrics = _compute_load_metrics_for_buses(working)
+            continue
+
+        swapped = _attempt_swap_move(working, block_jobs, block_tt, current_metrics, cfg)
+        if swapped:
+            swaps += 1
+            improved_any = True
+            current_metrics = _compute_load_metrics_for_buses(working)
+            continue
+
+        break
+
+    result.after_metrics = _compute_load_metrics_for_buses(working)
+    result.passes = passes
+    result.moves = moves
+    result.swaps = swaps
+    result.applied = improved_any and (_load_metric_tuple(result.after_metrics) < before_tuple)
+    result.unresolved = int(result.after_metrics.get("load_spread_routes", 0)) > int(cfg.hard_spread_limit)
+    result.elapsed_ms = int((time_module.perf_counter() - started) * 1000)
+    result.reason = "ok" if result.applied else "no_improving_move"
+    return working, result
 
 
 # ============================================================
@@ -2247,6 +2650,9 @@ def optimize_v6(
     routes: List[Route], 
     progress_callback: ProgressCallback = None,
     use_ml_assignment: bool = True,
+    balance_load: bool = True,
+    load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
+    load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
 ) -> List[BusSchedule]:
     """
     Main optimization function for V6.
@@ -2255,6 +2661,9 @@ def optimize_v6(
         routes: List of Route objects to optimize
         progress_callback: Optional callback function(phase: str, progress: int, message: str) -> None
         use_ml_assignment: Enable ML pair scoring for route chaining
+        balance_load: Enable load rebalance phase after minimizing buses
+        load_balance_hard_spread_limit: Max allowed spread (max-min routes per bus)
+        load_balance_target_band: Band around median for target load
         
     Returns:
         List of BusSchedule objects representing the optimized fleet
@@ -2280,6 +2689,19 @@ def optimize_v6(
     print("TUTTI OPTIMIZER V6 (ILP + Local Search)")
     print("=" * 60)
     print(f"ML assignment: {'enabled' if use_ml_assignment else 'disabled'}")
+    print(
+        "Load balance: "
+        f"{'enabled' if balance_load else 'disabled'} "
+        f"(spread<={max(1, int(load_balance_hard_spread_limit))}, "
+        f"band=+/-{max(0, int(load_balance_target_band))})"
+    )
+
+    load_balance_cfg = LoadBalanceConfig(
+        enabled=bool(balance_load),
+        hard_spread_limit=max(1, int(load_balance_hard_spread_limit)),
+        target_band=max(0, int(load_balance_target_band)),
+    )
+    load_balance_result = LoadBalanceResult(reason="not_run")
 
     # Phase 0: Prepare (0-10%)
     phase_start = time_module.perf_counter()
@@ -2378,7 +2800,12 @@ def optimize_v6(
     report_progress("local_search", 80, "Optimizando con búsqueda local...")
     print("\n[Phase 4] Local search improvement...")
     baseline_buses = deepcopy(bus_list)
-    candidate_buses = local_search_improve(deepcopy(bus_list), blocks, block_tt)
+    candidate_buses = local_search_improve(
+        deepcopy(bus_list),
+        blocks,
+        block_tt,
+        load_balance_config=load_balance_cfg,
+    )
 
     baseline_schedules = build_full_schedule(baseline_buses, blocks, block_tt)
     candidate_schedules = build_full_schedule(candidate_buses, blocks, block_tt)
@@ -2407,6 +2834,65 @@ def optimize_v6(
             f"buses {len(baseline_schedules)}->{len(candidate_schedules)}"
         )
     _record_phase_time("local_search", phase_start)
+
+    # Phase 4.5: Rebalance route load (85-88%)
+    phase_start = time_module.perf_counter()
+    report_progress("load_rebalance", 86, "Equilibrando carga por bus...")
+    print("\n[Phase 4.5] Load rebalance...")
+
+    selected_baseline_buses = deepcopy(bus_list)
+    selected_baseline_schedules = prebuilt_schedules
+    baseline_split = max(0, len(selected_baseline_schedules) - len(selected_baseline_buses))
+    baseline_load_metrics = _compute_load_metrics_for_schedules(selected_baseline_schedules)
+
+    try:
+        rebalanced_buses, load_balance_result = rebalance_route_load(
+            deepcopy(bus_list),
+            blocks,
+            block_tt,
+            config=load_balance_cfg,
+        )
+        rebalanced_schedules = build_full_schedule(rebalanced_buses, blocks, block_tt)
+        rebalanced_split = max(0, len(rebalanced_schedules) - len(rebalanced_buses))
+        rebalanced_load_metrics = _compute_load_metrics_for_schedules(rebalanced_schedules)
+
+        accept_rebalance = (
+            len(rebalanced_schedules) <= len(selected_baseline_schedules)
+            and rebalanced_split <= baseline_split
+            and _load_metric_tuple(rebalanced_load_metrics) <= _load_metric_tuple(baseline_load_metrics)
+        )
+        if accept_rebalance and _load_metric_tuple(rebalanced_load_metrics) < _load_metric_tuple(baseline_load_metrics):
+            bus_list = rebalanced_buses
+            prebuilt_schedules = rebalanced_schedules
+            load_balance_result.applied = True
+            load_balance_result.after_metrics = dict(rebalanced_load_metrics)
+            print(
+                "    Rebalance accepted: "
+                f"spread {baseline_load_metrics.get('load_spread_routes', 0)}"
+                f"->{rebalanced_load_metrics.get('load_spread_routes', 0)}, "
+                f"abs_dev {baseline_load_metrics.get('load_abs_dev_sum', 0.0)}"
+                f"->{rebalanced_load_metrics.get('load_abs_dev_sum', 0.0)}"
+            )
+        else:
+            bus_list = selected_baseline_buses
+            prebuilt_schedules = selected_baseline_schedules
+            load_balance_result.applied = False
+            load_balance_result.after_metrics = dict(baseline_load_metrics)
+            load_balance_result.unresolved = bool(
+                baseline_load_metrics.get("load_spread_routes", 0) > load_balance_cfg.hard_spread_limit
+            )
+            print("    Rebalance skipped: no feasible improving move without degrading viability")
+    except Exception as rebalance_exc:
+        logger.exception("Load rebalance failed; keeping baseline solution")
+        bus_list = selected_baseline_buses
+        prebuilt_schedules = selected_baseline_schedules
+        load_balance_result.applied = False
+        load_balance_result.reason = f"error:{type(rebalance_exc).__name__}"
+        load_balance_result.after_metrics = dict(baseline_load_metrics)
+        load_balance_result.unresolved = bool(
+            baseline_load_metrics.get("load_spread_routes", 0) > load_balance_cfg.hard_spread_limit
+        )
+    _record_phase_time("load_rebalance", phase_start)
 
     # Phase 5: Build schedules (85-95%)
     phase_start = time_module.perf_counter()
@@ -2440,6 +2926,8 @@ def optimize_v6(
     except Exception:
         router_metrics = {}
 
+    final_load_metrics = _compute_load_metrics_for_schedules(schedules)
+
     _LAST_OPTIMIZATION_DIAGNOSTICS = {
         "total_routes": total_routes,
         "pre_split_buses": pre_split_buses,
@@ -2457,6 +2945,20 @@ def optimize_v6(
         "osrm_fallback_count": int(_RUNTIME_METRICS.get("osrm_fallback_count", 0)),
         "ilp_solver_failures": int(_RUNTIME_METRICS.get("ilp_solver_failures", 0)),
         "ilp_fallback_greedy_matches": int(_RUNTIME_METRICS.get("ilp_fallback_greedy_matches", 0)),
+        "median_routes_per_bus": final_load_metrics.get("median_routes_per_bus", 0.0),
+        "min_routes_per_bus": final_load_metrics.get("min_routes_per_bus", 0),
+        "max_routes_per_bus": final_load_metrics.get("max_routes_per_bus", 0),
+        "load_spread_routes": final_load_metrics.get("load_spread_routes", 0),
+        "load_abs_dev_sum": final_load_metrics.get("load_abs_dev_sum", 0.0),
+        "load_balanced": bool(final_load_metrics.get("load_spread_routes", 0) <= load_balance_cfg.hard_spread_limit),
+        "load_rebalance_applied": bool(load_balance_result.applied),
+        "load_rebalance_moves": int(load_balance_result.moves),
+        "load_rebalance_swaps": int(load_balance_result.swaps),
+        "load_rebalance_passes": int(load_balance_result.passes),
+        "load_balance_unresolved": bool(load_balance_result.unresolved),
+        "load_balance_before": dict(load_balance_result.before_metrics or {}),
+        "load_balance_after": dict(load_balance_result.after_metrics or {}),
+        "load_balance_reason": str(load_balance_result.reason or ""),
     }
     total_assigned = sum(len(s.items) for s in schedules)
     entry_count = sum(1 for s in schedules for item in s.items if item.type == "entry")
@@ -2468,6 +2970,20 @@ def optimize_v6(
     print(f"  Entries: {entry_count}, Exits: {exit_count}")
     if routes_per_bus:
         print(f"  Routes/bus: min={min(routes_per_bus)}, max={max(routes_per_bus)}, avg={sum(routes_per_bus)/len(routes_per_bus):.1f}")
+        print(
+            "  Load balance: "
+            f"median={_LAST_OPTIMIZATION_DIAGNOSTICS.get('median_routes_per_bus', 0)}, "
+            f"spread={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_spread_routes', 0)}, "
+            f"abs_dev={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_abs_dev_sum', 0)}"
+        )
+        print(
+            "  Load rebalance: "
+            f"applied={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_rebalance_applied', False)}, "
+            f"moves={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_rebalance_moves', 0)}, "
+            f"swaps={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_rebalance_swaps', 0)}, "
+            f"passes={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_rebalance_passes', 0)}, "
+            f"unresolved={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_balance_unresolved', False)}"
+        )
 
     shifts = [item.time_shift_minutes for s in schedules for item in s.items if item.time_shift_minutes > 0]
     if shifts:
@@ -2509,9 +3025,21 @@ def optimize_v6(
     return schedules
 
 
-def optimize_routes_v6(routes: List[Route], use_ml_assignment: bool = True) -> List[BusSchedule]:
+def optimize_routes_v6(
+    routes: List[Route],
+    use_ml_assignment: bool = True,
+    balance_load: bool = True,
+    load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
+    load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
+) -> List[BusSchedule]:
     """Alias for optimize_v6."""
-    return optimize_v6(routes, use_ml_assignment=use_ml_assignment)
+    return optimize_v6(
+        routes,
+        use_ml_assignment=use_ml_assignment,
+        balance_load=balance_load,
+        load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+        load_balance_target_band=load_balance_target_band,
+    )
 
 
 __all__ = ['optimize_v6', 'optimize_routes_v6', 'get_last_optimization_diagnostics']

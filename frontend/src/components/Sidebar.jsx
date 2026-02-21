@@ -162,6 +162,18 @@ const Sidebar = ({
                           <p className="text-[10px] text-gt-text-muted mt-0.5 uppercase tracking-[0.1em]">Media/Bus</p>
                         </div>
                         <div className="gt-stat-card rounded-xl p-3 text-center">
+                          <p className="text-lg font-semibold text-cyan-300 data-mono">
+                            {optimizationStats.median_routes_per_bus || 0}
+                          </p>
+                          <p className="text-[10px] text-gt-text-muted mt-0.5 uppercase tracking-[0.1em]">Mediana</p>
+                        </div>
+                        <div className="gt-stat-card rounded-xl p-3 text-center">
+                          <p className={`text-lg font-semibold data-mono ${(optimizationStats.load_spread_routes || 0) > 2 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                            {optimizationStats.load_spread_routes || 0}
+                          </p>
+                          <p className="text-[10px] text-gt-text-muted mt-0.5 uppercase tracking-[0.1em]">Spread</p>
+                        </div>
+                        <div className="gt-stat-card rounded-xl p-3 text-center">
                           <p className="text-lg font-semibold text-gt-info data-mono">
                             {optimizationStats.total_entries || 0}
                           </p>
@@ -172,6 +184,12 @@ const Sidebar = ({
                             {optimizationStats.total_exits || 0}
                           </p>
                           <p className="text-[10px] text-gt-text-muted mt-0.5 uppercase tracking-[0.1em]">Salidas</p>
+                        </div>
+                        <div className="col-span-2 gt-stat-card rounded-xl p-2.5 text-center">
+                          <span className="text-[13px] font-semibold text-gt-text data-mono">
+                            {optimizationStats.min_routes_per_bus || 0}-{optimizationStats.max_routes_per_bus || 0}
+                          </span>
+                          <span className="text-[10px] text-gt-text-muted ml-2 uppercase tracking-[0.1em]">carga min/max</span>
                         </div>
                         {optimizationStats.buses_with_both > 0 && (
                           <div className="col-span-2 gt-stat-card rounded-xl p-2.5 text-center">

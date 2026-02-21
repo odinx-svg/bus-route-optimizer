@@ -145,6 +145,10 @@ export default function ControlHubPage({
           const selected = String(workspace.id) === String(activeWorkspaceId);
           const buses = workspace?.summary_metrics?.best_buses ?? workspace?.summary_metrics?.total_buses ?? 0;
           const infeasible = workspace?.summary_metrics?.infeasible_buses ?? 0;
+          const loadMin = workspace?.summary_metrics?.min_routes_per_bus;
+          const loadMax = workspace?.summary_metrics?.max_routes_per_bus;
+          const loadMedian = workspace?.summary_metrics?.median_routes_per_bus;
+          const loadSpread = workspace?.summary_metrics?.load_spread_routes;
           return (
             <div
               key={workspace.id}
@@ -170,6 +174,16 @@ export default function ControlHubPage({
                   <Activity className="w-3.5 h-3.5" />
                   {infeasible} inviables
                 </span>
+                {(Number.isFinite(loadMin) && Number.isFinite(loadMax)) ? (
+                  <span className="data-mono">
+                    carga {loadMin}-{loadMax}
+                  </span>
+                ) : null}
+                {(Number.isFinite(loadMedian) || Number.isFinite(loadSpread)) ? (
+                  <span className={`data-mono ${Number(loadSpread || 0) > 2 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                    med {loadMedian ?? 0} | spread {loadSpread ?? 0}
+                  </span>
+                ) : null}
                 <span>{new Date(workspace.updated_at).toLocaleString()}</span>
               </div>
               <div className="mt-3 flex items-center gap-2">

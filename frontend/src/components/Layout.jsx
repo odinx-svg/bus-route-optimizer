@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutGrid, Activity, Gauge } from 'lucide-react';
+import tuttiSymbol from '../assets/tutti-symbol.svg';
 
 const DAY_CONFIG = [
   { key: 'L', label: 'L', full: 'Lunes' },
@@ -100,8 +101,8 @@ const Header = ({
   return (
     <header className="h-[62px] gt-header-gradient gt-border-b flex items-center px-5 flex-shrink-0 z-50">
       <div className="flex items-center gap-3 mr-8">
-        <div className="w-9 h-9 rounded-lg gt-glass flex items-center justify-center">
-          <span className="text-[12px] font-bold text-gt-accent data-mono">TT</span>
+        <div className="w-9 h-9 rounded-lg gt-glass flex items-center justify-center overflow-hidden">
+          <img src={tuttiSymbol} alt="TUTTI" className="w-full h-full object-cover" />
         </div>
         <div className="flex flex-col">
           <span className="text-[12px] font-semibold text-gt-text tracking-[0.12em] uppercase data-mono">TUTTI</span>
@@ -156,6 +157,27 @@ const Header = ({
               value={stats.avg_routes_per_bus}
               label="media/bus"
               color="text-emerald-400"
+            />
+          )}
+          {stats.median_routes_per_bus > 0 && (
+            <MetricBadge
+              value={stats.median_routes_per_bus}
+              label="mediana"
+              color="text-cyan-300"
+            />
+          )}
+          {(stats.max_routes_per_bus || 0) > 0 && (
+            <MetricBadge
+              value={`${stats.min_routes_per_bus || 0}-${stats.max_routes_per_bus || 0}`}
+              label="carga min/max"
+              color="text-slate-200"
+            />
+          )}
+          {(stats.load_spread_routes || 0) > 0 && (
+            <MetricBadge
+              value={stats.load_spread_routes}
+              label="spread"
+              color={stats.load_spread_routes > 2 ? 'text-rose-300' : 'text-emerald-300'}
             />
           )}
         </div>

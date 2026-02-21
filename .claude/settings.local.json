@@ -30,7 +30,12 @@
       "WebFetch(domain:buildui.com)",
       "Bash(dir:*)",
       "Bash(npm install:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(powershell -command \"Get-Content ''$env:LOCALAPPDATA\\\\Tutti\\\\logs\\\\desktop-backend.log'' -Tail 100\")",
+      "Bash(powershell -command \"Get-Content ''C:\\\\Users\\\\Juanjo\\\\AppData\\\\Local\\\\Tutti\\\\logs\\\\desktop-backend.log'' -Tail 150\")",
+      "Bash(git tag:*)",
+      "Bash(git push:*)",
+      "Bash(curl:*)"
     ]
   }
 }

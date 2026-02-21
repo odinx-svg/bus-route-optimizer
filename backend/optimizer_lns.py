@@ -37,7 +37,9 @@ from optimizer_v6 import (
     build_block_chains, merge_all_blocks, local_search_improve,
     build_full_schedule, RouteJob, ChainedBus, to_minutes, from_minutes,
     coords_valid, haversine_travel_minutes,
-    MIN_CONNECTION_BUFFER_MINUTES, DEADHEAD_BUFFER_MINUTES
+    MIN_CONNECTION_BUFFER_MINUTES, DEADHEAD_BUFFER_MINUTES,
+    DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
+    DEFAULT_LOAD_BALANCE_TARGET_BAND,
 )
 from router_service import get_real_travel_time
 
@@ -154,6 +156,9 @@ class LNSOptimizer:
         initial_schedule: Optional[List[BusSchedule]] = None,
         progress_callback: Optional[Callable[[str, int, str], None]] = None,
         use_ml_assignment: bool = True,
+        balance_load: bool = True,
+        load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
+        load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
     ) -> List[BusSchedule]:
         """
         Ejecutar LNS para mejorar la solución.
@@ -163,6 +168,9 @@ class LNSOptimizer:
             initial_schedule: Solución inicial (opcional, usa optimize_v6 si None)
             progress_callback: Callback para reportar progreso
             use_ml_assignment: Activar scoring ML en el optimizador base V6
+            balance_load: Activar fase de rebalanceo de carga
+            load_balance_hard_spread_limit: Limite duro max-min rutas por bus
+            load_balance_target_band: Banda objetivo alrededor de la mediana
             
         Returns:
             Mejor schedule encontrado
@@ -187,6 +195,9 @@ class LNSOptimizer:
                 routes,
                 progress_callback=None,
                 use_ml_assignment=use_ml_assignment,
+                balance_load=balance_load,
+                load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+                load_balance_target_band=load_balance_target_band,
             )
         else:
             current = deepcopy(initial_schedule)
@@ -772,6 +783,9 @@ def optimize_v6_lns(
     progress_callback: Optional[Callable[[str, int, str], None]] = None,
     config: Optional[LNSConfig] = None,
     use_ml_assignment: bool = True,
+    balance_load: bool = True,
+    load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
+    load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
 ) -> List[BusSchedule]:
     """
     Optimización V6 con soporte opcional de LNS.
@@ -783,6 +797,9 @@ def optimize_v6_lns(
         progress_callback: Callback de progreso
         config: Configuración LNS (usa default si None)
         use_ml_assignment: Activar scoring ML en el optimizador base V6
+        balance_load: Activar fase de rebalanceo de carga
+        load_balance_hard_spread_limit: Limite duro max-min rutas por bus
+        load_balance_target_band: Banda objetivo alrededor de la mediana
         
     Returns:
         Schedule optimizado
@@ -793,6 +810,9 @@ def optimize_v6_lns(
             routes,
             progress_callback,
             use_ml_assignment=use_ml_assignment,
+            balance_load=balance_load,
+            load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+            load_balance_target_band=load_balance_target_band,
         )
         return schedule
     
@@ -803,6 +823,9 @@ def optimize_v6_lns(
         initial_schedule=None,
         progress_callback=progress_callback,
         use_ml_assignment=use_ml_assignment,
+        balance_load=balance_load,
+        load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+        load_balance_target_band=load_balance_target_band,
     )
 
 
@@ -812,6 +835,9 @@ def optimize_multi_objective(
     use_lns: bool = True,
     progress_callback: Optional[Callable[[str, int, str], None]] = None,
     use_ml_assignment: bool = True,
+    balance_load: bool = True,
+    load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
+    load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
 ) -> Tuple[List[BusSchedule], ScheduleMetrics]:
     """
     Optimización multi-objetivo con métricas detalladas.
@@ -831,6 +857,9 @@ def optimize_multi_objective(
         use_lns,
         progress_callback,
         use_ml_assignment=use_ml_assignment,
+        balance_load=balance_load,
+        load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+        load_balance_target_band=load_balance_target_band,
     )
     
     optimizer = MultiObjectiveOptimizer(weights)

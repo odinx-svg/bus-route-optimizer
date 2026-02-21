@@ -19,6 +19,7 @@ import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, time
+from statistics import median
 from time import time as now_seconds
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -64,6 +65,9 @@ class PipelineConfig:
     max_iterations: int = _DEFAULT_MAX_ITERATIONS
     use_ml_assignment: bool = True
     invalid_rows_dropped: int = 0
+    balance_load: bool = True
+    load_balance_hard_spread_limit: int = 2
+    load_balance_target_band: int = 1
 
     @classmethod
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> "PipelineConfig":
@@ -76,6 +80,9 @@ class PipelineConfig:
             max_iterations=int(data.get("max_iterations", _DEFAULT_MAX_ITERATIONS)),
             use_ml_assignment=bool(data.get("use_ml_assignment", True)),
             invalid_rows_dropped=max(0, int(data.get("invalid_rows_dropped", 0))),
+            balance_load=bool(data.get("balance_load", True)),
+            load_balance_hard_spread_limit=max(1, int(data.get("load_balance_hard_spread_limit", 2))),
+            load_balance_target_band=max(0, int(data.get("load_balance_target_band", 1))),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -86,6 +93,9 @@ class PipelineConfig:
             "max_iterations": self.max_iterations,
             "use_ml_assignment": self.use_ml_assignment,
             "invalid_rows_dropped": self.invalid_rows_dropped,
+            "balance_load": self.balance_load,
+            "load_balance_hard_spread_limit": self.load_balance_hard_spread_limit,
+            "load_balance_target_band": self.load_balance_target_band,
         }
 
 
@@ -94,6 +104,7 @@ def calculate_pipeline_candidate_score(metrics: Dict[str, Any]) -> float:
     Score final (menor es mejor):
     score = 1000*infeasible_buses + 100*error_issues + 20*warning_issues
             + 10*best_buses + 5000*split_count - avg_efficiency
+            + 25*load_spread_routes + 2*load_abs_dev_sum
     """
     infeasible_buses = int(metrics.get("infeasible_buses", 0))
     error_issues = int(metrics.get("error_issues", 0))
@@ -101,6 +112,8 @@ def calculate_pipeline_candidate_score(metrics: Dict[str, Any]) -> float:
     best_buses = int(metrics.get("best_buses", metrics.get("total_buses", 0)))
     split_count = int(metrics.get("split_count", 0))
     avg_efficiency = float(metrics.get("avg_efficiency", 0.0))
+    load_spread_routes = int(metrics.get("load_spread_routes", 0))
+    load_abs_dev_sum = float(metrics.get("load_abs_dev_sum", 0.0))
     return (
         (1000 * infeasible_buses)
         + (100 * error_issues)
@@ -108,6 +121,23 @@ def calculate_pipeline_candidate_score(metrics: Dict[str, Any]) -> float:
         + (10 * best_buses)
         + (5000 * split_count)
         - avg_efficiency
+        + (25 * load_spread_routes)
+        + (2 * load_abs_dev_sum)
+    )
+
+
+def rank_pipeline_candidate(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
+    """Lexicographic ranking for candidate selection (smaller is better)."""
+    return (
+        1 if int(metrics.get("split_count", 0)) > 0 else 0,
+        int(metrics.get("infeasible_buses", 0)),
+        int(metrics.get("best_buses", metrics.get("total_buses", 0))),
+        int(metrics.get("load_spread_routes", 0)),
+        float(metrics.get("load_abs_dev_sum", 0.0)),
+        int(metrics.get("error_issues", 0)),
+        float(metrics.get("avg_deadhead", 0.0)),
+        int(metrics.get("warning_issues", 0)),
+        -float(metrics.get("avg_efficiency", 0.0)),
     )
 
 
@@ -140,6 +170,12 @@ def _calculate_stats(schedule: List[BusSchedule]) -> Dict[str, Any]:
             "buses_with_both": 0,
             "avg_routes_per_bus": 0,
             "total_early_shift_minutes": 0,
+            "median_routes_per_bus": 0.0,
+            "min_routes_per_bus": 0,
+            "max_routes_per_bus": 0,
+            "load_spread_routes": 0,
+            "load_abs_dev_sum": 0.0,
+            "load_balanced": True,
         }
 
     total_routes = sum(len(bus.items) for bus in schedule)
@@ -151,6 +187,12 @@ def _calculate_stats(schedule: List[BusSchedule]) -> Dict[str, Any]:
     total_early_shift = sum(
         item.time_shift_minutes for bus in schedule for item in bus.items if item.time_shift_minutes > 0
     )
+    route_counts = sorted(len(bus.items) for bus in schedule if bus.items)
+    med_routes = float(median(route_counts)) if route_counts else 0.0
+    min_routes = int(route_counts[0]) if route_counts else 0
+    max_routes = int(route_counts[-1]) if route_counts else 0
+    spread = int(max_routes - min_routes) if route_counts else 0
+    abs_dev_sum = float(sum(abs(float(v) - med_routes) for v in route_counts)) if route_counts else 0.0
 
     return {
         "total_buses": len(schedule),
@@ -162,6 +204,12 @@ def _calculate_stats(schedule: List[BusSchedule]) -> Dict[str, Any]:
         "buses_with_both": buses_with_both,
         "avg_routes_per_bus": round(total_routes / len(schedule), 1) if schedule else 0,
         "total_early_shift_minutes": total_early_shift,
+        "median_routes_per_bus": round(med_routes, 2),
+        "min_routes_per_bus": min_routes,
+        "max_routes_per_bus": max_routes,
+        "load_spread_routes": spread,
+        "load_abs_dev_sum": round(abs_dev_sum, 2),
+        "load_balanced": spread <= 2,
     }
 
 
@@ -445,15 +493,40 @@ def _report_metrics_from_validation(
 
     avg_efficiency = sum(efficiencies) / len(efficiencies) if efficiencies else 0.0
     deadhead_values: List[int] = []
+    routes_per_bus_all_days: List[int] = []
+    per_day_spreads: List[int] = []
+    per_day_abs_dev: List[float] = []
     for day in ALL_DAYS:
         day_data = schedule_by_day_serialized.get(day, {})
+        day_counts: List[int] = []
         for bus in day_data.get("schedule", []):
+            bus_count = int(len(bus.get("items", []) or []))
+            if bus_count > 0:
+                day_counts.append(bus_count)
+                routes_per_bus_all_days.append(bus_count)
             for item in bus.get("items", []):
                 value = item.get("deadhead_minutes")
                 if isinstance(value, (int, float)):
                     deadhead_values.append(int(value))
+        if day_counts:
+            day_sorted = sorted(day_counts)
+            day_med = float(median(day_sorted))
+            per_day_spreads.append(int(day_sorted[-1] - day_sorted[0]))
+            per_day_abs_dev.append(float(sum(abs(float(v) - day_med) for v in day_sorted)))
     avg_deadhead = (sum(deadhead_values) / len(deadhead_values)) if deadhead_values else 0.0
     avg_positioning = avg_deadhead
+
+    if routes_per_bus_all_days:
+        sorted_counts = sorted(routes_per_bus_all_days)
+        median_routes = float(median(sorted_counts))
+        min_routes = int(sorted_counts[0])
+        max_routes = int(sorted_counts[-1])
+    else:
+        median_routes = 0.0
+        min_routes = 0
+        max_routes = 0
+    load_spread_routes = int(max(per_day_spreads)) if per_day_spreads else 0
+    load_abs_dev_sum = float(sum(per_day_abs_dev)) if per_day_abs_dev else 0.0
 
     infeasible_buses = max(0, int(summary.get("total_buses", 0)) - int(summary.get("feasible_buses", 0)))
 
@@ -507,6 +580,12 @@ def _report_metrics_from_validation(
         "avg_deadhead": round(avg_deadhead, 2),
         "avg_positioning_minutes": round(avg_positioning, 2),
         "avg_efficiency": round(avg_efficiency, 2),
+        "median_routes_per_bus": round(median_routes, 2),
+        "min_routes_per_bus": min_routes,
+        "max_routes_per_bus": max_routes,
+        "load_spread_routes": load_spread_routes,
+        "load_abs_dev_sum": round(load_abs_dev_sum, 2),
+        "load_balanced": bool(load_spread_routes <= 2),
     }
 
 
@@ -525,6 +604,9 @@ def _serialize_schedule_by_day(schedule_by_day: Dict[str, List[BusSchedule]]) ->
 def _optimize_by_day_v6(
     routes: List[Route],
     use_ml_assignment: bool = True,
+    balance_load: bool = True,
+    load_balance_hard_spread_limit: int = 2,
+    load_balance_target_band: int = 1,
     trace_callback: DayTraceCallback = None,
 ) -> Tuple[Dict[str, List[BusSchedule]], Dict[str, Dict[str, Any]]]:
     try:
@@ -560,6 +642,9 @@ def _optimize_by_day_v6(
                     day_routes,
                     progress_callback=_day_progress,
                     use_ml_assignment=use_ml_assignment,
+                    balance_load=balance_load,
+                    load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+                    load_balance_target_band=load_balance_target_band,
                 )
                 diagnostics_by_day[day] = get_last_optimization_diagnostics()
             except Exception as first_exc:
@@ -581,6 +666,9 @@ def _optimize_by_day_v6(
                         day_routes,
                         progress_callback=_day_progress,
                         use_ml_assignment=False,
+                        balance_load=balance_load,
+                        load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+                        load_balance_target_band=load_balance_target_band,
                     )
                     diagnostics_by_day[day] = dict(get_last_optimization_diagnostics() or {})
                     diagnostics_by_day[day]["solver_status"] = "fallback_ml_disabled"
@@ -648,6 +736,9 @@ def _optimize_by_day_lns(
     routes: List[Route],
     objective: str,
     use_ml_assignment: bool = True,
+    balance_load: bool = True,
+    load_balance_hard_spread_limit: int = 2,
+    load_balance_target_band: int = 1,
     trace_callback: DayTraceCallback = None,
     iteration: int = 1,
 ) -> Tuple[Dict[str, List[BusSchedule]], Dict[str, Dict[str, Any]]]:
@@ -714,6 +805,9 @@ def _optimize_by_day_lns(
             use_lns=True,
             progress_callback=_day_progress,
             use_ml_assignment=use_ml_assignment,
+            balance_load=balance_load,
+            load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+            load_balance_target_band=load_balance_target_band,
         )
         diagnostics_by_day[day] = get_last_optimization_diagnostics()
         if trace_callback:
@@ -883,15 +977,7 @@ async def run_optimization_pipeline_by_day(
         }
 
     def candidate_rank(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
-        return (
-            1 if int(metrics.get("split_count", 0)) > 0 else 0,
-            int(metrics.get("infeasible_buses", 0)),
-            int(metrics.get("best_buses", metrics.get("total_buses", 0))),
-            int(metrics.get("error_issues", 0)),
-            float(metrics.get("avg_deadhead", 0.0)),
-            int(metrics.get("warning_issues", 0)),
-            -float(metrics.get("avg_efficiency", 0.0)),
-        )
+        return rank_pipeline_candidate(metrics)
 
     def is_acceptable(metrics: Dict[str, Any]) -> bool:
         return int(metrics.get("split_count", 0)) == 0
@@ -902,6 +988,9 @@ async def run_optimization_pipeline_by_day(
         _optimize_by_day_v6,
         routes,
         config.use_ml_assignment,
+        config.balance_load,
+        config.load_balance_hard_spread_limit,
+        config.load_balance_target_band,
         lambda day, phase, progress, message, extra=None: emit_day_trace(
             stage="baseline_trace",
             progress_window=(10, 34),
@@ -1026,6 +1115,9 @@ async def run_optimization_pipeline_by_day(
                     routes,
                     config.objective,
                     use_ml_assignment=config.use_ml_assignment,
+                    balance_load=config.balance_load,
+                    load_balance_hard_spread_limit=config.load_balance_hard_spread_limit,
+                    load_balance_target_band=config.load_balance_target_band,
                     trace_callback=lambda day, phase, progress, message, extra=None: emit_day_trace(
                         stage=f"reoptimize_trace_{iteration}",
                         progress_window=(base_progress, min(base_progress + 7, 90)),

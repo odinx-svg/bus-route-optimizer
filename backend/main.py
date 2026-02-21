@@ -29,6 +29,7 @@ import asyncio
 import re
 import traceback
 import sys
+import statistics
 
 from parser import parse_routes, parse_routes_with_report, aggregate_parse_reports
 from models import Route, Bus, BusSchedule
@@ -1094,6 +1095,22 @@ async def optimize_v6_endpoint(
         default=True,
         description="Activa scoring ML para encadenado de rutas",
     ),
+    balance_load: bool = Query(
+        default=True,
+        description="Activa rebalanceo de carga sin aumentar buses",
+    ),
+    load_balance_hard_spread_limit: int = Query(
+        default=2,
+        ge=1,
+        le=12,
+        description="Limite max-min rutas por bus",
+    ),
+    load_balance_target_band: int = Query(
+        default=1,
+        ge=0,
+        le=6,
+        description="Banda objetivo alrededor de mediana",
+    ),
 ) -> Dict[str, Any]:
     """
     Tutti Optimizer V6: ILP-based optimization + local search.
@@ -1110,9 +1127,18 @@ async def optimize_v6_endpoint(
 
         logger.info(
             f"[V6] Starting optimization with {len(routes)} routes "
-            f"(ml_assignment={use_ml_assignment})"
+            f"(ml_assignment={use_ml_assignment}, "
+            f"balance_load={balance_load}, "
+            f"spread_limit={load_balance_hard_spread_limit}, "
+            f"target_band={load_balance_target_band})"
         )
-        schedule = optimize_v6(routes, use_ml_assignment=use_ml_assignment)
+        schedule = optimize_v6(
+            routes,
+            use_ml_assignment=use_ml_assignment,
+            balance_load=balance_load,
+            load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+            load_balance_target_band=load_balance_target_band,
+        )
         schedule, fleet_assignment = _apply_fleet_profiles(schedule)
 
         total_routes = sum(len(b.items) for b in schedule)
@@ -1143,6 +1169,9 @@ async def optimize_v6_endpoint(
             },
             "optimization_options": {
                 "use_ml_assignment": bool(use_ml_assignment),
+                "balance_load": bool(balance_load),
+                "load_balance_hard_spread_limit": int(load_balance_hard_spread_limit),
+                "load_balance_target_band": int(load_balance_target_band),
             },
             "fleet_assignment": fleet_assignment,
         }
@@ -1361,6 +1390,12 @@ def _calculate_stats(schedule: List[BusSchedule]) -> Dict[str, Any]:
             "buses_with_both": 0,
             "avg_routes_per_bus": 0,
             "total_early_shift_minutes": 0,
+            "median_routes_per_bus": 0.0,
+            "min_routes_per_bus": 0,
+            "max_routes_per_bus": 0,
+            "load_spread_routes": 0,
+            "load_abs_dev_sum": 0.0,
+            "load_balanced": True,
         }
     
     total_routes = sum(len(bus.items) for bus in schedule)
@@ -1373,6 +1408,12 @@ def _calculate_stats(schedule: List[BusSchedule]) -> Dict[str, Any]:
         item.time_shift_minutes for bus in schedule for item in bus.items
         if item.time_shift_minutes > 0
     )
+    route_counts = sorted(len(bus.items) for bus in schedule if bus.items)
+    med_routes = float(statistics.median(route_counts)) if route_counts else 0.0
+    min_routes = int(route_counts[0]) if route_counts else 0
+    max_routes = int(route_counts[-1]) if route_counts else 0
+    spread = int(max_routes - min_routes) if route_counts else 0
+    abs_dev_sum = float(sum(abs(float(v) - med_routes) for v in route_counts)) if route_counts else 0.0
     
     return {
         "total_buses": len(schedule),
@@ -1384,6 +1425,12 @@ def _calculate_stats(schedule: List[BusSchedule]) -> Dict[str, Any]:
         "buses_with_both": buses_with_both,
         "avg_routes_per_bus": round(total_routes / len(schedule), 1) if schedule else 0,
         "total_early_shift_minutes": total_early_shift,
+        "median_routes_per_bus": round(med_routes, 2),
+        "min_routes_per_bus": min_routes,
+        "max_routes_per_bus": max_routes,
+        "load_spread_routes": spread,
+        "load_abs_dev_sum": round(abs_dev_sum, 2),
+        "load_balanced": spread <= 2,
     }
 
 
@@ -1394,6 +1441,9 @@ class PipelineConfigPayload(BaseModel):
     max_iterations: int = 2
     use_ml_assignment: bool = True
     invalid_rows_dropped: int = 0
+    balance_load: bool = True
+    load_balance_hard_spread_limit: int = 2
+    load_balance_target_band: int = 1
 
 
 class PipelineOptimizationRequest(BaseModel):
@@ -1416,6 +1466,22 @@ async def optimize_v6_by_day_endpoint(
     use_ml_assignment: bool = Query(
         default=True,
         description="Activa scoring ML para encadenado de rutas",
+    ),
+    balance_load: bool = Query(
+        default=True,
+        description="Activa rebalanceo de carga sin aumentar buses",
+    ),
+    load_balance_hard_spread_limit: int = Query(
+        default=2,
+        ge=1,
+        le=12,
+        description="Limite max-min rutas por bus",
+    ),
+    load_balance_target_band: int = Query(
+        default=1,
+        ge=0,
+        le=6,
+        description="Banda objetivo alrededor de mediana",
     ),
 ) -> Dict[str, Any]:
     """
@@ -1455,9 +1521,16 @@ async def optimize_v6_by_day_endpoint(
 
             logger.info(
                 f"[V6-ByDay] {DAY_NAMES[day]}: {len(day_routes)} routes "
-                f"(ml_assignment={use_ml_assignment})"
+                f"(ml_assignment={use_ml_assignment}, balance_load={balance_load}, "
+                f"spread_limit={load_balance_hard_spread_limit}, target_band={load_balance_target_band})"
             )
-            schedule = optimize_v6(day_routes, use_ml_assignment=use_ml_assignment)
+            schedule = optimize_v6(
+                day_routes,
+                use_ml_assignment=use_ml_assignment,
+                balance_load=balance_load,
+                load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+                load_balance_target_band=load_balance_target_band,
+            )
             schedule, fleet_assignment = _apply_fleet_profiles(schedule)
 
             total_routes = sum(len(b.items) for b in schedule)
@@ -1485,7 +1558,13 @@ async def optimize_v6_by_day_endpoint(
                     "total_early_shift_minutes": total_early_shift,
                 },
                 "fleet_assignment": fleet_assignment,
-                "day_name": DAY_NAMES[day]
+                "day_name": DAY_NAMES[day],
+                "optimization_options": {
+                    "use_ml_assignment": bool(use_ml_assignment),
+                    "balance_load": bool(balance_load),
+                    "load_balance_hard_spread_limit": int(load_balance_hard_spread_limit),
+                    "load_balance_target_band": int(load_balance_target_band),
+                },
             }
 
             logger.info(f"[V6-ByDay] {DAY_NAMES[day]}: {len(schedule)} buses, {total_routes} routes")
@@ -1863,6 +1942,9 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
         "max_iterations": int(os.environ.get("TUTTI_PIPELINE_MAX_ITERATIONS", "2")),
         "use_ml_assignment": True,
         "invalid_rows_dropped": 0,
+        "balance_load": True,
+        "load_balance_hard_spread_limit": 2,
+        "load_balance_target_band": 1,
     }
     if request.workspace_id:
         config_payload["workspace_id"] = request.workspace_id
@@ -1978,6 +2060,9 @@ async def optimize_hybrid_by_day_async(request: PipelineOptimizationRequest) -> 
     config_payload.setdefault("max_iterations", int(os.environ.get("TUTTI_PIPELINE_MAX_ITERATIONS", "2")))
     config_payload.setdefault("use_ml_assignment", True)
     config_payload.setdefault("invalid_rows_dropped", 0)
+    config_payload.setdefault("balance_load", True)
+    config_payload.setdefault("load_balance_hard_spread_limit", 2)
+    config_payload.setdefault("load_balance_target_band", 1)
 
     wrapped_request = PipelineOptimizationRequest(
         routes=request.routes,
