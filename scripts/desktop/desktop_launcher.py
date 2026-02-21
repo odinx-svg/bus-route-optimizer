@@ -549,8 +549,20 @@ if not errorlevel 1 (
         goto wait_target
 
         :start_target
-        timeout /t 2 /nobreak >nul
-        start "" "%TARGET_EXE%"
+        set "TUTTI_TEMP=%LOCALAPPDATA%\Tutti\temp-runtime"
+        if not exist "%TUTTI_TEMP%" mkdir "%TUTTI_TEMP%" >nul 2>&1
+
+        set "LAUNCH_TRY=0"
+        :launch_retry
+        set /a LAUNCH_TRY+=1
+        timeout /t 8 /nobreak >nul
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "$env:TEMP=$env:TUTTI_TEMP; $env:TMP=$env:TUTTI_TEMP; Start-Process -FilePath $env:TARGET_EXE" >nul 2>&1
+        timeout /t 6 /nobreak >nul
+
+        tasklist /FI "IMAGENAME eq Tutti Desktop.exe" | findstr /I "Tutti Desktop.exe" >nul
+        if errorlevel 1 (
+            if !LAUNCH_TRY! LSS 4 goto launch_retry
+        )
     )
 )
 
