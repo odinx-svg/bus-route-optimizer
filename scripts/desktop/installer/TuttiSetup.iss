@@ -44,6 +44,9 @@ Name: "desktopicon"; Description: "Crear icono en el escritorio"; GroupDescripti
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
 
+[Dirs]
+Name: "{localappdata}\TuttiRuntime"
+
 [Icons]
 Name: "{autoprograms}\TUTTI"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\TUTTI"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon

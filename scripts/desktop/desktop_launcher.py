@@ -427,7 +427,7 @@ def _launch_updater_and_exit(current_exe: Path, new_exe: Path, backup_exe: Optio
     """
     auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
     start_cmd = (
-        f'set "TUTTI_TEMP=%LOCALAPPDATA%\\Tutti\\temp-runtime"\n'
+        f'set "TUTTI_TEMP=%LOCALAPPDATA%\\TuttiRuntime"\n'
         f'if not exist "%TUTTI_TEMP%" mkdir "%TUTTI_TEMP%" >nul 2>&1\n'
         f'set "TEMP=%TUTTI_TEMP%"\n'
         f'set "TMP=%TUTTI_TEMP%"\n'
@@ -558,7 +558,7 @@ if not errorlevel 1 (
         goto wait_target
 
         :start_target
-        set "TUTTI_TEMP=%LOCALAPPDATA%\Tutti\temp-runtime"
+        set "TUTTI_TEMP=%LOCALAPPDATA%\TuttiRuntime"
         if not exist "%TUTTI_TEMP%" mkdir "%TUTTI_TEMP%" >nul 2>&1
         set "TEMP=%TUTTI_TEMP%"
         set "TMP=%TUTTI_TEMP%"

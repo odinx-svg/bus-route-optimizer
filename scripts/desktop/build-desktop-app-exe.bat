@@ -100,6 +100,7 @@ set "PYI=%VENV%\Scripts\pyinstaller.exe"
 "%PYI%" --noconfirm --clean --windowed --onefile ^
   --name "%BUILD_EXE_NAME%" ^
   --icon "%APP_ICON%" ^
+  --runtime-tmpdir "%LOCALAPPDATA%\TuttiRuntime" ^
   --distpath "%PYI_DIST%" ^
   --workpath "%PYI_WORK%" ^
   --specpath "%PYI_SPEC%" ^
