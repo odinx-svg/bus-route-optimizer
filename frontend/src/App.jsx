@@ -442,6 +442,57 @@ function LoadOptionsModal({
   );
 }
 
+function PreOptimizeRestrictionsModal({
+  open = false,
+  workspaceName = '',
+  onCancel,
+  onConfigureRestrictions,
+  onContinueWithoutChanges,
+}) {
+  if (!open) return null;
+
+  const label = String(workspaceName || '').trim() || 'esta optimizacion';
+
+  return (
+    <div className="fixed inset-0 z-[1250] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={onCancel} />
+      <div className="relative w-full max-w-md rounded-xl border border-[#2a4057] bg-[#0b141f] p-4 shadow-2xl">
+        <h3 className="text-[16px] font-semibold text-white">Antes de optimizar</h3>
+        <p className="mt-2 text-[12px] text-[#8ba3bd]">
+          Quieres anadir o ajustar restricciones para <span className="text-white font-semibold">{label}</span> antes de ejecutar el pipeline?
+        </p>
+        <p className="mt-1 text-[11px] text-slate-400">
+          Si guardas restricciones ahora, esta corrida se ejecuta directamente con esas reglas.
+        </p>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onContinueWithoutChanges}
+            className="rounded-md border border-[#2f4d65] bg-[#0b1a2a] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-200 transition hover:bg-[#10243a]"
+          >
+            Optimizar ya
+          </button>
+          <button
+            type="button"
+            onClick={onConfigureRestrictions}
+            className="rounded-md bg-[#2ab5e8] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110"
+          >
+            Anadir restricciones
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [routes, setRoutes] = useState([]);
   const [parseReport, setParseReport] = useState(null);
@@ -471,6 +522,12 @@ function App() {
     workspaceId: null,
     title: 'Restricciones de carga',
   });
+  const [preOptimizeModal, setPreOptimizeModal] = useState({
+    open: false,
+    workspaceName: '',
+    request: null,
+  });
+  const [pendingOptimizationRequest, setPendingOptimizationRequest] = useState(null);
 
   const [pipelineJobId, setPipelineJobId] = useState(null);
   const [pipelineStatus, setPipelineStatus] = useState('idle');
@@ -553,7 +610,7 @@ function App() {
   const openLoadOptionsModal = useCallback(async ({ workspaceId = null, workspaceName = '' } = {}) => {
     const normalizedName = String(workspaceName || '').trim();
     const title = workspaceId
-      ? `Restricciones · ${normalizedName || 'Optimizacion'}`
+      ? `Restricciones - ${normalizedName || 'Optimizacion'}`
       : 'Restricciones por defecto';
     if (workspaceId) {
       const loaded = await fetchAndStoreWorkspaceOptions(workspaceId);
@@ -568,6 +625,7 @@ function App() {
 
   const closeLoadOptionsModal = useCallback(() => {
     setLoadOptionsModal({ open: false, workspaceId: null, title: 'Restricciones de carga' });
+    setPendingOptimizationRequest(null);
   }, []);
 
   const handleSaveLoadOptions = useCallback(async (nextOptionsRaw) => {
@@ -589,7 +647,16 @@ function App() {
       notifications.success('Restricciones por defecto', 'Configuracion lista para la siguiente corrida');
     }
     closeLoadOptionsModal();
-  }, [activeWorkspaceId, closeLoadOptionsModal, loadOptionsModal.workspaceId]);
+    if (pendingOptimizationRequest) {
+      const request = pendingOptimizationRequest;
+      setPendingOptimizationRequest(null);
+      await startAutoPipeline(
+        request.routesInput,
+        request.parseReportInput,
+        request.workspaceIdInput
+      );
+    }
+  }, [activeWorkspaceId, closeLoadOptionsModal, loadOptionsModal.workspaceId, pendingOptimizationRequest]);
 
   const refreshWorkspaces = useCallback(async () => {
     const data = await listWorkspaces().catch(() => ({ items: [] }));
@@ -869,6 +936,22 @@ function App() {
     }
   };
 
+  const openPreOptimizeModal = useCallback((request) => {
+    if (!request?.routesInput || request.routesInput.length === 0) {
+      notifications.warning('No hay datos', 'Sube archivos Excel primero');
+      return;
+    }
+    setPreOptimizeModal({
+      open: true,
+      workspaceName: String(request.workspaceName || '').trim(),
+      request,
+    });
+  }, []);
+
+  const closePreOptimizeModal = useCallback(() => {
+    setPreOptimizeModal({ open: false, workspaceName: '', request: null });
+  }, []);
+
   const handleUploadSuccess = async (payload) => {
     const uploadedRoutes = Array.isArray(payload) ? payload : (payload?.routes || []);
     const uploadReport = Array.isArray(payload) ? null : (payload?.parse_report || null);
@@ -891,12 +974,12 @@ function App() {
 
     if (droppedRows > 0) {
       const shouldContinue = window.confirm(
-        `Calidad de datos detectó ${droppedRows} filas inválidas descartadas de ${rowsTotal} filas.\n\n¿Quieres continuar igualmente con el pipeline automático?`
+        `Calidad de datos detecto ${droppedRows} filas invalidas descartadas de ${rowsTotal} filas.\n\n¿Quieres continuar con estos datos para optimizar?`
       );
       if (!shouldContinue) {
         notifications.info(
-          'Pipeline pausado',
-          'Revisa el panel de calidad de datos antes de optimizar'
+          'Carga pausada',
+          'Revisa el panel de calidad de datos antes de ejecutar la optimizacion'
         );
         return;
       }
@@ -946,15 +1029,22 @@ function App() {
       await refreshWorkspaces();
     }
 
-    const pipelineStart = await startAutoPipeline(uploadedRoutes, uploadReport, workspaceId);
     setCreateFlowMode(false);
-    if (pipelineStart?.status === 'completed') {
-      setIngestionPanelOpen(false);
-    }
+    setIngestionPanelOpen(true);
+    notifications.info(
+      'Datos listos para optimizar',
+      'Pulsa "Ejecutar Pipeline". Antes te preguntaremos si quieres añadir restricciones.'
+    );
   };
 
   const handleOptimize = async () => {
-    await startAutoPipeline(routes, parseReport, activeWorkspaceId);
+    const workspaceName = workspaces.find((ws) => String(ws.id) === String(activeWorkspaceId))?.name || '';
+    openPreOptimizeModal({
+      routesInput: routes,
+      parseReportInput: parseReport,
+      workspaceIdInput: activeWorkspaceId,
+      workspaceName,
+    });
   };
 
   const handleReset = () => {
@@ -1542,6 +1632,32 @@ function App() {
         onSave={handleSaveLoadOptions}
       />
 
+      <PreOptimizeRestrictionsModal
+        open={preOptimizeModal.open}
+        workspaceName={preOptimizeModal.workspaceName}
+        onCancel={closePreOptimizeModal}
+        onContinueWithoutChanges={async () => {
+          const request = preOptimizeModal.request;
+          closePreOptimizeModal();
+          if (!request) return;
+          await startAutoPipeline(
+            request.routesInput,
+            request.parseReportInput,
+            request.workspaceIdInput
+          );
+        }}
+        onConfigureRestrictions={async () => {
+          const request = preOptimizeModal.request;
+          closePreOptimizeModal();
+          if (!request) return;
+          setPendingOptimizationRequest(request);
+          await openLoadOptionsModal({
+            workspaceId: request.workspaceIdInput || null,
+            workspaceName: request.workspaceName || '',
+          });
+        }}
+      />
+
       <TextInputModal
         open={textInputModal.open}
         title={textInputModal.title}
@@ -1562,6 +1678,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
