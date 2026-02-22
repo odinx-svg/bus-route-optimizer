@@ -427,7 +427,14 @@ def _launch_updater_and_exit(current_exe: Path, new_exe: Path, backup_exe: Optio
     """
     auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
     start_cmd = (
-        f'timeout /t 2 /nobreak >nul\nstart "" "{current_exe}"'
+        f'set "TUTTI_TEMP=%LOCALAPPDATA%\\Tutti\\temp-runtime"\n'
+        f'if not exist "%TUTTI_TEMP%" mkdir "%TUTTI_TEMP%" >nul 2>&1\n'
+        f'set "TEMP=%TUTTI_TEMP%"\n'
+        f'set "TMP=%TUTTI_TEMP%"\n'
+        f'set "TUTTI_AFTER_UPDATE=1"\n'
+        f'set "TUTTI_DESKTOP_DISABLE_AUTO_UPDATE=1"\n'
+        f'timeout /t 12 /nobreak >nul\n'
+        f'start "" "{current_exe}"'
         if auto_restart
         else 'echo Actualizacion aplicada. Abre TUTTI manualmente.'
     )
@@ -512,10 +519,12 @@ def _launch_installer_and_exit(installer_exe: Path, expected_exe: Optional[Path]
             runner_bat = Path(tempfile.gettempdir()) / "tutti_desktop_installer_update.bat"
             command_line = subprocess.list2cmdline(installer_args)
             current_pid = os.getpid()
+            target_exe_dir = target_exe.parent
             script = f"""@echo off
 setlocal EnableDelayedExpansion
 set "TARGET_PID={current_pid}"
 set "TARGET_EXE={target_exe}"
+set "TARGET_EXE_DIR={target_exe_dir}"
 set "WAIT_SEC=0"
 set "AUTO_RESTART={1 if auto_restart else 0}"
 
@@ -551,18 +560,14 @@ if not errorlevel 1 (
         :start_target
         set "TUTTI_TEMP=%LOCALAPPDATA%\Tutti\temp-runtime"
         if not exist "%TUTTI_TEMP%" mkdir "%TUTTI_TEMP%" >nul 2>&1
-
-        set "LAUNCH_TRY=0"
-        :launch_retry
-        set /a LAUNCH_TRY+=1
-        timeout /t 8 /nobreak >nul
-        powershell -NoProfile -ExecutionPolicy Bypass -Command "$env:TEMP=$env:TUTTI_TEMP; $env:TMP=$env:TUTTI_TEMP; Start-Process -FilePath $env:TARGET_EXE" >nul 2>&1
-        timeout /t 6 /nobreak >nul
-
-        tasklist /FI "IMAGENAME eq Tutti Desktop.exe" | findstr /I "Tutti Desktop.exe" >nul
-        if errorlevel 1 (
-            if !LAUNCH_TRY! LSS 4 goto launch_retry
-        )
+        set "TEMP=%TUTTI_TEMP%"
+        set "TMP=%TUTTI_TEMP%"
+        set "TUTTI_AFTER_UPDATE=1"
+        set "TUTTI_DESKTOP_DISABLE_AUTO_UPDATE=1"
+        if not exist "%TARGET_EXE%" goto done
+        for %%A in ("%TARGET_EXE%") do if %%~zA==0 goto done
+        timeout /t 18 /nobreak >nul
+        start "" /D "%TARGET_EXE_DIR%" "%TARGET_EXE%"
     )
 )
 
@@ -1205,10 +1210,16 @@ def main() -> int:
     # Check for updates in the foreground only when TUTTI_DESKTOP_UPDATE_BLOCKING=1,
     # otherwise the check runs in background while the app boots.
     blocking_update = _env_flag("TUTTI_DESKTOP_UPDATE_BLOCKING", "0")
+    skip_update_boot = _env_flag("TUTTI_AFTER_UPDATE", "0") or _env_flag(
+        "TUTTI_DESKTOP_DISABLE_AUTO_UPDATE", "0"
+    )
     _pending_update: dict = {}
     _background_update_done = threading.Event()
 
-    if blocking_update:
+    if skip_update_boot:
+        _log_update("Skipping update checks on post-update startup")
+        _background_update_done.set()
+    elif blocking_update:
         if _check_and_apply_update_if_available():
             return 0
     else:
