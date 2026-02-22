@@ -6,6 +6,10 @@
 #define SourceExe "..\..\..\dist\Tutti Desktop.exe"
 #endif
 
+#ifndef SourceDir
+#define SourceDir "..\..\..\dist\desktop-app\installer-payload"
+#endif
+
 #ifndef OutputDir
 #define OutputDir "..\..\..\dist\desktop-app"
 #endif
@@ -42,7 +46,10 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "Crear icono en el escritorio"; GroupDescription: "Opciones adicionales:"; Flags: unchecked
 
 [Files]
-Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExeName}"; Flags: ignoreversion
+; Installer payload must come from PyInstaller onedir output.
+; This avoids the onefile _MEI startup race that can trigger:
+; "Failed to load Python DLL ... _MEI...\python311.dll".
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Dirs]
 Name: "{localappdata}\TuttiRuntime"
@@ -50,7 +57,3 @@ Name: "{localappdata}\TuttiRuntime"
 [Icons]
 Name: "{autoprograms}\TUTTI"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\TUTTI"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
-
-; Avoid launching immediately after install/update to prevent sporadic
-; PyInstaller onefile startup race ("Failed to load Python DLL ... _MEI...").
-; User starts TUTTI manually once setup completes.

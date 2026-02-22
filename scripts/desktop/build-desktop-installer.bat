@@ -6,7 +6,8 @@ color 0B
 
 set "ROOT=%~dp0..\.."
 for %%I in ("%ROOT%") do set "ROOT=%%~fI"
-set "APP_EXE=%ROOT%\dist\Tutti Desktop.exe"
+set "PAYLOAD_DIR=%ROOT%\dist\desktop-app\installer-payload"
+set "APP_EXE=%PAYLOAD_DIR%\Tutti Desktop.exe"
 set "INSTALLER_SCRIPT=%ROOT%\scripts\desktop\installer\TuttiSetup.iss"
 set "INSTALLER_OUT_DIR=%ROOT%\dist\desktop-app"
 set "APP_VERSION=0.1.0"
@@ -19,15 +20,15 @@ echo  ===============================================
 echo.
 
 if not exist "%APP_EXE%" (
-    echo  [1/4] Desktop EXE not found. Building first...
+    echo  [1/4] Installer payload not found. Building desktop artifacts first...
     call "%ROOT%\scripts\desktop\build-desktop-app-exe.bat"
     if %errorlevel% neq 0 (
-        echo        ERROR: Could not build desktop EXE.
+        echo        ERROR: Could not build desktop artifacts.
         if not defined TUTTI_NON_INTERACTIVE pause
         exit /b 1
     )
 ) else (
-    echo  [1/4] Desktop EXE found.
+    echo  [1/4] Installer payload found.
 )
 
 echo  [2/4] Resolving app version...
@@ -54,6 +55,7 @@ echo  [4/4] Building installer...
 if not exist "%INSTALLER_OUT_DIR%" mkdir "%INSTALLER_OUT_DIR%" >nul 2>&1
 "%ISCC_EXE%" ^
   /DAppVersion=%APP_VERSION% ^
+  /DSourceDir="%PAYLOAD_DIR%" ^
   "%INSTALLER_SCRIPT%"
 
 if %errorlevel% neq 0 (
