@@ -289,6 +289,23 @@ WorkspaceSaveKind = Literal["autosave", "save", "publish", "migration"]
 WorkspaceStatus = Literal["active", "draft", "inactive"]
 
 
+class RouteLoadConstraint(BaseModel):
+    """Route load cap for a time window."""
+    start_time: str = Field(..., min_length=4, max_length=8)
+    end_time: str = Field(..., min_length=4, max_length=8)
+    max_routes: int = Field(default=1, ge=1, le=30)
+    enabled: bool = True
+    label: Optional[str] = Field(default=None, max_length=120)
+
+
+class WorkspaceOptimizationOptions(BaseModel):
+    """Persistent optimization options per workspace."""
+    balance_load: bool = True
+    load_balance_hard_spread_limit: int = Field(default=2, ge=1, le=12)
+    load_balance_target_band: int = Field(default=1, ge=0, le=6)
+    route_load_constraints: List[RouteLoadConstraint] = Field(default_factory=list)
+
+
 class WorkspaceVersionCreate(BaseModel):
     """Snapshot payload used to create a workspace version."""
     checkpoint_name: Optional[str] = None

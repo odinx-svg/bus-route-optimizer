@@ -18,6 +18,7 @@ export default function ControlHubPage({
   onArchiveWorkspace,
   onRestoreWorkspace,
   onDeleteWorkspace,
+  onConfigureWorkspaceOptions,
 }) {
   const [fleetSummary, setFleetSummary] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({
@@ -193,6 +194,12 @@ export default function ControlHubPage({
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
                   Abrir Studio
+                </button>
+                <button
+                  onClick={() => onConfigureWorkspaceOptions?.(workspace.id, workspace.name)}
+                  className="px-2.5 py-1.5 rounded-md text-[11px] border border-cyan-500/35 text-cyan-300 hover:bg-cyan-500/10"
+                >
+                  Restricciones
                 </button>
                 {workspace.status !== 'inactive' ? (
                   <button

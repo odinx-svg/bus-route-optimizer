@@ -159,6 +159,7 @@ class LNSOptimizer:
         balance_load: bool = True,
         load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
         load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
+        route_load_constraints: Optional[List[Dict[str, Any]]] = None,
     ) -> List[BusSchedule]:
         """
         Ejecutar LNS para mejorar la solución.
@@ -198,6 +199,7 @@ class LNSOptimizer:
                 balance_load=balance_load,
                 load_balance_hard_spread_limit=load_balance_hard_spread_limit,
                 load_balance_target_band=load_balance_target_band,
+                route_load_constraints=route_load_constraints,
             )
         else:
             current = deepcopy(initial_schedule)
@@ -786,6 +788,7 @@ def optimize_v6_lns(
     balance_load: bool = True,
     load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
     load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
+    route_load_constraints: Optional[List[Dict[str, Any]]] = None,
 ) -> List[BusSchedule]:
     """
     Optimización V6 con soporte opcional de LNS.
@@ -813,6 +816,7 @@ def optimize_v6_lns(
             balance_load=balance_load,
             load_balance_hard_spread_limit=load_balance_hard_spread_limit,
             load_balance_target_band=load_balance_target_band,
+            route_load_constraints=route_load_constraints,
         )
         return schedule
     
@@ -826,6 +830,7 @@ def optimize_v6_lns(
         balance_load=balance_load,
         load_balance_hard_spread_limit=load_balance_hard_spread_limit,
         load_balance_target_band=load_balance_target_band,
+        route_load_constraints=route_load_constraints,
     )
 
 
@@ -838,6 +843,7 @@ def optimize_multi_objective(
     balance_load: bool = True,
     load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
     load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
+    route_load_constraints: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[BusSchedule], ScheduleMetrics]:
     """
     Optimización multi-objetivo con métricas detalladas.
@@ -860,6 +866,7 @@ def optimize_multi_objective(
         balance_load=balance_load,
         load_balance_hard_spread_limit=load_balance_hard_spread_limit,
         load_balance_target_band=load_balance_target_band,
+        route_load_constraints=route_load_constraints,
     )
     
     optimizer = MultiObjectiveOptimizer(weights)

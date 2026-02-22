@@ -14,6 +14,7 @@ import {
   createWorkspace,
   deleteWorkspace,
   getWorkspace,
+  getWorkspaceOptimizationOptions,
   getWorkspacePreferences,
   listWorkspaces,
   migrateLegacyWorkspaces,
@@ -21,12 +22,54 @@ import {
   publishWorkspaceVersion,
   restoreWorkspace,
   saveWorkspaceVersion,
+  setWorkspaceOptimizationOptions,
   setLastOpenWorkspace,
 } from './services/workspaceService';
 import { useWorkspaceStudioStore } from './stores/workspaceStudioStore';
 
 const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
 const ALL_DAYS = ['L', 'M', 'Mc', 'X', 'V'];
+const DEFAULT_OPTIMIZATION_OPTIONS = {
+  balance_load: true,
+  load_balance_hard_spread_limit: 2,
+  load_balance_target_band: 1,
+  route_load_constraints: [],
+};
+
+const createEmptyRouteLoadConstraint = () => ({
+  start_time: '07:30',
+  end_time: '09:30',
+  max_routes: 3,
+  enabled: true,
+  label: '',
+});
+
+const normalizeOptimizationOptions = (raw) => {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const toInt = (value, fallback) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const constraints = Array.isArray(source.route_load_constraints)
+    ? source.route_load_constraints
+      .filter((item) => item && typeof item === 'object')
+      .map((item) => ({
+        start_time: String(item.start_time || item.start || '').trim(),
+        end_time: String(item.end_time || item.end || '').trim(),
+        max_routes: Math.max(1, toInt(item.max_routes, 1)),
+        enabled: item.enabled !== false,
+        label: String(item.label || '').trim(),
+      }))
+      .filter((item) => item.start_time && item.end_time)
+    : [];
+
+  return {
+    balance_load: source.balance_load !== false,
+    load_balance_hard_spread_limit: Math.max(1, Math.min(12, toInt(source.load_balance_hard_spread_limit, 2))),
+    load_balance_target_band: Math.max(0, Math.min(6, toInt(source.load_balance_target_band, 1))),
+    route_load_constraints: constraints,
+  };
+};
 const createEmptyScheduleByDay = () => (
   ALL_DAYS.reduce((acc, day) => {
     acc[day] = { schedule: [], stats: null };
@@ -220,6 +263,185 @@ function TextInputModal({
   );
 }
 
+function LoadOptionsModal({
+  open = false,
+  title = 'Restricciones de carga',
+  initialValue = DEFAULT_OPTIMIZATION_OPTIONS,
+  onCancel,
+  onSave,
+}) {
+  const [value, setValue] = useState(normalizeOptimizationOptions(initialValue));
+
+  useEffect(() => {
+    if (!open) return;
+    setValue(normalizeOptimizationOptions(initialValue));
+  }, [open, initialValue]);
+
+  if (!open) return null;
+
+  const updateConstraint = (index, patch) => {
+    setValue((prev) => {
+      const next = normalizeOptimizationOptions(prev);
+      const rows = [...next.route_load_constraints];
+      rows[index] = { ...rows[index], ...patch };
+      return { ...next, route_load_constraints: rows };
+    });
+  };
+
+  const removeConstraint = (index) => {
+    setValue((prev) => {
+      const next = normalizeOptimizationOptions(prev);
+      return {
+        ...next,
+        route_load_constraints: next.route_load_constraints.filter((_, idx) => idx !== index),
+      };
+    });
+  };
+
+  const addConstraint = () => {
+    setValue((prev) => {
+      const next = normalizeOptimizationOptions(prev);
+      return {
+        ...next,
+        route_load_constraints: [...next.route_load_constraints, createEmptyRouteLoadConstraint()],
+      };
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={onCancel} />
+      <div className="relative w-full max-w-2xl rounded-xl border border-[#2a4057] bg-[#0b141f] p-4 shadow-2xl">
+        <h3 className="text-[16px] font-semibold text-white">{title}</h3>
+        <p className="mt-1 text-[12px] text-[#8ba3bd]">
+          Configura el reparto de rutas por bus. Se mantiene siempre el objetivo de minimo buses factibles.
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 flex items-center gap-2 text-[12px] text-slate-200">
+            <input
+              type="checkbox"
+              checked={Boolean(value.balance_load)}
+              onChange={(event) => setValue((prev) => ({ ...normalizeOptimizationOptions(prev), balance_load: event.target.checked }))}
+            />
+            Balancear carga
+          </label>
+          <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
+            Spread max
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={value.load_balance_hard_spread_limit}
+              onChange={(event) => setValue((prev) => ({
+                ...normalizeOptimizationOptions(prev),
+                load_balance_hard_spread_limit: Number.parseInt(event.target.value || '2', 10),
+              }))}
+              className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1 text-[12px] text-white"
+            />
+          </label>
+          <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
+            Banda mediana (+/-)
+            <input
+              type="number"
+              min={0}
+              max={6}
+              value={value.load_balance_target_band}
+              onChange={(event) => setValue((prev) => ({
+                ...normalizeOptimizationOptions(prev),
+                load_balance_target_band: Number.parseInt(event.target.value || '1', 10),
+              }))}
+              className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1 text-[12px] text-white"
+            />
+          </label>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-[#2a4057] bg-[#0a1324] p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] uppercase tracking-[0.1em] text-cyan-300">Restricciones horarias</p>
+            <button
+              type="button"
+              onClick={addConstraint}
+              className="rounded border border-cyan-500/40 px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-cyan-200 hover:bg-cyan-500/10"
+            >
+              + Anadir
+            </button>
+          </div>
+          <div className="mt-2 max-h-[240px] overflow-auto space-y-2">
+            {value.route_load_constraints.length === 0 && (
+              <p className="text-[12px] text-slate-400">
+                Sin restricciones horarias. Puedes usar por ejemplo 07:30-09:30 max 3 rutas.
+              </p>
+            )}
+            {value.route_load_constraints.map((rule, index) => (
+              <div key={`${rule.start_time}-${rule.end_time}-${index}`} className="grid grid-cols-12 gap-2 items-center rounded border border-[#35506a] bg-[#09101d] px-2 py-2">
+                <label className="col-span-1 flex justify-center">
+                  <input
+                    type="checkbox"
+                    checked={rule.enabled !== false}
+                    onChange={(event) => updateConstraint(index, { enabled: event.target.checked })}
+                  />
+                </label>
+                <input
+                  type="time"
+                  value={rule.start_time}
+                  onChange={(event) => updateConstraint(index, { start_time: event.target.value })}
+                  className="col-span-3 rounded border border-[#2f4861] bg-[#08101c] px-2 py-1 text-[12px] text-white"
+                />
+                <input
+                  type="time"
+                  value={rule.end_time}
+                  onChange={(event) => updateConstraint(index, { end_time: event.target.value })}
+                  className="col-span-3 rounded border border-[#2f4861] bg-[#08101c] px-2 py-1 text-[12px] text-white"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={rule.max_routes}
+                  onChange={(event) => updateConstraint(index, { max_routes: Number.parseInt(event.target.value || '1', 10) })}
+                  className="col-span-2 rounded border border-[#2f4861] bg-[#08101c] px-2 py-1 text-[12px] text-white"
+                />
+                <input
+                  type="text"
+                  value={rule.label || ''}
+                  placeholder="Etiqueta"
+                  onChange={(event) => updateConstraint(index, { label: event.target.value })}
+                  className="col-span-2 rounded border border-[#2f4861] bg-[#08101c] px-2 py-1 text-[12px] text-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeConstraint(index)}
+                  className="col-span-1 rounded border border-rose-500/45 px-1 py-1 text-[10px] text-rose-200 hover:bg-rose-500/15"
+                >
+                  X
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave?.(normalizeOptimizationOptions(value))}
+            className="rounded-md bg-[#2ab5e8] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110"
+          >
+            Guardar restricciones
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [routes, setRoutes] = useState([]);
   const [parseReport, setParseReport] = useState(null);
@@ -240,6 +462,15 @@ function App() {
   const [pinnedBusesByDay, setPinnedBusesByDay] = useState(createEmptyPinnedBusesByDay());
   const [ingestionPanelOpen, setIngestionPanelOpen] = useState(false);
   const [createFlowMode, setCreateFlowMode] = useState(false);
+  const [optimizationOptionsByWorkspace, setOptimizationOptionsByWorkspace] = useState({});
+  const [activeOptimizationOptions, setActiveOptimizationOptions] = useState(
+    normalizeOptimizationOptions(DEFAULT_OPTIMIZATION_OPTIONS)
+  );
+  const [loadOptionsModal, setLoadOptionsModal] = useState({
+    open: false,
+    workspaceId: null,
+    title: 'Restricciones de carga',
+  });
 
   const [pipelineJobId, setPipelineJobId] = useState(null);
   const [pipelineStatus, setPipelineStatus] = useState('idle');
@@ -299,6 +530,67 @@ function App() {
     }
   }, []);
 
+  const fetchAndStoreWorkspaceOptions = useCallback(async (workspaceId) => {
+    if (!workspaceId) return normalizeOptimizationOptions(DEFAULT_OPTIMIZATION_OPTIONS);
+    try {
+      const options = await getWorkspaceOptimizationOptions(workspaceId);
+      const normalized = normalizeOptimizationOptions(options);
+      setOptimizationOptionsByWorkspace((prev) => ({
+        ...prev,
+        [workspaceId]: normalized,
+      }));
+      return normalized;
+    } catch {
+      const fallback = normalizeOptimizationOptions(DEFAULT_OPTIMIZATION_OPTIONS);
+      setOptimizationOptionsByWorkspace((prev) => ({
+        ...prev,
+        [workspaceId]: fallback,
+      }));
+      return fallback;
+    }
+  }, []);
+
+  const openLoadOptionsModal = useCallback(async ({ workspaceId = null, workspaceName = '' } = {}) => {
+    const normalizedName = String(workspaceName || '').trim();
+    const title = workspaceId
+      ? `Restricciones · ${normalizedName || 'Optimizacion'}`
+      : 'Restricciones por defecto';
+    if (workspaceId) {
+      const loaded = await fetchAndStoreWorkspaceOptions(workspaceId);
+      setActiveOptimizationOptions(loaded);
+    }
+    setLoadOptionsModal({
+      open: true,
+      workspaceId: workspaceId || null,
+      title,
+    });
+  }, [fetchAndStoreWorkspaceOptions]);
+
+  const closeLoadOptionsModal = useCallback(() => {
+    setLoadOptionsModal({ open: false, workspaceId: null, title: 'Restricciones de carga' });
+  }, []);
+
+  const handleSaveLoadOptions = useCallback(async (nextOptionsRaw) => {
+    const nextOptions = normalizeOptimizationOptions(nextOptionsRaw);
+    const workspaceId = loadOptionsModal.workspaceId;
+    if (workspaceId) {
+      const persisted = await setWorkspaceOptimizationOptions(workspaceId, nextOptions);
+      const normalizedPersisted = normalizeOptimizationOptions(persisted);
+      setOptimizationOptionsByWorkspace((prev) => ({
+        ...prev,
+        [workspaceId]: normalizedPersisted,
+      }));
+      if (String(activeWorkspaceId || '') === String(workspaceId)) {
+        setActiveOptimizationOptions(normalizedPersisted);
+      }
+      notifications.success('Restricciones guardadas', 'Se aplicaran en la siguiente optimizacion');
+    } else {
+      setActiveOptimizationOptions(nextOptions);
+      notifications.success('Restricciones por defecto', 'Configuracion lista para la siguiente corrida');
+    }
+    closeLoadOptionsModal();
+  }, [activeWorkspaceId, closeLoadOptionsModal, loadOptionsModal.workspaceId]);
+
   const refreshWorkspaces = useCallback(async () => {
     const data = await listWorkspaces().catch(() => ({ items: [] }));
     const items = Array.isArray(data?.items) ? data.items : [];
@@ -325,7 +617,9 @@ function App() {
   const openWorkspaceById = useCallback(async (workspaceId, { switchToStudio = true } = {}) => {
     if (!workspaceId) return null;
     const detail = await getWorkspace(workspaceId);
+    const options = await fetchAndStoreWorkspaceOptions(workspaceId);
     setActiveWorkspaceId(workspaceId);
+    setActiveOptimizationOptions(options);
     studioSetWorkspaceId(workspaceId);
     hydrateWorkspaceDetail(detail);
     setLastOpenWorkspace(workspaceId).catch(() => {});
@@ -337,7 +631,7 @@ function App() {
     setCreateFlowMode(false);
     studioMarkSaved();
     return detail;
-  }, [hydrateWorkspaceDetail, studioMarkSaved, studioSetWorkspaceId]);
+  }, [fetchAndStoreWorkspaceOptions, hydrateWorkspaceDetail, studioMarkSaved, studioSetWorkspaceId]);
 
   const createWorkspaceAndOpen = useCallback(async (seed = {}) => {
     const suggestedName = seed?.name || `Optimizacion ${new Date().toLocaleDateString()}`;
@@ -493,6 +787,11 @@ function App() {
     setWorkspaceMode('optimize');
 
     const loadingToast = notifications.loading('Iniciando pipeline automatico...');
+    const resolvedOptions = normalizeOptimizationOptions(
+      (workspaceIdInput && optimizationOptionsByWorkspace?.[workspaceIdInput])
+        || activeOptimizationOptions
+        || DEFAULT_OPTIMIZATION_OPTIONS
+    );
 
     try {
       let data = null;
@@ -506,9 +805,12 @@ function App() {
             max_duration_sec: 300,
             max_iterations: 2,
             invalid_rows_dropped: Number(parseReportInput?.rows_dropped_invalid || 0),
-            balance_load: true,
-            load_balance_hard_spread_limit: 2,
-            load_balance_target_band: 1,
+            balance_load: Boolean(resolvedOptions.balance_load),
+            load_balance_hard_spread_limit: Number(resolvedOptions.load_balance_hard_spread_limit || 2),
+            load_balance_target_band: Number(resolvedOptions.load_balance_target_band || 1),
+            route_load_constraints: Array.isArray(resolvedOptions.route_load_constraints)
+              ? resolvedOptions.route_load_constraints
+              : [],
           },
         });
       } else {
@@ -524,9 +826,12 @@ function App() {
               max_duration_sec: 300,
               max_iterations: 2,
               invalid_rows_dropped: Number(parseReportInput?.rows_dropped_invalid || 0),
-              balance_load: true,
-              load_balance_hard_spread_limit: 2,
-              load_balance_target_band: 1,
+              balance_load: Boolean(resolvedOptions.balance_load),
+              load_balance_hard_spread_limit: Number(resolvedOptions.load_balance_hard_spread_limit || 2),
+              load_balance_target_band: Number(resolvedOptions.load_balance_target_band || 1),
+              route_load_constraints: Array.isArray(resolvedOptions.route_load_constraints)
+                ? resolvedOptions.route_load_constraints
+                : [],
             },
           }),
         });
@@ -630,6 +935,14 @@ function App() {
     }
 
     if (workspaceId) {
+      const optionsToPersist = normalizeOptimizationOptions(
+        optimizationOptionsByWorkspace?.[workspaceId]
+        || activeOptimizationOptions
+        || DEFAULT_OPTIMIZATION_OPTIONS
+      );
+      await setWorkspaceOptimizationOptions(workspaceId, optionsToPersist).catch(() => null);
+      setOptimizationOptionsByWorkspace((prev) => ({ ...prev, [workspaceId]: optionsToPersist }));
+      setActiveOptimizationOptions(optionsToPersist);
       await refreshWorkspaces();
     }
 
@@ -1086,6 +1399,13 @@ function App() {
               setIngestionPanelOpen(false);
               setCreateFlowMode(false);
             }}
+            optimizationOptions={activeOptimizationOptions}
+            onConfigureOptimizationOptions={() => openLoadOptionsModal({
+              workspaceId: createFlowMode ? null : activeWorkspaceId,
+              workspaceName: createFlowMode
+                ? 'Nueva optimizacion'
+                : (workspaces.find((ws) => String(ws.id) === String(activeWorkspaceId))?.name || ''),
+            })}
           >
             {pipelineJobId && (
               <OptimizationProgress
@@ -1134,6 +1454,9 @@ function App() {
                     setSelectedRouteId(null);
                   }
                   await refreshWorkspaces();
+                }}
+                onConfigureWorkspaceOptions={async (workspaceId, workspaceName) => {
+                  await openLoadOptionsModal({ workspaceId, workspaceName });
                 }}
               />
             )}
@@ -1206,6 +1529,18 @@ function App() {
           )}
         </div>
       </section>
+
+      <LoadOptionsModal
+        open={loadOptionsModal.open}
+        title={loadOptionsModal.title}
+        initialValue={
+          loadOptionsModal.workspaceId
+            ? (optimizationOptionsByWorkspace?.[loadOptionsModal.workspaceId] || activeOptimizationOptions)
+            : activeOptimizationOptions
+        }
+        onCancel={closeLoadOptionsModal}
+        onSave={handleSaveLoadOptions}
+      />
 
       <TextInputModal
         open={textInputModal.open}

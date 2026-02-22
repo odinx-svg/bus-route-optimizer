@@ -17,7 +17,7 @@ import asyncio
 import logging
 import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time
 from statistics import median
 from time import time as now_seconds
@@ -68,11 +68,14 @@ class PipelineConfig:
     balance_load: bool = True
     load_balance_hard_spread_limit: int = 2
     load_balance_target_band: int = 1
+    route_load_constraints: List[Dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> "PipelineConfig":
         if not isinstance(data, dict):
             return cls()
+        raw_constraints = data.get("route_load_constraints")
+        normalized_constraints = raw_constraints if isinstance(raw_constraints, list) else []
         return cls(
             auto_start=bool(data.get("auto_start", True)),
             objective=str(data.get("objective", "min_buses_viability")),
@@ -83,6 +86,7 @@ class PipelineConfig:
             balance_load=bool(data.get("balance_load", True)),
             load_balance_hard_spread_limit=max(1, int(data.get("load_balance_hard_spread_limit", 2))),
             load_balance_target_band=max(0, int(data.get("load_balance_target_band", 1))),
+            route_load_constraints=normalized_constraints,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -96,6 +100,7 @@ class PipelineConfig:
             "balance_load": self.balance_load,
             "load_balance_hard_spread_limit": self.load_balance_hard_spread_limit,
             "load_balance_target_band": self.load_balance_target_band,
+            "route_load_constraints": list(self.route_load_constraints or []),
         }
 
 
@@ -104,7 +109,7 @@ def calculate_pipeline_candidate_score(metrics: Dict[str, Any]) -> float:
     Score final (menor es mejor):
     score = 1000*infeasible_buses + 100*error_issues + 20*warning_issues
             + 10*best_buses + 5000*split_count - avg_efficiency
-            + 25*load_spread_routes + 2*load_abs_dev_sum
+            + 200*time_window_total_excess + 25*load_spread_routes + 2*load_abs_dev_sum
     """
     infeasible_buses = int(metrics.get("infeasible_buses", 0))
     error_issues = int(metrics.get("error_issues", 0))
@@ -114,6 +119,7 @@ def calculate_pipeline_candidate_score(metrics: Dict[str, Any]) -> float:
     avg_efficiency = float(metrics.get("avg_efficiency", 0.0))
     load_spread_routes = int(metrics.get("load_spread_routes", 0))
     load_abs_dev_sum = float(metrics.get("load_abs_dev_sum", 0.0))
+    time_window_total_excess = int(metrics.get("time_window_total_excess", 0))
     return (
         (1000 * infeasible_buses)
         + (100 * error_issues)
@@ -121,6 +127,7 @@ def calculate_pipeline_candidate_score(metrics: Dict[str, Any]) -> float:
         + (10 * best_buses)
         + (5000 * split_count)
         - avg_efficiency
+        + (200 * time_window_total_excess)
         + (25 * load_spread_routes)
         + (2 * load_abs_dev_sum)
     )
@@ -132,6 +139,7 @@ def rank_pipeline_candidate(metrics: Dict[str, Any]) -> Tuple[Any, ...]:
         1 if int(metrics.get("split_count", 0)) > 0 else 0,
         int(metrics.get("infeasible_buses", 0)),
         int(metrics.get("best_buses", metrics.get("total_buses", 0))),
+        int(metrics.get("time_window_total_excess", 0)),
         int(metrics.get("load_spread_routes", 0)),
         float(metrics.get("load_abs_dev_sum", 0.0)),
         int(metrics.get("error_issues", 0)),
@@ -534,6 +542,9 @@ def _report_metrics_from_validation(
     split_count = 0
     lower_bound_buses = 0
     statuses: List[str] = []
+    time_window_excess_per_day: List[int] = []
+    time_window_violating_buses_per_day: List[int] = []
+    time_window_constraints_applied = False
     for day in ALL_DAYS:
         day_diag = diagnostics.get(day) or {}
         split_count += int(day_diag.get("split_count", 0) or 0)
@@ -549,6 +560,12 @@ def _report_metrics_from_validation(
         status = str(day_diag.get("solver_status", "") or "").strip().lower()
         if status:
             statuses.append(status)
+        day_excess = int(day_diag.get("time_window_total_excess", 0) or 0)
+        day_violating = int(day_diag.get("time_window_violating_buses", 0) or 0)
+        if day_excess > 0 or day_violating > 0 or bool(day_diag.get("time_window_constraints_applied", False)):
+            time_window_constraints_applied = True
+        time_window_excess_per_day.append(day_excess)
+        time_window_violating_buses_per_day.append(day_violating)
 
     best_buses = total_buses
     if lower_bound_buses <= 0:
@@ -586,6 +603,11 @@ def _report_metrics_from_validation(
         "load_spread_routes": load_spread_routes,
         "load_abs_dev_sum": round(load_abs_dev_sum, 2),
         "load_balanced": bool(load_spread_routes <= 2),
+        "time_window_total_excess": int(sum(time_window_excess_per_day)),
+        "time_window_max_excess_per_day": int(max(time_window_excess_per_day) if time_window_excess_per_day else 0),
+        "time_window_violating_buses": int(max(time_window_violating_buses_per_day) if time_window_violating_buses_per_day else 0),
+        "time_window_constraints_applied": bool(time_window_constraints_applied),
+        "load_time_constraints_met": bool(sum(time_window_excess_per_day) <= 0),
     }
 
 
@@ -607,6 +629,7 @@ def _optimize_by_day_v6(
     balance_load: bool = True,
     load_balance_hard_spread_limit: int = 2,
     load_balance_target_band: int = 1,
+    route_load_constraints: Optional[List[Dict[str, Any]]] = None,
     trace_callback: DayTraceCallback = None,
 ) -> Tuple[Dict[str, List[BusSchedule]], Dict[str, Dict[str, Any]]]:
     try:
@@ -645,6 +668,7 @@ def _optimize_by_day_v6(
                     balance_load=balance_load,
                     load_balance_hard_spread_limit=load_balance_hard_spread_limit,
                     load_balance_target_band=load_balance_target_band,
+                    route_load_constraints=route_load_constraints,
                 )
                 diagnostics_by_day[day] = get_last_optimization_diagnostics()
             except Exception as first_exc:
@@ -669,6 +693,7 @@ def _optimize_by_day_v6(
                         balance_load=balance_load,
                         load_balance_hard_spread_limit=load_balance_hard_spread_limit,
                         load_balance_target_band=load_balance_target_band,
+                        route_load_constraints=route_load_constraints,
                     )
                     diagnostics_by_day[day] = dict(get_last_optimization_diagnostics() or {})
                     diagnostics_by_day[day]["solver_status"] = "fallback_ml_disabled"
@@ -739,6 +764,7 @@ def _optimize_by_day_lns(
     balance_load: bool = True,
     load_balance_hard_spread_limit: int = 2,
     load_balance_target_band: int = 1,
+    route_load_constraints: Optional[List[Dict[str, Any]]] = None,
     trace_callback: DayTraceCallback = None,
     iteration: int = 1,
 ) -> Tuple[Dict[str, List[BusSchedule]], Dict[str, Dict[str, Any]]]:
@@ -808,6 +834,7 @@ def _optimize_by_day_lns(
             balance_load=balance_load,
             load_balance_hard_spread_limit=load_balance_hard_spread_limit,
             load_balance_target_band=load_balance_target_band,
+            route_load_constraints=route_load_constraints,
         )
         diagnostics_by_day[day] = get_last_optimization_diagnostics()
         if trace_callback:
@@ -991,6 +1018,7 @@ async def run_optimization_pipeline_by_day(
         config.balance_load,
         config.load_balance_hard_spread_limit,
         config.load_balance_target_band,
+        config.route_load_constraints,
         lambda day, phase, progress, message, extra=None: emit_day_trace(
             stage="baseline_trace",
             progress_window=(10, 34),
@@ -1118,6 +1146,7 @@ async def run_optimization_pipeline_by_day(
                     balance_load=config.balance_load,
                     load_balance_hard_spread_limit=config.load_balance_hard_spread_limit,
                     load_balance_target_band=config.load_balance_target_band,
+                    route_load_constraints=config.route_load_constraints,
                     trace_callback=lambda day, phase, progress, message, extra=None: emit_day_trace(
                         stage=f"reoptimize_trace_{iteration}",
                         progress_window=(base_progress, min(base_progress + 7, 90)),

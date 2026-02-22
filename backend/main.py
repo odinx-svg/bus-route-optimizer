@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from typing import List, Dict, Any, Optional, Union, Tuple
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import shutil
 import os
 import tempfile
@@ -183,6 +183,19 @@ try:
     from services.fleet_assignment import assign_fleet_profiles_to_schedule
 except ImportError:
     from backend.services.fleet_assignment import assign_fleet_profiles_to_schedule
+
+try:
+    from services.workspace_options import (
+        DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS,
+        get_workspace_optimization_options as load_workspace_optimization_options,
+        sanitize_workspace_optimization_options,
+    )
+except ImportError:
+    from backend.services.workspace_options import (
+        DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS,
+        get_workspace_optimization_options as load_workspace_optimization_options,
+        sanitize_workspace_optimization_options,
+    )
 
 logger = logging.getLogger(__name__)
 LOCAL_PIPELINE_TASKS: Dict[str, asyncio.Task] = {}
@@ -1444,6 +1457,7 @@ class PipelineConfigPayload(BaseModel):
     balance_load: bool = True
     load_balance_hard_spread_limit: int = 2
     load_balance_target_band: int = 1
+    route_load_constraints: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class PipelineOptimizationRequest(BaseModel):
@@ -1921,6 +1935,38 @@ async def optimize_pipeline_for_workspace(
 ) -> Dict[str, Any]:
     """Launch async pipeline bound to workspace context."""
     payload = request.model_dump()
+    incoming_config = payload.get("config") if isinstance(payload.get("config"), dict) else {}
+    stored_config: Dict[str, Any] = {}
+
+    if is_database_available() and SessionLocal is not None:
+        db = SessionLocal()
+        try:
+            from db import crud as db_crud
+            workspace = db_crud.get_workspace(db, workspace_id)
+            if workspace is None:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            stored_config = load_workspace_optimization_options(db, workspace_id)
+        finally:
+            db.close()
+
+    merged_config = dict(incoming_config or {})
+    stored_options = sanitize_workspace_optimization_options(stored_config)
+    for key, value in stored_options.items():
+        merged_config.setdefault(key, value)
+    for key, value in DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS.items():
+        merged_config.setdefault(key, value)
+    merged_config.update(
+        sanitize_workspace_optimization_options(
+            {
+                "balance_load": merged_config.get("balance_load"),
+                "load_balance_hard_spread_limit": merged_config.get("load_balance_hard_spread_limit"),
+                "load_balance_target_band": merged_config.get("load_balance_target_band"),
+                "route_load_constraints": merged_config.get("route_load_constraints"),
+            }
+        )
+    )
+
+    payload["config"] = PipelineConfigPayload(**merged_config).model_dump()
     payload["workspace_id"] = workspace_id
     bound_request = PipelineOptimizationRequest(**payload)
     return await optimize_pipeline_by_day_async(bound_request)
@@ -1945,6 +1991,7 @@ async def optimize_pipeline_by_day_async(request: PipelineOptimizationRequest) -
         "balance_load": True,
         "load_balance_hard_spread_limit": 2,
         "load_balance_target_band": 1,
+        "route_load_constraints": [],
     }
     if request.workspace_id:
         config_payload["workspace_id"] = request.workspace_id
@@ -2063,6 +2110,7 @@ async def optimize_hybrid_by_day_async(request: PipelineOptimizationRequest) -> 
     config_payload.setdefault("balance_load", True)
     config_payload.setdefault("load_balance_hard_spread_limit", 2)
     config_payload.setdefault("load_balance_target_band", 1)
+    config_payload.setdefault("route_load_constraints", [])
 
     wrapped_request = PipelineOptimizationRequest(
         routes=request.routes,

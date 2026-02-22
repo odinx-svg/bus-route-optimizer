@@ -18,6 +18,12 @@ from db.models import (
     OptimizationWorkspaceModel,
     OptimizationWorkspaceVersionModel,
 )
+from services.workspace_options import (
+    DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS,
+    get_workspace_optimization_options,
+    sanitize_workspace_optimization_options,
+    set_workspace_optimization_options,
+)
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 
@@ -167,6 +173,52 @@ async def set_last_open_workspace(workspace_id: str = Body(..., embed=True)) -> 
     try:
         db_crud.set_app_meta(db, "last_open_workspace_id", workspace_id)
         return {"success": True, "workspace_id": workspace_id}
+    finally:
+        db.close()
+
+
+@router.get(
+    "/{workspace_id}/optimization-options",
+    response_model=schemas.WorkspaceOptimizationOptions,
+)
+async def get_workspace_options(workspace_id: str) -> schemas.WorkspaceOptimizationOptions:
+    """Get persisted optimization options for a workspace."""
+    if not is_database_available() or SessionLocal is None:
+        return schemas.WorkspaceOptimizationOptions(**DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS)
+    _ensure_tables_ready()
+
+    db = SessionLocal()
+    try:
+        workspace = db_crud.get_workspace(db, workspace_id)
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        options = get_workspace_optimization_options(db, workspace_id)
+        return schemas.WorkspaceOptimizationOptions(**options)
+    finally:
+        db.close()
+
+
+@router.post(
+    "/{workspace_id}/optimization-options",
+    response_model=schemas.WorkspaceOptimizationOptions,
+)
+async def set_workspace_options(
+    workspace_id: str,
+    payload: schemas.WorkspaceOptimizationOptions = Body(default_factory=schemas.WorkspaceOptimizationOptions),
+) -> schemas.WorkspaceOptimizationOptions:
+    """Persist optimization options for a workspace."""
+    if not is_database_available() or SessionLocal is None:
+        normalized = sanitize_workspace_optimization_options(payload.model_dump())
+        return schemas.WorkspaceOptimizationOptions(**normalized)
+    _ensure_tables_ready()
+
+    db = SessionLocal()
+    try:
+        workspace = db_crud.get_workspace(db, workspace_id)
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        options = set_workspace_optimization_options(db, workspace_id, payload.model_dump())
+        return schemas.WorkspaceOptimizationOptions(**options)
     finally:
         db.close()
 

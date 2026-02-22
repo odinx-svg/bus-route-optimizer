@@ -19,6 +19,8 @@ const Sidebar = ({
   forceUploadMode = false,
   showCloseButton = false,
   onClose = null,
+  optimizationOptions = null,
+  onConfigureOptimizationOptions = null,
   children // Para mostrar OptimizationProgress
 }) => {
   const hasData = !forceUploadMode && routes.length > 0;
@@ -115,6 +117,23 @@ const Sidebar = ({
 
               {/* Progress UI (OptimizationProgress component) */}
               {children}
+              <div className="gt-glass rounded-xl p-3 border border-[#2a4057]">
+                <p className="text-[10px] font-medium text-cyan-300 uppercase tracking-[0.14em] mb-1">
+                  Restricciones de carga
+                </p>
+                <p className="text-[11px] text-gt-text-muted">
+                  Spread {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
+                  {' '}| Banda ±{optimizationOptions?.load_balance_target_band ?? 1}
+                  {' '}| Ventanas {Array.isArray(optimizationOptions?.route_load_constraints) ? optimizationOptions.route_load_constraints.length : 0}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onConfigureOptimizationOptions?.()}
+                  className="mt-2 w-full py-2 rounded-lg border border-cyan-500/35 text-[10px] uppercase tracking-[0.1em] text-cyan-200 hover:bg-cyan-500/10 transition-colors"
+                >
+                  Configurar restricciones
+                </button>
+              </div>
 
               {!hasResults ? (
                 <div className="space-y-3">

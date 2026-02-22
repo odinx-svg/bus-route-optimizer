@@ -526,6 +526,17 @@ class LoadBalanceConfig:
     max_passes: int = DEFAULT_LOAD_BALANCE_MAX_PASSES
     max_moves_per_pass: int = DEFAULT_LOAD_BALANCE_MAX_MOVES_PER_PASS
     max_swap_attempts_per_pass: int = DEFAULT_LOAD_BALANCE_MAX_SWAP_ATTEMPTS_PER_PASS
+    time_window_limits: List["TimeWindowLimit"] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class TimeWindowLimit:
+    """Route-load cap for a specific start-time window."""
+
+    start_min: int
+    end_min: int
+    max_routes: int
+    label: str = ""
 
 
 @dataclass
@@ -564,6 +575,10 @@ def _load_metrics_from_counts(counts: List[int]) -> Dict[str, Any]:
             "load_spread_routes": 0,
             "load_abs_dev_sum": 0.0,
             "load_balanced": True,
+            "time_window_total_excess": 0,
+            "time_window_violating_buses": 0,
+            "time_window_max_excess_per_bus": 0,
+            "time_window_constraints_applied": False,
         }
     ordered = sorted(int(v) for v in counts)
     med = float(median(ordered))
@@ -579,22 +594,218 @@ def _load_metrics_from_counts(counts: List[int]) -> Dict[str, Any]:
         "load_spread_routes": spread,
         "load_abs_dev_sum": round(abs_dev_sum, 2),
         "load_balanced": spread <= DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
+        "time_window_total_excess": 0,
+        "time_window_violating_buses": 0,
+        "time_window_max_excess_per_bus": 0,
+        "time_window_constraints_applied": False,
     }
 
 
-def _compute_load_metrics_for_buses(buses: List[ChainedBus]) -> Dict[str, Any]:
+def _parse_hhmm_minutes(value: Any) -> Optional[int]:
+    """Parse time-like values to minutes since midnight."""
+    if value is None:
+        return None
+    if hasattr(value, "hour") and hasattr(value, "minute"):
+        return (int(value.hour) * 60) + int(value.minute)
+    if isinstance(value, (int, float)):
+        ivalue = int(value)
+        if 0 <= ivalue < 24 * 60:
+            return ivalue
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    parts = text.split(":")
+    if len(parts) < 2:
+        return None
+    try:
+        hh = int(parts[0])
+        mm = int(parts[1])
+    except Exception:
+        return None
+    if hh < 0 or hh > 23 or mm < 0 or mm > 59:
+        return None
+    return (hh * 60) + mm
+
+
+def normalize_time_window_limits(raw_limits: Optional[List[Dict[str, Any]]]) -> List[TimeWindowLimit]:
+    """
+    Normalize route-load windows from API/UI payloads.
+
+    Accepted row format:
+      {start_time: "07:30", end_time: "09:30", max_routes: 3, enabled: true, label?: "..."}
+    """
+    normalized: List[TimeWindowLimit] = []
+    if not isinstance(raw_limits, list):
+        return normalized
+
+    for idx, row in enumerate(raw_limits):
+        if not isinstance(row, dict):
+            continue
+        if row.get("enabled", True) is False:
+            continue
+        start_raw = row.get("start_time", row.get("start"))
+        end_raw = row.get("end_time", row.get("end"))
+        start_min = _parse_hhmm_minutes(start_raw)
+        end_min = _parse_hhmm_minutes(end_raw)
+        try:
+            max_routes = int(row.get("max_routes", 0) or 0)
+        except Exception:
+            max_routes = 0
+        if start_min is None or end_min is None or max_routes <= 0:
+            continue
+        if start_min == end_min:
+            continue
+        label = str(row.get("label", "") or "").strip()
+        if not label:
+            label = f"{start_min // 60:02d}:{start_min % 60:02d}-{end_min // 60:02d}:{end_min % 60:02d}"
+        normalized.append(
+            TimeWindowLimit(
+                start_min=int(start_min),
+                end_min=int(end_min),
+                max_routes=max(1, max_routes),
+                label=label,
+            )
+        )
+    normalized.sort(key=lambda item: (item.start_min, item.end_min, item.max_routes))
+    return normalized
+
+
+def _minutes_in_window(minute_of_day: int, limit: TimeWindowLimit) -> bool:
+    """Check if a minute belongs to a possibly wrap-around window."""
+    minute = int(minute_of_day) % (24 * 60)
+    start = int(limit.start_min) % (24 * 60)
+    end = int(limit.end_min) % (24 * 60)
+    if start < end:
+        return start <= minute < end
+    # wrap-around (e.g. 23:00-02:00)
+    return minute >= start or minute < end
+
+
+def _job_start_minute(job: RouteJob) -> int:
+    return int(getattr(job, "scheduled_start_min", 0) or 0)
+
+
+def _compute_time_window_metrics_for_buses(
+    buses: List[ChainedBus],
+    block_jobs: Dict[int, List[RouteJob]],
+    limits: List[TimeWindowLimit],
+) -> Dict[str, Any]:
+    if not limits:
+        return {
+            "time_window_total_excess": 0,
+            "time_window_violating_buses": 0,
+            "time_window_max_excess_per_bus": 0,
+            "time_window_constraints_applied": False,
+        }
+
+    total_excess = 0
+    violating_buses = 0
+    max_excess = 0
+
+    for bus in buses:
+        bus_excess = 0
+        for limit in limits:
+            bucket_count = 0
+            for block, chain in (bus.block_chains or {}).items():
+                jobs = block_jobs.get(block, [])
+                if not jobs or not chain:
+                    continue
+                for route_idx in chain:
+                    if route_idx < 0 or route_idx >= len(jobs):
+                        continue
+                    minute = _job_start_minute(jobs[route_idx])
+                    if _minutes_in_window(minute, limit):
+                        bucket_count += 1
+            bucket_excess = max(0, int(bucket_count) - int(limit.max_routes))
+            if bucket_excess > 0:
+                bus_excess += bucket_excess
+        if bus_excess > 0:
+            violating_buses += 1
+            total_excess += bus_excess
+            max_excess = max(max_excess, bus_excess)
+
+    return {
+        "time_window_total_excess": int(total_excess),
+        "time_window_violating_buses": int(violating_buses),
+        "time_window_max_excess_per_bus": int(max_excess),
+        "time_window_constraints_applied": True,
+    }
+
+
+def _compute_time_window_metrics_for_schedules(
+    schedules: List[BusSchedule],
+    limits: List[TimeWindowLimit],
+) -> Dict[str, Any]:
+    if not limits:
+        return {
+            "time_window_total_excess": 0,
+            "time_window_violating_buses": 0,
+            "time_window_max_excess_per_bus": 0,
+            "time_window_constraints_applied": False,
+        }
+
+    total_excess = 0
+    violating_buses = 0
+    max_excess = 0
+    for bus in schedules:
+        items = list(getattr(bus, "items", []) or [])
+        if not items:
+            continue
+        bus_excess = 0
+        for limit in limits:
+            bucket_count = 0
+            for item in items:
+                minute = _parse_hhmm_minutes(getattr(item, "start_time", None))
+                if minute is None:
+                    continue
+                if _minutes_in_window(minute, limit):
+                    bucket_count += 1
+            bucket_excess = max(0, int(bucket_count) - int(limit.max_routes))
+            if bucket_excess > 0:
+                bus_excess += bucket_excess
+        if bus_excess > 0:
+            violating_buses += 1
+            total_excess += bus_excess
+            max_excess = max(max_excess, bus_excess)
+    return {
+        "time_window_total_excess": int(total_excess),
+        "time_window_violating_buses": int(violating_buses),
+        "time_window_max_excess_per_bus": int(max_excess),
+        "time_window_constraints_applied": True,
+    }
+
+
+def _compute_load_metrics_for_buses(
+    buses: List[ChainedBus],
+    block_jobs: Optional[Dict[int, List[RouteJob]]] = None,
+    time_window_limits: Optional[List[TimeWindowLimit]] = None,
+) -> Dict[str, Any]:
     """Compute load metrics for chained buses."""
-    return _load_metrics_from_counts(_routes_per_bus_counts_from_buses(buses))
+    metrics = _load_metrics_from_counts(_routes_per_bus_counts_from_buses(buses))
+    limits = list(time_window_limits or [])
+    if limits and block_jobs:
+        metrics.update(_compute_time_window_metrics_for_buses(buses, block_jobs, limits))
+    return metrics
 
 
-def _compute_load_metrics_for_schedules(schedules: List[BusSchedule]) -> Dict[str, Any]:
+def _compute_load_metrics_for_schedules(
+    schedules: List[BusSchedule],
+    time_window_limits: Optional[List[TimeWindowLimit]] = None,
+) -> Dict[str, Any]:
     """Compute load metrics for final schedules."""
-    return _load_metrics_from_counts(_routes_per_bus_counts_from_schedule(schedules))
+    metrics = _load_metrics_from_counts(_routes_per_bus_counts_from_schedule(schedules))
+    limits = list(time_window_limits or [])
+    if limits:
+        metrics.update(_compute_time_window_metrics_for_schedules(schedules, limits))
+    return metrics
 
 
-def _load_metric_tuple(metrics: Dict[str, Any]) -> Tuple[int, float, int]:
+def _load_metric_tuple(metrics: Dict[str, Any]) -> Tuple[int, int, int, float, int]:
     """Lexicographic tuple used for local acceptance of load improvements."""
     return (
+        int(metrics.get("time_window_total_excess", 0)),
+        int(metrics.get("time_window_violating_buses", 0)),
         int(metrics.get("load_spread_routes", 0)),
         float(metrics.get("load_abs_dev_sum", 0.0)),
         int(metrics.get("max_routes_per_bus", 0)),
@@ -2180,10 +2391,23 @@ def _attempt_relocate_move(
                             if not verify_fn(new_src_chain, jobs, tt):
                                 continue
 
-                        candidate_counts = list(counts)
-                        candidate_counts[src_idx] -= 1
-                        candidate_counts[tgt_idx] += 1
-                        candidate_metrics = _load_metrics_from_counts(candidate_counts)
+                        if config.time_window_limits:
+                            prev_src_chain = list(src.get_chain(block))
+                            prev_tgt_chain = list(tgt.get_chain(block))
+                            src.set_chain(block, new_src_chain)
+                            tgt.set_chain(block, new_tgt_chain)
+                            candidate_metrics = _compute_load_metrics_for_buses(
+                                buses,
+                                block_jobs=block_jobs,
+                                time_window_limits=config.time_window_limits,
+                            )
+                            src.set_chain(block, prev_src_chain)
+                            tgt.set_chain(block, prev_tgt_chain)
+                        else:
+                            candidate_counts = list(counts)
+                            candidate_counts[src_idx] -= 1
+                            candidate_counts[tgt_idx] += 1
+                            candidate_metrics = _load_metrics_from_counts(candidate_counts)
                         candidate_tuple = _load_metric_tuple(candidate_metrics)
                         if candidate_tuple >= best_before:
                             continue
@@ -2231,6 +2455,7 @@ def _attempt_swap_move(
         return False
 
     attempts = 0
+    best_before = _load_metric_tuple(current_metrics)
     for src_idx in over_idx:
         src = buses[src_idx]
         for tgt_idx in under_idx:
@@ -2273,6 +2498,23 @@ def _attempt_swap_move(
                         if not verify_fn(new_tgt_chain, jobs, tt):
                             continue
 
+                        if config.time_window_limits:
+                            prev_src_chain = list(src.get_chain(block))
+                            prev_tgt_chain = list(tgt.get_chain(block))
+                            src.set_chain(block, new_src_chain)
+                            tgt.set_chain(block, new_tgt_chain)
+                            candidate_metrics = _compute_load_metrics_for_buses(
+                                buses,
+                                block_jobs=block_jobs,
+                                time_window_limits=config.time_window_limits,
+                            )
+                            candidate_tuple = _load_metric_tuple(candidate_metrics)
+                            if candidate_tuple < best_before:
+                                return True
+                            src.set_chain(block, prev_src_chain)
+                            tgt.set_chain(block, prev_tgt_chain)
+                            continue
+
                         src.set_chain(block, new_src_chain)
                         tgt.set_chain(block, new_tgt_chain)
                         return True
@@ -2293,13 +2535,21 @@ def rebalance_route_load(
 
     if not cfg.enabled or len(buses) <= 1:
         result.reason = "disabled_or_single_bus"
-        result.before_metrics = _compute_load_metrics_for_buses(buses)
+        result.before_metrics = _compute_load_metrics_for_buses(
+            buses,
+            block_jobs=block_jobs,
+            time_window_limits=cfg.time_window_limits,
+        )
         result.after_metrics = dict(result.before_metrics)
         result.elapsed_ms = int((time_module.perf_counter() - started) * 1000)
         return buses, result
 
     working = deepcopy(buses)
-    before_metrics = _compute_load_metrics_for_buses(working)
+    before_metrics = _compute_load_metrics_for_buses(
+        working,
+        block_jobs=block_jobs,
+        time_window_limits=cfg.time_window_limits,
+    )
     current_metrics = dict(before_metrics)
     before_tuple = _load_metric_tuple(current_metrics)
     result.before_metrics = dict(before_metrics)
@@ -2311,31 +2561,48 @@ def rebalance_route_load(
 
     while passes < max(1, int(cfg.max_passes)):
         passes += 1
-        if _load_metric_tuple(current_metrics)[0] <= int(cfg.hard_spread_limit):
+        spread_now = int(current_metrics.get("load_spread_routes", 0))
+        window_excess_now = int(current_metrics.get("time_window_total_excess", 0))
+        if spread_now <= int(cfg.hard_spread_limit) and window_excess_now <= 0:
             break
 
         relocated = _attempt_relocate_move(working, block_jobs, block_tt, current_metrics, cfg)
         if relocated:
             moves += 1
             improved_any = True
-            current_metrics = _compute_load_metrics_for_buses(working)
+            current_metrics = _compute_load_metrics_for_buses(
+                working,
+                block_jobs=block_jobs,
+                time_window_limits=cfg.time_window_limits,
+            )
             continue
 
         swapped = _attempt_swap_move(working, block_jobs, block_tt, current_metrics, cfg)
         if swapped:
             swaps += 1
             improved_any = True
-            current_metrics = _compute_load_metrics_for_buses(working)
+            current_metrics = _compute_load_metrics_for_buses(
+                working,
+                block_jobs=block_jobs,
+                time_window_limits=cfg.time_window_limits,
+            )
             continue
 
         break
 
-    result.after_metrics = _compute_load_metrics_for_buses(working)
+    result.after_metrics = _compute_load_metrics_for_buses(
+        working,
+        block_jobs=block_jobs,
+        time_window_limits=cfg.time_window_limits,
+    )
     result.passes = passes
     result.moves = moves
     result.swaps = swaps
     result.applied = improved_any and (_load_metric_tuple(result.after_metrics) < before_tuple)
-    result.unresolved = int(result.after_metrics.get("load_spread_routes", 0)) > int(cfg.hard_spread_limit)
+    result.unresolved = (
+        int(result.after_metrics.get("load_spread_routes", 0)) > int(cfg.hard_spread_limit)
+        or int(result.after_metrics.get("time_window_total_excess", 0)) > 0
+    )
     result.elapsed_ms = int((time_module.perf_counter() - started) * 1000)
     result.reason = "ok" if result.applied else "no_improving_move"
     return working, result
@@ -2653,6 +2920,7 @@ def optimize_v6(
     balance_load: bool = True,
     load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
     load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
+    route_load_constraints: Optional[List[Dict[str, Any]]] = None,
 ) -> List[BusSchedule]:
     """
     Main optimization function for V6.
@@ -2664,6 +2932,7 @@ def optimize_v6(
         balance_load: Enable load rebalance phase after minimizing buses
         load_balance_hard_spread_limit: Max allowed spread (max-min routes per bus)
         load_balance_target_band: Band around median for target load
+        route_load_constraints: Optional time windows to cap routes per bus
         
     Returns:
         List of BusSchedule objects representing the optimized fleet
@@ -2695,11 +2964,22 @@ def optimize_v6(
         f"(spread<={max(1, int(load_balance_hard_spread_limit))}, "
         f"band=+/-{max(0, int(load_balance_target_band))})"
     )
+    normalized_window_limits = normalize_time_window_limits(route_load_constraints)
+    if normalized_window_limits:
+        print("Route load windows:")
+        for win in normalized_window_limits:
+            print(
+                f"  - {win.label}: "
+                f"{win.start_min // 60:02d}:{win.start_min % 60:02d}"
+                f"-{win.end_min // 60:02d}:{win.end_min % 60:02d} "
+                f"max {win.max_routes} rutas/bus"
+            )
 
     load_balance_cfg = LoadBalanceConfig(
         enabled=bool(balance_load),
         hard_spread_limit=max(1, int(load_balance_hard_spread_limit)),
         target_band=max(0, int(load_balance_target_band)),
+        time_window_limits=normalized_window_limits,
     )
     load_balance_result = LoadBalanceResult(reason="not_run")
 
@@ -2843,7 +3123,10 @@ def optimize_v6(
     selected_baseline_buses = deepcopy(bus_list)
     selected_baseline_schedules = prebuilt_schedules
     baseline_split = max(0, len(selected_baseline_schedules) - len(selected_baseline_buses))
-    baseline_load_metrics = _compute_load_metrics_for_schedules(selected_baseline_schedules)
+    baseline_load_metrics = _compute_load_metrics_for_schedules(
+        selected_baseline_schedules,
+        time_window_limits=load_balance_cfg.time_window_limits,
+    )
 
     try:
         rebalanced_buses, load_balance_result = rebalance_route_load(
@@ -2854,7 +3137,10 @@ def optimize_v6(
         )
         rebalanced_schedules = build_full_schedule(rebalanced_buses, blocks, block_tt)
         rebalanced_split = max(0, len(rebalanced_schedules) - len(rebalanced_buses))
-        rebalanced_load_metrics = _compute_load_metrics_for_schedules(rebalanced_schedules)
+        rebalanced_load_metrics = _compute_load_metrics_for_schedules(
+            rebalanced_schedules,
+            time_window_limits=load_balance_cfg.time_window_limits,
+        )
 
         accept_rebalance = (
             len(rebalanced_schedules) <= len(selected_baseline_schedules)
@@ -2880,6 +3166,7 @@ def optimize_v6(
             load_balance_result.after_metrics = dict(baseline_load_metrics)
             load_balance_result.unresolved = bool(
                 baseline_load_metrics.get("load_spread_routes", 0) > load_balance_cfg.hard_spread_limit
+                or baseline_load_metrics.get("time_window_total_excess", 0) > 0
             )
             print("    Rebalance skipped: no feasible improving move without degrading viability")
     except Exception as rebalance_exc:
@@ -2891,6 +3178,7 @@ def optimize_v6(
         load_balance_result.after_metrics = dict(baseline_load_metrics)
         load_balance_result.unresolved = bool(
             baseline_load_metrics.get("load_spread_routes", 0) > load_balance_cfg.hard_spread_limit
+            or baseline_load_metrics.get("time_window_total_excess", 0) > 0
         )
     _record_phase_time("load_rebalance", phase_start)
 
@@ -2926,7 +3214,10 @@ def optimize_v6(
     except Exception:
         router_metrics = {}
 
-    final_load_metrics = _compute_load_metrics_for_schedules(schedules)
+    final_load_metrics = _compute_load_metrics_for_schedules(
+        schedules,
+        time_window_limits=load_balance_cfg.time_window_limits,
+    )
 
     _LAST_OPTIMIZATION_DIAGNOSTICS = {
         "total_routes": total_routes,
@@ -2950,7 +3241,15 @@ def optimize_v6(
         "max_routes_per_bus": final_load_metrics.get("max_routes_per_bus", 0),
         "load_spread_routes": final_load_metrics.get("load_spread_routes", 0),
         "load_abs_dev_sum": final_load_metrics.get("load_abs_dev_sum", 0.0),
-        "load_balanced": bool(final_load_metrics.get("load_spread_routes", 0) <= load_balance_cfg.hard_spread_limit),
+        "load_balanced": bool(
+            final_load_metrics.get("load_spread_routes", 0) <= load_balance_cfg.hard_spread_limit
+            and final_load_metrics.get("time_window_total_excess", 0) <= 0
+        ),
+        "load_time_constraints_met": bool(final_load_metrics.get("time_window_total_excess", 0) <= 0),
+        "time_window_total_excess": int(final_load_metrics.get("time_window_total_excess", 0)),
+        "time_window_violating_buses": int(final_load_metrics.get("time_window_violating_buses", 0)),
+        "time_window_max_excess_per_bus": int(final_load_metrics.get("time_window_max_excess_per_bus", 0)),
+        "time_window_constraints_applied": bool(final_load_metrics.get("time_window_constraints_applied", False)),
         "load_rebalance_applied": bool(load_balance_result.applied),
         "load_rebalance_moves": int(load_balance_result.moves),
         "load_rebalance_swaps": int(load_balance_result.swaps),
@@ -2984,6 +3283,12 @@ def optimize_v6(
             f"passes={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_rebalance_passes', 0)}, "
             f"unresolved={_LAST_OPTIMIZATION_DIAGNOSTICS.get('load_balance_unresolved', False)}"
         )
+        if _LAST_OPTIMIZATION_DIAGNOSTICS.get("time_window_constraints_applied", False):
+            print(
+                "  Time windows: "
+                f"excess={_LAST_OPTIMIZATION_DIAGNOSTICS.get('time_window_total_excess', 0)}, "
+                f"violating_buses={_LAST_OPTIMIZATION_DIAGNOSTICS.get('time_window_violating_buses', 0)}"
+            )
 
     shifts = [item.time_shift_minutes for s in schedules for item in s.items if item.time_shift_minutes > 0]
     if shifts:
@@ -3031,6 +3336,7 @@ def optimize_routes_v6(
     balance_load: bool = True,
     load_balance_hard_spread_limit: int = DEFAULT_LOAD_BALANCE_HARD_SPREAD_LIMIT,
     load_balance_target_band: int = DEFAULT_LOAD_BALANCE_TARGET_BAND,
+    route_load_constraints: Optional[List[Dict[str, Any]]] = None,
 ) -> List[BusSchedule]:
     """Alias for optimize_v6."""
     return optimize_v6(
@@ -3039,6 +3345,7 @@ def optimize_routes_v6(
         balance_load=balance_load,
         load_balance_hard_spread_limit=load_balance_hard_spread_limit,
         load_balance_target_band=load_balance_target_band,
+        route_load_constraints=route_load_constraints,
     )
 
 

@@ -122,3 +122,17 @@ export async function optimizeWorkspacePipeline(workspaceId, payload) {
   });
   return parseResponse(response);
 }
+
+export async function getWorkspaceOptimizationOptions(workspaceId) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/optimization-options`);
+  return parseResponse(response);
+}
+
+export async function setWorkspaceOptimizationOptions(workspaceId, payload = {}) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/optimization-options`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse(response);
+}
