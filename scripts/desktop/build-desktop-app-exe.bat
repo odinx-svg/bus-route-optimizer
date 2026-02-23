@@ -84,6 +84,7 @@ if exist "%PYI_ONEDIR_WORK%" rmdir /S /Q "%PYI_ONEDIR_WORK%" >nul 2>&1
 if not exist "%PYI_ONEFILE_WORK%" mkdir "%PYI_ONEFILE_WORK%" >nul 2>&1
 if not exist "%PYI_ONEDIR_WORK%" mkdir "%PYI_ONEDIR_WORK%" >nul 2>&1
 if not exist "%PYI_SPEC%" mkdir "%PYI_SPEC%" >nul 2>&1
+del /Q "%PYI_SPEC%\*.spec" >nul 2>&1
 
 set /a CLEAN_TRIES=0
 :cleanup_locked_exe
