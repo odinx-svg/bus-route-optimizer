@@ -89,7 +89,8 @@ En cada version:
 3. Crea release con tag `vX.Y.Z`
 4. Adjunta assets en este orden:
    - `TuttiSetup.exe` (descarga principal desde web)
-   - `TuttiDesktopApp.zip` (auto-update interno desktop)
+   - `TuttiDesktopApp.zip` (canal portable)
+   - `checksums-sha256.txt` (integridad obligatoria)
 
 ### Comando one-click (version + tag + push)
 
@@ -121,15 +122,35 @@ La app de escritorio:
 
 1. Consulta la ultima release en GitHub.
 2. Compara version actual vs release.
-3. Si esta instalada en `Program Files`, descarga `TuttiSetup.exe` y abre el instalador (UAC).
-4. Si es instalacion portable, descarga `TuttiDesktopApp.zip`, reemplaza el exe y relanza.
+3. Detecta modo de instalacion:
+   - `onedir_installed` (Setup): requiere `TuttiSetup.exe`.
+   - `portable`: requiere `TuttiDesktopApp.zip`.
+4. Si falta el asset requerido para su modo, bloquea update y avisa claramente.
+5. Si todo es correcto, aplica actualizacion silenciosa y relanza la app.
 
 Importante:
 
-1. Mantener ambos assets en cada release:
+1. Mantener assets canonicos en cada release:
    - `TuttiSetup.exe`
    - `TuttiDesktopApp.zip`
-2. Solo hacer `push` no basta: la deteccion usa la release/tag publicada (ej. `v0.1.2`).
+   - `checksums-sha256.txt`
+2. Solo hacer `push` no basta: la deteccion usa la release/tag publicada (ej. `v0.2.32`).
+3. No mezclar canales:
+   - Setup nunca se actualiza con zip portable.
+   - Portable nunca se actualiza con installer.
+
+### Logs de updater (soporte)
+
+Ruta: `%LOCALAPPDATA%\Tutti\logs\desktop-updater.log`
+
+Eventos clave:
+
+- `UPDATE_MODE_RESOLVED`
+- `UPDATE_DOWNLOAD_STARTED`
+- `UPDATE_CHECKSUM_OK`
+- `UPDATE_APPLY_STARTED`
+- `UPDATE_APPLY_FAILED`
+- `UPDATE_APPLY_SUCCESS`
 
 ---
 
@@ -138,3 +159,9 @@ Importante:
 1. Windows 10/11
 2. Permiso para instalar apps (`UAC`)
 3. Conexion a internet para OSRM si no hay OSRM local
+
+## Soporte legacy
+
+Para equipos que ya muestran errores de runtime al actualizar, usar:
+
+- `docs/setup/DESKTOP_LEGACY_RUNTIME_RECOVERY_ES.md`

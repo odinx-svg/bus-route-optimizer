@@ -136,6 +136,30 @@ def _log_update(message: str) -> None:
         pass
 
 
+def _log_update_event(event_code: str, **fields: object) -> None:
+    """
+    Write a structured updater event line.
+
+    Example:
+      UPDATE_MODE_RESOLVED | install_mode=onedir_installed update_mode=installer
+    """
+    parts: list[str] = []
+    for key, value in fields.items():
+        if value is None:
+            continue
+        text = str(value).replace("\n", " ").replace("\r", " ").strip()
+        if not text:
+            continue
+        if any(ch in text for ch in (" ", "|")):
+            text = json.dumps(text, ensure_ascii=False)
+        parts.append(f"{key}={text}")
+
+    if parts:
+        _log_update(f"{event_code} | {' '.join(parts)}")
+    else:
+        _log_update(event_code)
+
+
 def _parse_version_numbers(version: str) -> tuple[int, ...]:
     # Accepts tags like "v0.1.2", "0.1.2-beta.1", etc.
     numbers = re.findall(r"\d+", version or "")
@@ -236,24 +260,48 @@ def _select_installer_asset(release_data: dict) -> Optional[dict]:
 def _select_portable_asset(release_data: dict) -> Optional[dict]:
     assets = release_data.get("assets", []) or []
     by_name = {asset.get("name"): asset for asset in assets}
-    installer_keywords = ("setup", "installer", "install")
 
     if RELEASE_ASSET_ZIP in by_name:
         return by_name[RELEASE_ASSET_ZIP]
-    if RELEASE_ASSET_EXE in by_name:
-        return by_name[RELEASE_ASSET_EXE]
 
     for asset in assets:
         name = (asset.get("name") or "").lower()
-        if name.endswith(".zip"):
-            return asset
-    for asset in assets:
-        name = (asset.get("name") or "").lower()
-        if any(keyword in name for keyword in installer_keywords):
-            continue
-        if name.endswith(".exe"):
+        if name.endswith(".zip") and "setup" not in name and "installer" not in name:
             return asset
     return None
+
+
+def _detect_install_mode(exe_path: Path) -> str:
+    if not getattr(sys, "frozen", False):
+        return "dev"
+    if _is_onedir_install(exe_path):
+        return "onedir_installed"
+    return "portable"
+
+
+def _resolve_update_asset_for_mode(
+    install_mode: str,
+    installer_asset: Optional[dict],
+    portable_asset: Optional[dict],
+) -> tuple[Optional[dict], str, Optional[str]]:
+    """
+    Resolve the update channel by strict contract:
+
+    - onedir_installed -> installer only
+    - portable -> zip only
+    - dev -> no production auto-update
+    """
+    if install_mode == "onedir_installed":
+        if installer_asset:
+            return installer_asset, "installer", None
+        return None, "installer", "installer_asset_missing"
+
+    if install_mode == "portable":
+        if portable_asset:
+            return portable_asset, "portable", None
+        return None, "portable", "portable_asset_missing"
+
+    return None, "none", "dev_mode"
 
 
 def _is_protected_install_path(exe_path: Path) -> bool:
@@ -362,12 +410,25 @@ def _verify_checksum(file_path: Path, actual_hash: str, expected_hash: Optional[
     If no expected hash is available the check is skipped (best-effort).
     """
     if not expected_hash:
-        _log_update("Checksum verification skipped: no expected hash available")
+        _log_update_event(
+            "UPDATE_CHECKSUM_SKIPPED",
+            asset=file_path.name,
+            reason="expected_hash_missing",
+        )
         return True
     if actual_hash.lower() == expected_hash.lower():
-        _log_update(f"Checksum OK: {actual_hash}")
+        _log_update_event(
+            "UPDATE_CHECKSUM_OK",
+            asset=file_path.name,
+            sha256=actual_hash.lower(),
+        )
         return True
-    _log_update(f"CHECKSUM MISMATCH: expected={expected_hash} actual={actual_hash}")
+    _log_update_event(
+        "UPDATE_CHECKSUM_MISMATCH",
+        asset=file_path.name,
+        expected=expected_hash.lower(),
+        actual=actual_hash.lower(),
+    )
     return False
 
 
@@ -517,7 +578,9 @@ def _launch_installer_and_exit(installer_exe: Path, expected_exe: Optional[Path]
         auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
         target_exe = (expected_exe or Path(sys.executable)).resolve()
         installer_args = _build_installer_update_args(installer_exe)
-        _log_update(f"Launching installer update | args={' '.join(installer_args[1:]) or '(interactive)'}")
+        _log_update(
+            f"Launching installer update | args={' '.join(installer_args[1:]) or '(interactive)'}"
+        )
 
         if os.name == "nt":
             runner_bat = Path(tempfile.gettempdir()) / "tutti_desktop_installer_update.bat"
@@ -581,7 +644,7 @@ exit /b 0
             subprocess.Popen(installer_args)
         return True
     except Exception as exc:
-        _log_update(f"Installer launch failed ({exc})")
+        _log_update_event("UPDATE_APPLY_FAILED", update_mode="installer", reason=str(exc))
         return False
 
 
@@ -693,40 +756,37 @@ def _check_and_apply_update_if_available() -> bool:
 
     installer_asset = _select_installer_asset(release)
     portable_asset = _select_portable_asset(release)
+    install_mode = _detect_install_mode(current_exe)
     protected_install = _is_protected_install_path(current_exe)
-    onedir_install = _is_onedir_install(current_exe)
-
-    asset: Optional[dict] = None
-    update_mode = "portable"
-    if (onedir_install or protected_install) and installer_asset:
-        asset = installer_asset
-        update_mode = "installer"
-    elif portable_asset:
-        asset = portable_asset
-        update_mode = "portable"
-    elif installer_asset:
-        asset = installer_asset
-        update_mode = "installer"
-
-    if not asset:
-        _log_update(f"Release {latest_tag} found but no compatible asset was found")
-        return False
-    _log_update(
-        f"Update mode resolved | onedir_install={onedir_install} "
-        f"protected_install={protected_install} mode={update_mode} asset={asset.get('name', '?')}"
+    asset, update_mode, block_reason = _resolve_update_asset_for_mode(
+        install_mode=install_mode,
+        installer_asset=installer_asset,
+        portable_asset=portable_asset,
     )
-    if (protected_install or onedir_install) and update_mode != "installer":
-        _log_update(
-            "Update blocked: installer mode required but release has no installer asset"
-        )
-        _message_box(
-            (
-                "Hay una nueva version, pero esta instalacion requiere actualizacion por instalador.\n\n"
-                "Sube TuttiSetup.exe al release y vuelve a abrir TUTTI."
-            ),
-            "TUTTI - Actualizacion pendiente",
-            kind="warn",
-        )
+    _log_update_event(
+        "UPDATE_MODE_RESOLVED",
+        current_version=APP_VERSION,
+        target_version=latest_tag,
+        install_mode=install_mode,
+        update_mode=update_mode,
+        protected_install=protected_install,
+        asset=(asset or {}).get("name"),
+        block_reason=block_reason,
+    )
+    if block_reason or not asset:
+        if install_mode == "onedir_installed":
+            message = (
+                "Hay una nueva version, pero esta instalacion solo puede actualizarse con instalador.\n\n"
+                "No se encontro TuttiSetup.exe en el release. Publica el instalador y reintenta."
+            )
+        elif install_mode == "portable":
+            message = (
+                "Hay una nueva version, pero no se encontro el paquete portable (TuttiDesktopApp.zip).\n\n"
+                "Publica el ZIP portable y reintenta."
+            )
+        else:
+            message = "La actualizacion automatica no aplica en este modo de ejecucion."
+        _message_box(message, "TUTTI - Actualizacion pendiente", kind="warn")
         return False
 
     # Build changelog for the confirmation dialog.
@@ -787,8 +847,13 @@ def _check_and_apply_update_if_available() -> bool:
     def _do_download() -> None:
         nonlocal download_hash, download_error
         try:
-            _log_update(
-                f"Downloading update asset | tag={latest_tag} | asset={asset_name} | url={download_url}"
+            _log_update_event(
+                "UPDATE_DOWNLOAD_STARTED",
+                current_version=APP_VERSION,
+                target_version=latest_tag,
+                install_mode=install_mode,
+                update_mode=update_mode,
+                asset=asset_name,
             )
             download_hash = _download_file(download_url, asset_path, progress_callback=reporter)
         except Exception as exc:
@@ -819,7 +884,15 @@ def _check_and_apply_update_if_available() -> bool:
     download_thread.join(timeout=300)
 
     if download_error:
-        _log_update(f"Update failed while downloading ({download_error})")
+        _log_update_event(
+            "UPDATE_DOWNLOAD_FAILED",
+            current_version=APP_VERSION,
+            target_version=latest_tag,
+            install_mode=install_mode,
+            update_mode=update_mode,
+            asset=asset_name,
+            reason=str(download_error),
+        )
         _message_box(
             f"Error al descargar la actualizacion:\n{download_error}",
             "TUTTI - Error de actualizacion",
@@ -830,6 +903,15 @@ def _check_and_apply_update_if_available() -> bool:
 
     # Verify integrity.
     if not _verify_checksum(asset_path, download_hash or "", expected_hash):
+        _log_update_event(
+            "UPDATE_APPLY_FAILED",
+            current_version=APP_VERSION,
+            target_version=latest_tag,
+            install_mode=install_mode,
+            update_mode=update_mode,
+            asset=asset_name,
+            reason="checksum_mismatch",
+        )
         _message_box(
             (
                 "La verificacion de integridad de la descarga fallo.\n"
@@ -842,22 +924,39 @@ def _check_and_apply_update_if_available() -> bool:
         return False
 
     try:
-        auto_restart_after_update = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
-        restart_hint = (
-            "TUTTI se abrira automaticamente al finalizar."
-            if auto_restart_after_update
-            else "Al terminar, abre TUTTI manualmente."
-        )
         if update_mode == "installer":
-            _log_update(
-                f"Installer update downloaded | tag={latest_tag} | asset={asset_name}"
+            _log_update_event(
+                "UPDATE_APPLY_STARTED",
+                current_version=APP_VERSION,
+                target_version=latest_tag,
+                install_mode=install_mode,
+                update_mode=update_mode,
+                asset=asset_name,
             )
-            return _launch_installer_and_exit(asset_path, expected_exe=current_exe)
+            launched = _launch_installer_and_exit(asset_path, expected_exe=current_exe)
+            _log_update_event(
+                "UPDATE_APPLY_SUCCESS" if launched else "UPDATE_APPLY_FAILED",
+                current_version=APP_VERSION,
+                target_version=latest_tag,
+                install_mode=install_mode,
+                update_mode=update_mode,
+                asset=asset_name,
+                reason=None if launched else "installer_launch_failed",
+            )
+            return launched
 
         if str(asset_name).lower().endswith(".zip"):
             updated_exe = _extract_exe_from_zip(asset_path, work_dir)
             if not updated_exe:
-                _log_update("Update failed: zip downloaded but no .exe found inside")
+                _log_update_event(
+                    "UPDATE_APPLY_FAILED",
+                    current_version=APP_VERSION,
+                    target_version=latest_tag,
+                    install_mode=install_mode,
+                    update_mode=update_mode,
+                    asset=asset_name,
+                    reason="zip_without_exe",
+                )
                 _message_box("No se encontro el .exe dentro del ZIP de actualizacion.", "TUTTI", kind="warn")
                 return False
         else:
@@ -866,21 +965,35 @@ def _check_and_apply_update_if_available() -> bool:
         # Create backup before replacing.
         backup_path = _create_backup(current_exe)
 
-        _log_update(
-            f"Update downloaded successfully | applying update to {current_exe} from {updated_exe}"
+        _log_update_event(
+            "UPDATE_APPLY_STARTED",
+            current_version=APP_VERSION,
+            target_version=latest_tag,
+            install_mode=install_mode,
+            update_mode=update_mode,
+            asset=asset_name,
         )
-        _message_box(
-            (
-                "Actualizacion descargada y verificada.\n"
-                "La app se cerrara para aplicar cambios.\n"
-                f"{restart_hint}"
-            ),
-            "TUTTI - Actualizando",
-            kind="info",
+        launched = _launch_updater_and_exit(current_exe=current_exe, new_exe=updated_exe, backup_exe=backup_path)
+        _log_update_event(
+            "UPDATE_APPLY_SUCCESS" if launched else "UPDATE_APPLY_FAILED",
+            current_version=APP_VERSION,
+            target_version=latest_tag,
+            install_mode=install_mode,
+            update_mode=update_mode,
+            asset=asset_name,
+            reason=None if launched else "portable_apply_launch_failed",
         )
-        return _launch_updater_and_exit(current_exe=current_exe, new_exe=updated_exe, backup_exe=backup_path)
+        return launched
     except Exception as exc:
-        _log_update(f"Update failed while applying ({exc})")
+        _log_update_event(
+            "UPDATE_APPLY_FAILED",
+            current_version=APP_VERSION,
+            target_version=latest_tag,
+            install_mode=install_mode,
+            update_mode=update_mode,
+            asset=asset_name,
+            reason=str(exc),
+        )
         shutil.rmtree(work_dir, ignore_errors=True)
         return False
 
@@ -1215,11 +1328,24 @@ def main() -> int:
     # Check for updates in the foreground only when TUTTI_DESKTOP_UPDATE_BLOCKING=1,
     # otherwise the check runs in background while the app boots.
     blocking_update = _env_flag("TUTTI_DESKTOP_UPDATE_BLOCKING", "0")
-    skip_update_boot = _env_flag("TUTTI_AFTER_UPDATE", "0") or _env_flag(
+    after_update_boot = _env_flag("TUTTI_AFTER_UPDATE", "0")
+    skip_update_boot = after_update_boot or _env_flag(
         "TUTTI_DESKTOP_DISABLE_AUTO_UPDATE", "0"
     )
     _pending_update: dict = {}
     _background_update_done = threading.Event()
+
+    if after_update_boot:
+        _log_update_event(
+            "UPDATE_APPLY_SUCCESS",
+            current_version=APP_VERSION,
+            notice="post_restart",
+        )
+        _message_box(
+            "Actualizacion aplicada correctamente. Reiniciando TUTTI...",
+            "TUTTI - Actualizacion completada",
+            kind="info",
+        )
 
     if skip_update_boot:
         _log_update("Skipping update checks on post-update startup")

@@ -42,6 +42,15 @@ jobs:
           }
           Write-Host "Desktop version validated: $fileVersion"
 
+      - name: Validate updater/build contract guards
+        shell: pwsh
+        run: |
+          $hits = git grep -n "runtime-tmpdir" -- scripts/desktop
+          if ($LASTEXITCODE -eq 0 -and $hits) {
+            throw "Forbidden runtime-tmpdir usage detected:`n$hits"
+          }
+          Write-Host "No runtime-tmpdir references detected in desktop scripts."
+
       - name: Build desktop EXE + ZIP
         shell: cmd
         env:
@@ -58,25 +67,86 @@ jobs:
           TUTTI_NON_INTERACTIVE: "1"
         run: scripts\desktop\build-desktop-installer.bat
 
+      - name: Smoke test desktop backend boot (onedir payload)
+        shell: pwsh
+        run: |
+          $exe = "dist/desktop-app/installer-payload/Tutti Desktop.exe"
+          if (-not (Test-Path $exe)) {
+            throw "Smoke test executable missing: $exe"
+          }
+
+          $env:TUTTI_DESKTOP_DISABLE_AUTO_UPDATE = "1"
+          $env:TUTTI_AFTER_UPDATE = "1"
+          $proc = Start-Process -FilePath $exe -ArgumentList "--run-backend" -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -TimeoutSec 2
+                if ($health.status -eq "ok") {
+                  $ok = $true
+                  break
+                }
+              } catch {
+                # keep waiting
+              }
+            }
+            if (-not $ok) {
+              throw "Desktop smoke test failed: backend /health not ready in time."
+            }
+            Write-Host "Desktop smoke test passed."
+          } finally {
+            if ($proc -and -not $proc.HasExited) {
+              Stop-Process -Id $proc.Id -Force
+            }
+            Get-Process -Name "Tutti Desktop" -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
+
       - name: Generate SHA-256 checksums
         shell: pwsh
         run: |
           $checksumFile = "dist/desktop-app/checksums-sha256.txt"
+          if (Test-Path $checksumFile) {
+            Remove-Item $checksumFile -Force
+          }
           $assets = @(
             "dist/desktop-app/TuttiSetup.exe",
-            "dist/Tutti Desktop.exe",
             "dist/desktop-app/TuttiDesktopApp.zip"
           )
           foreach ($asset in $assets) {
-            if (Test-Path $asset) {
-              $hash = (Get-FileHash -Path $asset -Algorithm SHA256).Hash.ToLower()
-              $name = Split-Path $asset -Leaf
-              "$hash  $name" | Out-File -Append -FilePath $checksumFile -Encoding utf8
-              Write-Host "SHA-256 $name = $hash"
+            if (-not (Test-Path $asset)) {
+              throw "Missing required asset: $asset"
             }
+            $hash = (Get-FileHash -Path $asset -Algorithm SHA256).Hash.ToLower()
+            $name = Split-Path $asset -Leaf
+            "$hash  $name" | Out-File -Append -FilePath $checksumFile -Encoding utf8
+            Write-Host "SHA-256 $name = $hash"
           }
           Write-Host "Checksum file:"
           Get-Content $checksumFile
+
+      - name: Validate canonical release assets and checksums
+        shell: pwsh
+        run: |
+          $required = @(
+            "dist/desktop-app/TuttiSetup.exe",
+            "dist/desktop-app/TuttiDesktopApp.zip",
+            "dist/desktop-app/checksums-sha256.txt"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Required release asset missing: $path"
+            }
+          }
+
+          $checksums = Get-Content "dist/desktop-app/checksums-sha256.txt" -Raw
+          foreach ($assetName in @("TuttiSetup.exe", "TuttiDesktopApp.zip")) {
+            if ($checksums -notmatch [Regex]::Escape($assetName)) {
+              throw "checksums-sha256.txt missing hash entry for $assetName"
+            }
+          }
+          Write-Host "Canonical assets and checksums validated."
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -84,7 +154,6 @@ jobs:
           name: tutti-desktop-release
           path: |
             dist/desktop-app/TuttiSetup.exe
-            dist/Tutti Desktop.exe
             dist/desktop-app/TuttiDesktopApp.zip
             dist/desktop-app/checksums-sha256.txt
 
@@ -93,7 +162,6 @@ jobs:
         with:
           files: |
             dist/desktop-app/TuttiSetup.exe
-            dist/Tutti Desktop.exe
             dist/desktop-app/TuttiDesktopApp.zip
             dist/desktop-app/checksums-sha256.txt
           draft: false
