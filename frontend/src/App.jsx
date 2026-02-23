@@ -327,7 +327,7 @@ function LoadOptionsModal({
             Balancear carga
           </label>
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
-            Spread max
+            Diferencia maxima entre buses
             <input
               type="number"
               min={1}
@@ -339,9 +339,12 @@ function LoadOptionsModal({
               }))}
               className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1 text-[12px] text-white"
             />
+            <p className="mt-1 text-[10px] text-slate-400">
+              Ejemplo: 2 = el bus con mas rutas solo puede tener 2 rutas mas que el bus con menos rutas.
+            </p>
           </label>
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
-            Banda mediana (+/-)
+            Margen alrededor del reparto ideal (+/-)
             <input
               type="number"
               min={0}
@@ -353,6 +356,9 @@ function LoadOptionsModal({
               }))}
               className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1 text-[12px] text-white"
             />
+            <p className="mt-1 text-[10px] text-slate-400">
+              Cuanto puede alejarse cada bus del numero ideal de rutas.
+            </p>
           </label>
         </div>
 

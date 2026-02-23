@@ -182,7 +182,7 @@ export default function ControlHubPage({
                 ) : null}
                 {(Number.isFinite(loadMedian) || Number.isFinite(loadSpread)) ? (
                   <span className={`data-mono ${Number(loadSpread || 0) > 2 ? 'text-rose-300' : 'text-emerald-300'}`}>
-                    med {loadMedian ?? 0} | spread {loadSpread ?? 0}
+                    mediana {loadMedian ?? 0} | diferencia {loadSpread ?? 0}
                   </span>
                 ) : null}
                 <span>{new Date(workspace.updated_at).toLocaleString()}</span>

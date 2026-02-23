@@ -122,8 +122,8 @@ const Sidebar = ({
                   Restricciones de carga
                 </p>
                 <p className="text-[11px] text-gt-text-muted">
-                  Spread {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
-                  {' '}| Banda ±{optimizationOptions?.load_balance_target_band ?? 1}
+                  Diferencia max {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
+                  {' '}| Margen ±{optimizationOptions?.load_balance_target_band ?? 1}
                   {' '}| Ventanas {Array.isArray(optimizationOptions?.route_load_constraints) ? optimizationOptions.route_load_constraints.length : 0}
                 </p>
                 <button
@@ -190,7 +190,7 @@ const Sidebar = ({
                           <p className={`text-lg font-semibold data-mono ${(optimizationStats.load_spread_routes || 0) > 2 ? 'text-rose-300' : 'text-emerald-300'}`}>
                             {optimizationStats.load_spread_routes || 0}
                           </p>
-                          <p className="text-[10px] text-gt-text-muted mt-0.5 uppercase tracking-[0.1em]">Spread</p>
+                          <p className="text-[10px] text-gt-text-muted mt-0.5 uppercase tracking-[0.1em]">Diferencia</p>
                         </div>
                         <div className="gt-stat-card rounded-xl p-3 text-center">
                           <p className="text-lg font-semibold text-gt-info data-mono">

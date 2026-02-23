@@ -176,7 +176,7 @@ const Header = ({
           {(stats.load_spread_routes || 0) > 0 && (
             <MetricBadge
               value={stats.load_spread_routes}
-              label="spread"
+              label="diferencia"
               color={stats.load_spread_routes > 2 ? 'text-rose-300' : 'text-emerald-300'}
             />
           )}
