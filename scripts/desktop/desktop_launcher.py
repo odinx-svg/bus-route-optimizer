@@ -285,6 +285,14 @@ def _is_protected_install_path(exe_path: Path) -> bool:
         return True
 
 
+def _is_onedir_install(exe_path: Path) -> bool:
+    """Return True when the executable is part of a PyInstaller onedir layout."""
+    try:
+        return (exe_path.resolve().parent / "_internal").is_dir()
+    except Exception:
+        return False
+
+
 def _download_file(
     url: str,
     destination: Path,
@@ -427,10 +435,6 @@ def _launch_updater_and_exit(current_exe: Path, new_exe: Path, backup_exe: Optio
     """
     auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
     start_cmd = (
-        f'set "TUTTI_TEMP=%LOCALAPPDATA%\\TuttiRuntime"\n'
-        f'if not exist "%TUTTI_TEMP%" mkdir "%TUTTI_TEMP%" >nul 2>&1\n'
-        f'set "TEMP=%TUTTI_TEMP%"\n'
-        f'set "TMP=%TUTTI_TEMP%"\n'
         f'set "TUTTI_AFTER_UPDATE=1"\n'
         f'set "TUTTI_DESKTOP_DISABLE_AUTO_UPDATE=1"\n'
         f'timeout /t 12 /nobreak >nul\n'
@@ -558,10 +562,6 @@ if not errorlevel 1 (
         goto wait_target
 
         :start_target
-        set "TUTTI_TEMP=%LOCALAPPDATA%\TuttiRuntime"
-        if not exist "%TUTTI_TEMP%" mkdir "%TUTTI_TEMP%" >nul 2>&1
-        set "TEMP=%TUTTI_TEMP%"
-        set "TMP=%TUTTI_TEMP%"
         set "TUTTI_AFTER_UPDATE=1"
         set "TUTTI_DESKTOP_DISABLE_AUTO_UPDATE=1"
         if not exist "%TARGET_EXE%" goto done
@@ -694,10 +694,11 @@ def _check_and_apply_update_if_available() -> bool:
     installer_asset = _select_installer_asset(release)
     portable_asset = _select_portable_asset(release)
     protected_install = _is_protected_install_path(current_exe)
+    onedir_install = _is_onedir_install(current_exe)
 
     asset: Optional[dict] = None
     update_mode = "portable"
-    if protected_install and installer_asset:
+    if (onedir_install or protected_install) and installer_asset:
         asset = installer_asset
         update_mode = "installer"
     elif portable_asset:
@@ -710,13 +711,17 @@ def _check_and_apply_update_if_available() -> bool:
     if not asset:
         _log_update(f"Release {latest_tag} found but no compatible asset was found")
         return False
-    if protected_install and update_mode != "installer":
+    _log_update(
+        f"Update mode resolved | onedir_install={onedir_install} "
+        f"protected_install={protected_install} mode={update_mode} asset={asset.get('name', '?')}"
+    )
+    if (protected_install or onedir_install) and update_mode != "installer":
         _log_update(
-            "Update blocked: install path is protected and release has no installer asset"
+            "Update blocked: installer mode required but release has no installer asset"
         )
         _message_box(
             (
-                "Hay una nueva version, pero esta instalacion requiere actualizacion con instalador.\n\n"
+                "Hay una nueva version, pero esta instalacion requiere actualizacion por instalador.\n\n"
                 "Sube TuttiSetup.exe al release y vuelve a abrir TUTTI."
             ),
             "TUTTI - Actualizacion pendiente",
