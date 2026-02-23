@@ -45,12 +45,11 @@ jobs:
       - name: Validate updater/build contract guards
         shell: pwsh
         run: |
-          $hits = git grep -n "runtime-tmpdir" -- scripts/desktop
-          if ($LASTEXITCODE -gt 1) {
-            throw "git grep failed while validating runtime-tmpdir guard."
-          }
-          if ($LASTEXITCODE -eq 0 -and $hits) {
-            throw "Forbidden runtime-tmpdir usage detected:`n$hits"
+          $files = Get-ChildItem -Path "scripts/desktop" -Recurse -File
+          $hits = $files | Select-String -Pattern "runtime-tmpdir" -SimpleMatch
+          if ($hits) {
+            $lines = ($hits | ForEach-Object { "$($_.Path):$($_.LineNumber):$($_.Line)" }) -join "`n"
+            throw "Forbidden runtime-tmpdir usage detected:`n$lines"
           }
           Write-Host "No runtime-tmpdir references detected in desktop scripts."
 
