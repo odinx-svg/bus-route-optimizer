@@ -108,35 +108,31 @@ jobs:
       - name: Validate binaries do not contain hardcoded runtime temp path
         shell: pwsh
         run: |
-          $targets = @(
-            "dist/desktop-app/installer-payload/Tutti Desktop.exe",
-            "dist/Tutti Desktop.exe"
-          )
-          $forbidden = @(
-            [System.Text.Encoding]::ASCII.GetBytes("\Users\runneradmin\AppData\Local\TuttiRuntime"),
-            [System.Text.Encoding]::ASCII.GetBytes("\AppData\Local\TuttiRuntime")
-          )
-
-          foreach ($target in $targets) {
-            if (-not (Test-Path $target)) {
-              throw "Missing binary for validation: $target"
-            }
-            $bytes = [System.IO.File]::ReadAllBytes($target)
-            foreach ($needle in $forbidden) {
-              $found = -1
-              for ($i = 0; $i -le $bytes.Length - $needle.Length; $i++) {
-                $ok = $true
-                for ($j = 0; $j -lt $needle.Length; $j++) {
-                  if ($bytes[$i + $j] -ne $needle[$j]) { $ok = $false; break }
-                }
-                if ($ok) { $found = $i; break }
-              }
-              if ($found -ge 0) {
-                throw "Forbidden hardcoded runtime temp path found in $target at offset $found"
-              }
-            }
-          }
-          Write-Host "Binary runtime-temp path validation passed."
+          @'
+          from pathlib import Path
+          
+          targets = [
+              Path("dist/desktop-app/installer-payload/Tutti Desktop.exe"),
+              Path("dist/Tutti Desktop.exe"),
+          ]
+          forbidden = [
+              b"\\Users\\runneradmin\\AppData\\Local\\TuttiRuntime",
+              b"\\AppData\\Local\\TuttiRuntime",
+          ]
+          
+          for target in targets:
+              if not target.exists():
+                  raise SystemExit(f"Missing binary for validation: {target}")
+              data = target.read_bytes()
+              for needle in forbidden:
+                  idx = data.find(needle)
+                  if idx >= 0:
+                      raise SystemExit(
+                          f"Forbidden hardcoded runtime temp path found in {target} at offset {idx}"
+                      )
+          
+          print("Binary runtime-temp path validation passed.")
+          '@ | python -
 
       - name: Generate SHA-256 checksums
         shell: pwsh
