@@ -8,6 +8,8 @@ database persistence is disabled.
 from __future__ import annotations
 
 import json
+import os
+import sys
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -18,14 +20,45 @@ from uuid import uuid4
 class FleetRegistry:
     """Simple thread-safe JSON-backed registry for fleet vehicles."""
 
-    def __init__(self, storage_path: Optional[Path] = None) -> None:
+    @staticmethod
+    def _default_storage_path() -> Path:
+        explicit_path = str(os.environ.get("TUTTI_FLEET_STORAGE_PATH", "") or "").strip()
+        if explicit_path:
+            return Path(explicit_path)
+
+        tutti_data_dir = str(os.environ.get("TUTTI_DATA_DIR", "") or "").strip()
+        if tutti_data_dir:
+            return Path(tutti_data_dir) / "fleet_profiles.json"
+
+        if os.name == "nt":
+            base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+            return base / "Tutti" / "data" / "fleet_profiles.json"
+
+        if getattr(sys, "frozen", False):
+            return Path.home() / ".tutti" / "data" / "fleet_profiles.json"
+
         base_dir = Path(__file__).resolve().parents[1]
-        self.storage_path = storage_path or (base_dir / "data" / "fleet_profiles.json")
+        return base_dir / "data" / "fleet_profiles.json"
+
+    @staticmethod
+    def _fallback_storage_path() -> Path:
+        if os.name == "nt":
+            base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+            return base / "Tutti" / "data" / "fleet_profiles.json"
+        return Path.home() / ".tutti" / "data" / "fleet_profiles.json"
+
+    def __init__(self, storage_path: Optional[Path] = None) -> None:
+        self.storage_path = storage_path or self._default_storage_path()
         self._lock = threading.Lock()
         self._ensure_storage()
 
     def _ensure_storage(self) -> None:
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            self.storage_path = self._fallback_storage_path()
+            self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+
         if not self.storage_path.exists():
             self._write_data({"version": 1, "vehicles": []})
 
@@ -192,4 +225,3 @@ class FleetRegistry:
             data["vehicles"] = vehicles
             self._write_data(data)
             return True
-
