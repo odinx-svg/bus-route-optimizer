@@ -3,7 +3,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 async function parseResponse(response) {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data?.detail || data?.message || `HTTP ${response.status}`);
+    const detail = data?.detail;
+    const message = typeof detail === 'string'
+      ? detail
+      : (detail?.message || data?.message || `HTTP ${response.status}`);
+    const error = new Error(message);
+    error.status = response.status;
+    error.payload = data;
+    throw error;
   }
   return response.json();
 }
@@ -134,5 +141,11 @@ export async function setWorkspaceOptimizationOptions(workspaceId, payload = {})
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  return parseResponse(response);
+}
+
+export async function getWorkspaceFleetPreview(workspaceId, day = null) {
+  const suffix = day ? `?day=${encodeURIComponent(day)}` : '';
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/fleet-preview${suffix}`);
   return parseResponse(response);
 }

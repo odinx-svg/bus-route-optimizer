@@ -150,6 +150,8 @@ export default function ControlHubPage({
           const loadMax = workspace?.summary_metrics?.max_routes_per_bus;
           const loadMedian = workspace?.summary_metrics?.median_routes_per_bus;
           const loadSpread = workspace?.summary_metrics?.load_spread_routes;
+          const fleetReal = workspace?.summary_metrics?.fleet_real_assigned ?? workspace?.summary_metrics?.fleet_assigned ?? 0;
+          const fleetVirtual = workspace?.summary_metrics?.fleet_virtual_created ?? workspace?.summary_metrics?.fleet_virtual_buses ?? 0;
           return (
             <div
               key={workspace.id}
@@ -185,6 +187,10 @@ export default function ControlHubPage({
                     mediana {loadMedian ?? 0} | diferencia {loadSpread ?? 0}
                   </span>
                 ) : null}
+                <span className="data-mono text-cyan-300">real {fleetReal}</span>
+                <span className={`data-mono ${Number(fleetVirtual || 0) > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                  virtual {fleetVirtual}
+                </span>
                 <span>{new Date(workspace.updated_at).toLocaleString()}</span>
               </div>
               <div className="mt-3 flex items-center gap-2">

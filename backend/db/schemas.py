@@ -318,9 +318,19 @@ class WorkspaceVersionCreate(BaseModel):
     summary_metrics: Optional[Dict[str, Any]] = None
 
 
+class FleetPublicationSummary(BaseModel):
+    company_id: Optional[str] = None
+    real_assigned: int = 0
+    virtual_created: int = 0
+    conflicts: List[Dict[str, Any]] = Field(default_factory=list)
+    blocked: bool = False
+    days: Dict[str, Any] = Field(default_factory=dict)
+
+
 class WorkspaceCreateRequest(BaseModel):
     """Request payload to create a new optimization workspace."""
     name: str = Field(..., min_length=1, max_length=120)
+    company_id: Optional[str] = Field(default=None, max_length=64)
     city_label: Optional[str] = Field(default=None, max_length=120)
     routes_payload: Optional[Any] = None
     parse_report: Optional[Dict[str, Any]] = None
@@ -359,11 +369,13 @@ class WorkspaceVersionDetailResponse(WorkspaceVersionResponse):
     parse_report: Optional[Dict[str, Any]] = None
     validation_report: Optional[Dict[str, Any]] = None
     fleet_snapshot: Optional[Dict[str, Any]] = None
+    fleet_publication: Optional[FleetPublicationSummary] = None
 
 
 class WorkspaceResponse(BaseModel):
     """Workspace list/detail shared metadata."""
     id: str
+    company_id: Optional[str] = None
     name: str
     city_label: Optional[str] = None
     archived: bool = False

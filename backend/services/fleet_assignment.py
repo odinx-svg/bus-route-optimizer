@@ -15,9 +15,9 @@ except ImportError:
     from backend.models import BusSchedule, ScheduleItem
 
 try:
-    from services.fleet_registry import FleetRegistry
+    from services.fleet_repository import FleetRepository
 except ImportError:
-    from backend.services.fleet_registry import FleetRegistry
+    from backend.services.fleet_repository import FleetRepository
 
 SMALL_SERVICE_MAX_SEATS = 9
 SMALL_BUS_MAX_SEATS = 25
@@ -95,14 +95,12 @@ def _fleet_score_for_requirement(vehicle: Dict[str, Any], required: int) -> Tupl
     return (small_service_penalty + under_min_penalty + overflow, seats_max, seats_min)
 
 
-def load_active_fleet_profiles() -> List[Dict[str, Any]]:
-    registry = FleetRegistry()
+def load_active_fleet_profiles(company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    repository = FleetRepository()
     profiles: List[Dict[str, Any]] = []
-    for raw in registry.list_vehicles():
+    for raw in repository.list_active_profiles(company_id=company_id):
         normalized = _normalize_vehicle(raw)
         if not normalized:
-            continue
-        if normalized["status"] != "active":
             continue
         profiles.append(normalized)
     profiles.sort(key=lambda x: (int(x["seats_max"]), int(x["seats_min"]), str(x["vehicle_code"])))
@@ -112,6 +110,8 @@ def load_active_fleet_profiles() -> List[Dict[str, Any]]:
 def assign_fleet_profiles_to_schedule(
     schedule: List[BusSchedule],
     fleet_profiles: Optional[List[Dict[str, Any]]] = None,
+    company_id: Optional[str] = None,
+    binding_state: str = "preview",
 ) -> Tuple[List[BusSchedule], Dict[str, Any]]:
     """
     Assign each optimized bus timeline to one real vehicle profile by capacity.
@@ -128,7 +128,7 @@ def assign_fleet_profiles_to_schedule(
             "unmatched_bus_ids": [],
         }
 
-    fleet = list(fleet_profiles) if fleet_profiles is not None else load_active_fleet_profiles()
+    fleet = list(fleet_profiles) if fleet_profiles is not None else load_active_fleet_profiles(company_id=company_id)
     normalized_fleet: List[Dict[str, Any]] = []
     for raw in fleet:
         normalized = _normalize_vehicle(raw)
@@ -164,6 +164,8 @@ def assign_fleet_profiles_to_schedule(
             available = [vehicle for vehicle in available if vehicle["id"] != chosen["id"]]
 
             bus.uses_fleet_profile = True
+            bus.fleet_assignment_type = "real"
+            bus.fleet_binding_state = str(binding_state or "preview")
             bus.assigned_vehicle_id = str(chosen["id"] or "")
             bus.assigned_vehicle_code = str(chosen["vehicle_code"] or "") or None
             bus.assigned_vehicle_plate = str(chosen["plate"] or "") or None
@@ -172,8 +174,11 @@ def assign_fleet_profiles_to_schedule(
             assigned_count += 1
         else:
             bus.uses_fleet_profile = False
-            bus.assigned_vehicle_id = None
-            bus.assigned_vehicle_code = None
+            bus.fleet_assignment_type = "virtual"
+            bus.fleet_binding_state = str(binding_state or "preview")
+            virtual_label = f"VIRTUAL-{str(bus.bus_id)}"
+            bus.assigned_vehicle_id = f"virtual:{str(bus.bus_id)}"
+            bus.assigned_vehicle_code = virtual_label
             bus.assigned_vehicle_plate = None
             bus.assigned_vehicle_seats_min = None
             bus.assigned_vehicle_seats_max = None
@@ -191,14 +196,21 @@ def assign_fleet_profiles_to_schedule(
 def assign_fleet_profiles_to_schedule_by_day(
     schedule_by_day: Dict[str, List[BusSchedule]],
     fleet_profiles: Optional[List[Dict[str, Any]]] = None,
+    company_id: Optional[str] = None,
+    binding_state: str = "preview",
 ) -> Tuple[Dict[str, List[BusSchedule]], Dict[str, Any]]:
-    fleet = list(fleet_profiles) if fleet_profiles is not None else load_active_fleet_profiles()
+    fleet = list(fleet_profiles) if fleet_profiles is not None else load_active_fleet_profiles(company_id=company_id)
     assigned_by_day: Dict[str, List[BusSchedule]] = {}
     summary_by_day: Dict[str, Any] = {}
     total_assigned = 0
     total_virtual = 0
     for day, day_schedule in (schedule_by_day or {}).items():
-        assigned_schedule, summary = assign_fleet_profiles_to_schedule(day_schedule, fleet_profiles=fleet)
+        assigned_schedule, summary = assign_fleet_profiles_to_schedule(
+            day_schedule,
+            fleet_profiles=fleet,
+            company_id=company_id,
+            binding_state=binding_state,
+        )
         assigned_by_day[day] = assigned_schedule
         summary_by_day[day] = summary
         total_assigned += int(summary.get("fleet_assigned", 0))

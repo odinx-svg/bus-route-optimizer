@@ -213,10 +213,20 @@ def _format_exception_message(exc: Exception) -> str:
     return exc_type
 
 
-def _apply_fleet_profiles(schedule: List[BusSchedule]) -> Tuple[List[BusSchedule], Dict[str, Any]]:
+def _apply_fleet_profiles(
+    schedule: List[BusSchedule],
+    *,
+    company_id: Optional[str] = None,
+    binding_state: str = "preview",
+) -> Tuple[List[BusSchedule], Dict[str, Any]]:
     """Attach real fleet profile metadata to optimized schedules."""
     try:
-        assigned_schedule, summary = assign_fleet_profiles_to_schedule(schedule)
+        assigned_schedule, summary = assign_fleet_profiles_to_schedule(
+            schedule,
+            company_id=company_id,
+            binding_state=binding_state,
+        )
+        summary["binding_state"] = str(binding_state or "preview")
         return assigned_schedule, summary
     except Exception as e:
         logger.warning(f"[FleetAssignment] Could not assign fleet profiles: {e}")
@@ -225,6 +235,7 @@ def _apply_fleet_profiles(schedule: List[BusSchedule]) -> Tuple[List[BusSchedule
             "fleet_assigned": 0,
             "virtual_buses": len(schedule),
             "unmatched_bus_ids": [bus.bus_id for bus in schedule],
+            "binding_state": str(binding_state or "preview"),
         }
 
 
@@ -970,7 +981,7 @@ async def upload_files_with_analysis(files: List[UploadFile] = File(...)) -> Dic
                 logger.warning(f"Could not delete temp file {temp_path}: {e}")
 
 
-@app.post("/optimize-lp")
+@app.post("/optimize-lp", deprecated=True)
 async def optimize_lp(routes: List[Route]) -> List[Dict[str, Any]]:
     """
     Simple optimization without progress tracking (V2).
@@ -995,7 +1006,7 @@ async def optimize_lp(routes: List[Route]) -> List[Dict[str, Any]]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/optimize-v4")
+@app.post("/optimize-v4", deprecated=True)
 async def optimize_v4_endpoint(routes: List[Route]) -> Dict[str, Any]:
     """
     Optimizacion V4: Agrupacion por cercania geografica + early arrival.
@@ -1043,7 +1054,7 @@ async def optimize_v4_endpoint(routes: List[Route]) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/optimize")
+@app.post("/optimize", deprecated=True)
 async def optimize_v5_endpoint(routes: List[Route]) -> Dict[str, Any]:
     """
     Tutti Optimizer V5: OSRM-based chain optimization.

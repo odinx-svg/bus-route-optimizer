@@ -26,6 +26,7 @@ def test_workspace_save_publish_semantics():
         )
         assert workspace.working_version_id is not None
         assert workspace.published_version_id is None
+        assert str(workspace.company_id) == crud.DEFAULT_COMPANY_ID
 
         save_version = crud.create_workspace_version(
             db,

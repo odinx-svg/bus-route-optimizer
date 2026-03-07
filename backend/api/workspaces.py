@@ -17,6 +17,11 @@ from db.database import SessionLocal, create_tables, is_database_available
 from db.models import (
     OptimizationWorkspaceModel,
     OptimizationWorkspaceVersionModel,
+    PublishedFleetAssignmentModel,
+)
+from services.fleet_publication import (
+    preview_workspace_publication,
+    persist_publication_assignments,
 )
 from services.workspace_options import (
     DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS,
@@ -41,6 +46,17 @@ def _ensure_tables_ready() -> None:
 def _to_version_response(version: Optional[OptimizationWorkspaceVersionModel]) -> Optional[schemas.WorkspaceVersionDetailResponse]:
     if version is None:
         return None
+    fleet_snapshot = version.fleet_snapshot if isinstance(version.fleet_snapshot, dict) else None
+    publication = None
+    if isinstance(fleet_snapshot, dict):
+        publication = schemas.FleetPublicationSummary(
+            company_id=fleet_snapshot.get("company_id"),
+            real_assigned=int(fleet_snapshot.get("real_assigned", 0) or 0),
+            virtual_created=int(fleet_snapshot.get("virtual_created", 0) or 0),
+            conflicts=fleet_snapshot.get("conflicts", []) if isinstance(fleet_snapshot.get("conflicts"), list) else [],
+            blocked=bool(fleet_snapshot.get("blocked", False)),
+            days=fleet_snapshot.get("days", {}) if isinstance(fleet_snapshot.get("days"), dict) else {},
+        )
     return schemas.WorkspaceVersionDetailResponse(
         id=str(version.id),
         workspace_id=str(version.workspace_id),
@@ -52,7 +68,8 @@ def _to_version_response(version: Optional[OptimizationWorkspaceVersionModel]) -
         schedule_by_day=db_crud.normalize_schedule_by_day(version.schedule_by_day or {}),
         parse_report=version.parse_report if isinstance(version.parse_report, dict) else None,
         validation_report=version.validation_report if isinstance(version.validation_report, dict) else None,
-        fleet_snapshot=version.fleet_snapshot if isinstance(version.fleet_snapshot, dict) else None,
+        fleet_snapshot=fleet_snapshot,
+        fleet_publication=publication,
         summary_metrics=version.summary_metrics if isinstance(version.summary_metrics, dict) else None,
     )
 
@@ -70,6 +87,7 @@ def _to_workspace_response(workspace: OptimizationWorkspaceModel) -> schemas.Wor
     )
     return schemas.WorkspaceResponse(
         id=str(workspace.id),
+        company_id=str(workspace.company_id or "") or None,
         name=str(workspace.name or ""),
         city_label=workspace.city_label,
         archived=bool(workspace.archived),
@@ -91,6 +109,49 @@ def _to_workspace_detail_response(workspace: OptimizationWorkspaceModel) -> sche
         **base.model_dump(),
         working_version=_to_version_response(workspace.working_version),
         published_version=_to_version_response(workspace.published_version),
+    )
+
+
+def _workspace_company_id(db, workspace: OptimizationWorkspaceModel) -> str:
+    default_company = db_crud.ensure_default_company(db)
+    company_id = str(workspace.company_id or "").strip() or str(default_company.id)
+    return company_id
+
+
+def _build_publish_payload(
+    workspace: OptimizationWorkspaceModel,
+    payload: schemas.WorkspaceVersionCreate,
+) -> schemas.WorkspaceVersionCreate:
+    working = workspace.working_version
+    schedule_by_day = payload.schedule_by_day
+    if schedule_by_day is None and working is not None and isinstance(working.schedule_by_day, dict):
+        schedule_by_day = working.schedule_by_day
+
+    routes_payload = payload.routes_payload
+    if routes_payload is None and working is not None:
+        routes_payload = working.routes_payload
+
+    parse_report = payload.parse_report
+    if parse_report is None and working is not None and isinstance(working.parse_report, dict):
+        parse_report = working.parse_report
+
+    validation_report = payload.validation_report
+    if validation_report is None and working is not None and isinstance(working.validation_report, dict):
+        validation_report = working.validation_report
+
+    summary_metrics = payload.summary_metrics
+    if summary_metrics is None and working is not None and isinstance(working.summary_metrics, dict):
+        summary_metrics = working.summary_metrics
+
+    return payload.model_copy(
+        update={
+            "save_kind": "publish",
+            "routes_payload": routes_payload,
+            "schedule_by_day": schedule_by_day or {},
+            "parse_report": parse_report,
+            "validation_report": validation_report,
+            "summary_metrics": summary_metrics,
+        }
     )
 
 
@@ -323,22 +384,140 @@ async def save_workspace(
         db.close()
 
 
-@router.post("/{workspace_id}/publish", response_model=schemas.WorkspaceVersionDetailResponse)
-async def publish_workspace(
+@router.get("/{workspace_id}/fleet-preview")
+async def get_workspace_fleet_preview(
     workspace_id: str,
-    payload: schemas.WorkspaceVersionCreate = Body(default_factory=schemas.WorkspaceVersionCreate),
-) -> schemas.WorkspaceVersionDetailResponse:
-    """Create publish snapshot and move published pointer."""
+    day: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    """Preview real/virtual fleet assignment for current working schedule."""
     if not is_database_available() or SessionLocal is None:
         raise HTTPException(status_code=503, detail="Database not available")
     _ensure_tables_ready()
 
     db = SessionLocal()
     try:
-        publish_payload = payload.model_copy(update={"save_kind": "publish"})
-        version = db_crud.create_workspace_version(db, workspace_id, publish_payload)
+        workspace = db_crud.get_workspace(db, workspace_id)
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        working_version = workspace.working_version or workspace.published_version
+        if working_version is None:
+            raise HTTPException(status_code=409, detail="Workspace has no version to preview")
+        schedule_by_day = db_crud.normalize_schedule_by_day(working_version.schedule_by_day or {})
+        company_id = _workspace_company_id(db, workspace)
+        preview = preview_workspace_publication(
+            db,
+            company_id=company_id,
+            schedule_by_day=schedule_by_day,
+            exclude_workspace_id=str(workspace.id),
+        )
+        if day and day in preview.get("schedule_by_day", {}):
+            return {
+                "workspace_id": workspace_id,
+                "company_id": company_id,
+                "day": day,
+                "blocked": bool(preview.get("blocked", False)),
+                "conflicts": [c for c in preview.get("conflicts", []) if c.get("day") == day],
+                "real_assigned": int(preview.get("real_assigned", 0)),
+                "virtual_created": int(preview.get("virtual_created", 0)),
+                "day_payload": preview.get("schedule_by_day", {}).get(day, {}),
+                "days": preview.get("days", {}),
+            }
+        return {
+            "workspace_id": workspace_id,
+            "company_id": company_id,
+            "blocked": bool(preview.get("blocked", False)),
+            "conflicts": preview.get("conflicts", []),
+            "real_assigned": int(preview.get("real_assigned", 0)),
+            "virtual_created": int(preview.get("virtual_created", 0)),
+            "schedule_by_day": preview.get("schedule_by_day", {}),
+            "days": preview.get("days", {}),
+        }
+    finally:
+        db.close()
+
+
+@router.post("/{workspace_id}/publish", response_model=schemas.WorkspaceVersionDetailResponse)
+async def publish_workspace(
+    workspace_id: str,
+    payload: schemas.WorkspaceVersionCreate = Body(default_factory=schemas.WorkspaceVersionCreate),
+) -> schemas.WorkspaceVersionDetailResponse:
+    """
+    Create publish snapshot + commit operational fleet reservations.
+    Blocks on real-vehicle conflicts with other published workspaces.
+    """
+    if not is_database_available() or SessionLocal is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    _ensure_tables_ready()
+
+    db = SessionLocal()
+    try:
+        workspace = db_crud.get_workspace(db, workspace_id)
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        company_id = _workspace_company_id(db, workspace)
+        publish_payload = _build_publish_payload(workspace, payload)
+        normalized_schedule = db_crud.normalize_schedule_by_day(publish_payload.schedule_by_day or {})
+        preview = preview_workspace_publication(
+            db,
+            company_id=company_id,
+            schedule_by_day=normalized_schedule,
+            exclude_workspace_id=str(workspace.id),
+        )
+        if bool(preview.get("blocked", False)):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Publicacion bloqueada por conflictos de flota publicados",
+                    "fleet_publication": {
+                        "company_id": company_id,
+                        "real_assigned": int(preview.get("real_assigned", 0)),
+                        "virtual_created": int(preview.get("virtual_created", 0)),
+                        "conflicts": preview.get("conflicts", []),
+                        "blocked": True,
+                        "days": preview.get("days", {}),
+                    },
+                },
+            )
+
+        fleet_snapshot = {
+            "company_id": company_id,
+            "real_assigned": int(preview.get("real_assigned", 0)),
+            "virtual_created": int(preview.get("virtual_created", 0)),
+            "conflicts": [],
+            "blocked": False,
+            "days": preview.get("days", {}),
+        }
+        merged_summary = dict(publish_payload.summary_metrics or {})
+        merged_summary["fleet_real_assigned"] = int(preview.get("real_assigned", 0))
+        merged_summary["fleet_virtual_created"] = int(preview.get("virtual_created", 0))
+        merged_summary["fleet_binding_state"] = "committed"
+
+        final_payload = publish_payload.model_copy(
+            update={
+                "schedule_by_day": preview.get("schedule_by_day", normalized_schedule),
+                "fleet_snapshot": fleet_snapshot,
+                "summary_metrics": merged_summary,
+            }
+        )
+        version = db_crud.create_workspace_version(
+            db,
+            workspace_id,
+            final_payload,
+            auto_commit=False,
+        )
         if version is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+
+        persist_publication_assignments(
+            db,
+            workspace_id=workspace_id,
+            workspace_version_id=str(version.id),
+            company_id=company_id,
+            candidate_rows=preview.get("candidate_rows", []),
+        )
+        db.commit()
+        db.refresh(version)
         response = _to_version_response(version)
         if response is None:
             raise HTTPException(status_code=500, detail="Version serialization failed")
@@ -372,7 +551,7 @@ async def rename_workspace(
 
 @router.post("/{workspace_id}/archive", response_model=schemas.WorkspaceResponse)
 async def archive_workspace(workspace_id: str) -> schemas.WorkspaceResponse:
-    """Archive workspace (inactive)."""
+    """Archive workspace (inactive) and disable operational reservations."""
     if not is_database_available() or SessionLocal is None:
         raise HTTPException(status_code=503, detail="Database not available")
     _ensure_tables_ready()
@@ -382,6 +561,11 @@ async def archive_workspace(workspace_id: str) -> schemas.WorkspaceResponse:
         workspace = db_crud.set_workspace_archived(db, workspace_id, True)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        db.query(PublishedFleetAssignmentModel).filter(
+            PublishedFleetAssignmentModel.workspace_id == str(workspace.id),
+            PublishedFleetAssignmentModel.active.is_(True),
+        ).update({"active": False})
+        db.commit()
         hydrated = db_crud.get_workspace(db, workspace_id)
         if hydrated is None:
             raise HTTPException(status_code=500, detail="Workspace serialization failed")
@@ -392,16 +576,59 @@ async def archive_workspace(workspace_id: str) -> schemas.WorkspaceResponse:
 
 @router.post("/{workspace_id}/restore", response_model=schemas.WorkspaceResponse)
 async def restore_workspace(workspace_id: str) -> schemas.WorkspaceResponse:
-    """Restore archived workspace."""
+    """
+    Restore archived workspace.
+    If it has a published version, conflicts are checked before reactivating reservations.
+    """
     if not is_database_available() or SessionLocal is None:
         raise HTTPException(status_code=503, detail="Database not available")
     _ensure_tables_ready()
 
     db = SessionLocal()
     try:
-        workspace = db_crud.set_workspace_archived(db, workspace_id, False)
+        workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+
+        restored = db_crud.set_workspace_archived(db, workspace_id, False)
+        if restored is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        # Re-activate only if no conflict for published version.
+        if restored.published_version and isinstance(restored.published_version.schedule_by_day, dict):
+            company_id = _workspace_company_id(db, restored)
+            schedule_by_day = db_crud.normalize_schedule_by_day(restored.published_version.schedule_by_day)
+            preview = preview_workspace_publication(
+                db,
+                company_id=company_id,
+                schedule_by_day=schedule_by_day,
+                exclude_workspace_id=str(restored.id),
+            )
+            if bool(preview.get("blocked", False)):
+                db_crud.set_workspace_archived(db, workspace_id, True)
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "No se puede restaurar: conflictos de flota con optimizaciones publicadas",
+                        "fleet_publication": {
+                            "company_id": company_id,
+                            "real_assigned": int(preview.get("real_assigned", 0)),
+                            "virtual_created": int(preview.get("virtual_created", 0)),
+                            "conflicts": preview.get("conflicts", []),
+                            "blocked": True,
+                            "days": preview.get("days", {}),
+                        },
+                    },
+                )
+            persist_publication_assignments(
+                db,
+                workspace_id=str(restored.id),
+                workspace_version_id=str(restored.published_version.id),
+                company_id=company_id,
+                candidate_rows=preview.get("candidate_rows", []),
+            )
+            db.commit()
+
         hydrated = db_crud.get_workspace(db, workspace_id)
         if hydrated is None:
             raise HTTPException(status_code=500, detail="Workspace serialization failed")

@@ -97,6 +97,8 @@ class BusSchedule(BaseModel):
     assigned_vehicle_plate: Optional[str] = None
     assigned_vehicle_seats_min: Optional[int] = None
     assigned_vehicle_seats_max: Optional[int] = None
+    fleet_binding_state: Optional[str] = None  # preview|committed
+    fleet_assignment_type: Optional[str] = None  # real|virtual
 
 
 # Type aliases for common patterns

@@ -120,11 +120,15 @@ class FleetRegistry:
         candidate: Dict[str, Any],
         exclude_id: Optional[str] = None,
     ) -> None:
+        candidate_company = str(candidate.get("company_id", "") or "company_main").strip() or "company_main"
         candidate_plate = str(candidate.get("plate", "") or "").strip().upper()
         candidate_code = str(candidate.get("vehicle_code", "") or "").strip().upper()
         for v in vehicles:
             v_id = str(v.get("id", "") or "")
             if exclude_id and v_id == exclude_id:
+                continue
+            company_id = str(v.get("company_id", "") or "company_main").strip() or "company_main"
+            if company_id != candidate_company:
                 continue
             plate = str(v.get("plate", "") or "").strip().upper()
             code = str(v.get("vehicle_code", "") or "").strip().upper()
@@ -156,6 +160,7 @@ class FleetRegistry:
             now = datetime.utcnow().isoformat()
             vehicle = {
                 "id": str(uuid4()),
+                "company_id": str(payload.get("company_id", "") or "company_main").strip() or "company_main",
                 "vehicle_code": str(payload.get("vehicle_code", "") or "").strip(),
                 "plate": str(payload.get("plate", "") or "").strip(),
                 "brand": str(payload.get("brand", "") or "").strip() or None,
@@ -168,6 +173,10 @@ class FleetRegistry:
                 "accessibility": bool(payload.get("accessibility", False)),
                 "mileage_km": payload.get("mileage_km"),
                 "notes": str(payload.get("notes", "") or "").strip() or None,
+                "gps_provider": str(payload.get("gps_provider", "") or "").strip() or None,
+                "gps_external_id": str(payload.get("gps_external_id", "") or "").strip() or None,
+                "gps_last_seen_at": payload.get("gps_last_seen_at"),
+                "gps_last_position": payload.get("gps_last_position") if isinstance(payload.get("gps_last_position"), dict) else None,
                 "documents": self._normalize_documents(payload.get("documents", [])),
                 "created_at": now,
                 "updated_at": now,
@@ -193,6 +202,7 @@ class FleetRegistry:
             now = datetime.utcnow().isoformat()
             updated = {
                 "id": str(existing.get("id", vehicle_id)),
+                "company_id": str(payload.get("company_id", existing.get("company_id", "company_main")) or "company_main").strip() or "company_main",
                 "vehicle_code": str(payload.get("vehicle_code", "") or "").strip(),
                 "plate": str(payload.get("plate", "") or "").strip(),
                 "brand": str(payload.get("brand", "") or "").strip() or None,
@@ -205,6 +215,14 @@ class FleetRegistry:
                 "accessibility": bool(payload.get("accessibility", False)),
                 "mileage_km": payload.get("mileage_km"),
                 "notes": str(payload.get("notes", "") or "").strip() or None,
+                "gps_provider": str(payload.get("gps_provider", existing.get("gps_provider", "")) or "").strip() or None,
+                "gps_external_id": str(payload.get("gps_external_id", existing.get("gps_external_id", "")) or "").strip() or None,
+                "gps_last_seen_at": payload.get("gps_last_seen_at", existing.get("gps_last_seen_at")),
+                "gps_last_position": (
+                    payload.get("gps_last_position")
+                    if isinstance(payload.get("gps_last_position"), dict)
+                    else existing.get("gps_last_position")
+                ),
                 "documents": self._normalize_documents(payload.get("documents", [])),
                 "created_at": existing.get("created_at", now),
                 "updated_at": now,

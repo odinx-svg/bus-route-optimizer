@@ -66,33 +66,18 @@ Estas skills se activan automáticamente según el contexto y proporcionan conoc
 ### Flujo de Datos
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│  Excel      │────▶│   Parser     │────▶│   Routes    │
-│  (.xlsx)    │     │  (parser.py) │     │  (models)   │
-└─────────────┘     └──────────────┘     └──────┬──────┘
-                                                │
-                         ┌──────────────────────┘
-                         ▼
-              ┌────────────────────┐
-              │  Optimizer V6      │
-              │  (optimizer_v6.py) │
-              │  • ILP-based       │
-              │  • Anti-overlap    │
-              │  • OSRM routing    │
-              └─────────┬──────────┘
-                        │
-                        ▼
-              ┌────────────────────┐
-              │   Schedule         │
-              │   (BusSchedule)    │
-              └─────────┬──────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
-   ┌─────────┐    ┌──────────┐   ┌──────────┐
-   │   PDF   │    │   Map    │   │  Timeline│
-   │ Export  │    │   View   │   │  Editor  │
-   └─────────┘    └──────────┘   └──────────┘
+Excel (.xlsx)
+  -> Parser (parser.py)
+  -> Routes (models)
+  -> Optimizer V6 / Pipeline
+  -> Schedule con asignacion de flota PREVIEW (real + virtual)
+  -> Workspace save (no reserva operativa)
+  -> Workspace publish
+      -> Fleet commit (services/fleet_publication.py)
+      -> Validacion de conflictos contra published_fleet_assignments
+      -> Si hay conflicto real: bloquea con HTTP 409
+      -> Si falta flota real: crea virtuales por version publicada
+  -> Consumo en PDF / Map / Timeline / Control Hub
 ```
 
 ---
@@ -154,6 +139,15 @@ Si cambia la forma de iniciar el backend o frontend:
 start "Tutti-Backend" cmd /k "... --workers 2"
 ```
 
+### 6. Cambios de Migraciones o Backfills DB
+
+Si agregas migraciones de Alembic o cambias la inicialización de base de datos:
+
+```batch
+:: Verificar llamada a init_db.py y flags
+"%VENV_PYTHON%" "%BACKEND%\scripts\init_db.py" --skip-verify
+```
+
 ---
 
 ## ✅ Checklist de Cambios Importantes
@@ -165,6 +159,8 @@ start "Tutti-Backend" cmd /k "... --workers 2"
 - [ ] ¿Modifiqué models.py? → Verificar schemas
 - [ ] ¿Agregué endpoints? → Agregar tests
 - [ ] ¿Cambié el optimizador? → Verificar anti-overlap sigue funcionando
+- [ ] ¿Toqué publish/restore/archive? → Verificar reservas en published_fleet_assignments
+- [ ] ¿Toqué Fleet API? → Verificar fallback JSON y compatibilidad company_id
 - [ ] ¿Agregué dependencias? → Actualizar requirements.txt Y start-tutti.bat
 
 ## Frontend
@@ -200,16 +196,24 @@ bus-route-optimizer/
 │   ├── 📄 pdf_service.py       # Generación de PDFs
 │   ├── 📄 router_service.py    # OSRM integration
 │   ├── 📄 requirements.txt     # Dependencias Python
+│   ├── 📁 scripts/
+│   │   └── 📄 init_db.py       # Init DB + migraciones + backfill flota
 │   │
 │   ├── 📁 api/                 # Routers adicionales
-│   │   └── 📄 routes_editor.py # Editor de rutas
+│   │   ├── 📄 routes_editor.py # Editor de rutas
+│   │   ├── 📄 fleet.py         # CRUD flota (DB-first + fallback JSON)
+│   │   └── 📄 workspaces.py    # Save/publish + fleet commit operativo
 │   │
 │   ├── 📁 db/                  # Database
 │   │   ├── 📄 models.py        # SQLAlchemy models
 │   │   ├── 📄 schemas.py       # Pydantic schemas
-│   │   └── 📄 crud.py          # Operaciones CRUD
+│   │   ├── 📄 crud.py          # Operaciones CRUD
+│   │   └── 📁 migrations/      # Alembic migrations (001/002/003+)
 │   │
 │   ├── 📁 services/            # Servicios auxiliares
+│   │   ├── 📄 fleet_repository.py   # Repositorio DB-first de flota
+│   │   ├── 📄 fleet_publication.py  # Commit de flota al publicar
+│   │   └── 📄 telematics_provider.py # Contrato GPS (contract-first)
 │   ├── 📁 validation/          # Validación Monte Carlo
 │   ├── 📁 websocket/           # WebSockets
 │   └── 📁 tests/               # Tests
@@ -357,6 +361,20 @@ for /f "tokens=5" %a in ('netstat -aon ^| findstr ":8000"') do taskkill /F /PID 
 
 ## 📌 Notas de Versión
 
+### v2.1 (2026-03-07)
+
+**Cambios mayores:**
+- ✅ Flota DB-first (`fleet_vehicles`, `fleet_vehicle_documents`) con fallback JSON
+- ✅ Publicación operativa: commit de flota al publicar workspace
+- ✅ Bloqueo por conflictos reales entre optimizaciones publicadas (`published_fleet_assignments`)
+- ✅ Endpoint de preview de flota por workspace (`/api/workspaces/{id}/fleet-preview`)
+- ✅ Base contract-first para GPS (`telematics_provider.py`)
+
+**start-tutti.bat actualizado:**
+- Ejecución de `backend/scripts/init_db.py` antes de iniciar backend/frontend
+- Verificación de dependencias críticas adicionales (`alembic`)
+- Verificación de módulos críticos de flota/publicación
+
 ### v2.0 (2026-02-11)
 
 **Cambios mayores:**
@@ -383,4 +401,4 @@ for /f "tokens=5" %a in ('netstat -aon ^| findstr ":8000"') do taskkill /F /PID 
 
 > **Recuerda:** Cada vez que hagas cambios que afecten el inicio del proyecto, actualiza `start-tutti.bat` y documenta en este archivo.
 
-*Última actualización: 2026-02-11*
+*Última actualización: 2026-03-07*

@@ -21,6 +21,41 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Company CRUD
+# =============================================================================
+
+DEFAULT_COMPANY_ID = "company_main"
+DEFAULT_COMPANY_NAME = "Empresa Principal"
+
+
+def ensure_default_company(db: Session) -> models.CompanyModel:
+    """Ensure the default company exists and return it."""
+    company = db.query(models.CompanyModel).filter(
+        models.CompanyModel.id == DEFAULT_COMPANY_ID
+    ).first()
+    if company is not None:
+        return company
+    company = models.CompanyModel(
+        id=DEFAULT_COMPANY_ID,
+        name=DEFAULT_COMPANY_NAME,
+        is_default=True,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(company)
+    db.flush()
+    return company
+
+
+def get_company(db: Session, company_id: str) -> Optional[models.CompanyModel]:
+    if not company_id:
+        return None
+    return db.query(models.CompanyModel).filter(
+        models.CompanyModel.id == company_id
+    ).first()
+
+
+# =============================================================================
 # Route CRUD
 # =============================================================================
 
@@ -809,7 +844,14 @@ def create_workspace(
     payload: schemas.WorkspaceCreateRequest,
 ) -> models.OptimizationWorkspaceModel:
     """Create new workspace and optional initial snapshot."""
+    default_company = ensure_default_company(db)
+    requested_company_id = str(payload.company_id or "").strip() or default_company.id
+    company = get_company(db, requested_company_id)
+    if company is None:
+        company = default_company
+
     workspace = models.OptimizationWorkspaceModel(
+        company_id=str(company.id),
         name=payload.name.strip(),
         city_label=(payload.city_label or "").strip() or None,
         archived=False,
@@ -881,6 +923,8 @@ def create_workspace_version(
     db: Session,
     workspace_id: str,
     payload: schemas.WorkspaceVersionCreate,
+    *,
+    auto_commit: bool = True,
 ) -> Optional[models.OptimizationWorkspaceVersionModel]:
     """Create snapshot and move working/published pointers according to save kind."""
     workspace = db.query(models.OptimizationWorkspaceModel).filter(
@@ -895,8 +939,9 @@ def create_workspace_version(
         workspace.published_version_id = record.id
     workspace.updated_at = datetime.utcnow()
     _enforce_workspace_autosave_retention(db, workspace.id, keep_last=30)
-    db.commit()
-    db.refresh(record)
+    if auto_commit:
+        db.commit()
+        db.refresh(record)
     return record
 
 
@@ -1053,7 +1098,9 @@ def migrate_legacy_workspace_bootstrap(
         return True, False, None, details
 
     migration_name = f"Migrado - {datetime.utcnow().strftime('%Y-%m-%d')}"
+    company = ensure_default_company(db)
     workspace = models.OptimizationWorkspaceModel(
+        company_id=str(company.id),
         name=migration_name,
         city_label=None,
         archived=False,

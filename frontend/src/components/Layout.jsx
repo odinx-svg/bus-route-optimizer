@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, Activity, Gauge } from 'lucide-react';
+import { LayoutGrid, Activity, Gauge, Bus } from 'lucide-react';
 import tuttiSymbol from '../assets/tutti-symbol.svg';
 
 const DAY_CONFIG = [
@@ -54,6 +54,7 @@ const DaySelector = ({ scheduleByDay, activeDay, onDayChange }) => {
 const ViewTabs = ({ viewMode, setViewMode, hasStudioAccess }) => {
   const tabs = [
     { id: 'dashboard', label: 'Control', icon: Gauge, requiresSchedule: false },
+    { id: 'fleet', label: 'Flota', icon: Bus, requiresSchedule: false },
     { id: 'studio', label: 'Studio', icon: LayoutGrid, requiresSchedule: false },
   ];
 

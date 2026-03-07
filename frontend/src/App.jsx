@@ -6,6 +6,7 @@ import OptimizationStudio from './components/OptimizationStudio';
 import OptimizationProgress from './components/OptimizationProgress';
 import StudioErrorBoundary from './components/StudioErrorBoundary';
 import ControlHubPage from './pages/ControlHubPage';
+import FleetPage from './pages/FleetPage';
 import { notifications } from './services/notifications';
 import { clearGeometryCache } from './services/RouteService';
 import { buildRouteCapacityMap, getItemCapacityNeeded } from './utils/capacity';
@@ -14,6 +15,7 @@ import {
   createWorkspace,
   deleteWorkspace,
   getWorkspace,
+  getWorkspaceFleetPreview,
   getWorkspaceOptimizationOptions,
   getWorkspacePreferences,
   listWorkspaces,
@@ -499,6 +501,61 @@ function PreOptimizeRestrictionsModal({
   );
 }
 
+function FleetConflictModal({
+  open = false,
+  conflicts = [],
+  onClose,
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[1260] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative w-full max-w-2xl rounded-xl border border-rose-500/35 bg-[#0b141f] p-4 shadow-2xl">
+        <h3 className="text-[16px] font-semibold text-white">Publicacion bloqueada por conflicto de flota</h3>
+        <p className="mt-2 text-[12px] text-[#8ba3bd]">
+          Hay autobuses reales reservados en otras optimizaciones publicadas en el mismo tramo horario.
+        </p>
+        <div className="mt-3 max-h-[320px] overflow-auto rounded-md border border-[#2a4057]">
+          <table className="w-full text-[11px]">
+            <thead className="bg-[#101a26] text-slate-400">
+              <tr>
+                <th className="px-2 py-1.5 text-left">Dia</th>
+                <th className="px-2 py-1.5 text-left">Vehiculo</th>
+                <th className="px-2 py-1.5 text-left">Ruta candidata</th>
+                <th className="px-2 py-1.5 text-left">Workspace conflicto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {conflicts.map((conflict, idx) => (
+                <tr key={`${conflict?.vehicle_id || 'v'}-${idx}`} className="border-t border-[#253a4f]">
+                  <td className="px-2 py-1.5 text-slate-200">{conflict?.day || '-'}</td>
+                  <td className="px-2 py-1.5 text-rose-200 data-mono">{conflict?.vehicle_id || '-'}</td>
+                  <td className="px-2 py-1.5 text-slate-200 data-mono">{conflict?.candidate_route_id || '-'}</td>
+                  <td className="px-2 py-1.5 text-slate-400 data-mono">{conflict?.conflicting_workspace_id || '-'}</td>
+                </tr>
+              ))}
+              {conflicts.length === 0 && (
+                <tr>
+                  <td className="px-2 py-3 text-center text-slate-500" colSpan={4}>Sin detalle de conflictos.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [routes, setRoutes] = useState([]);
   const [parseReport, setParseReport] = useState(null);
@@ -512,7 +569,7 @@ function App() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
 
   const [activeTab, setActiveTab] = useState('upload');
-  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'studio'
+  const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'studio' | 'fleet'
   const [workspaceMode, setWorkspaceMode] = useState('create'); // 'create' | 'edit' | 'optimize'
   const [selectedBusId, setSelectedBusId] = useState(null);
   const [selectedRouteId, setSelectedRouteId] = useState(null);
@@ -532,6 +589,10 @@ function App() {
     open: false,
     workspaceName: '',
     request: null,
+  });
+  const [fleetConflictModal, setFleetConflictModal] = useState({
+    open: false,
+    conflicts: [],
   });
   const [pendingOptimizationRequest, setPendingOptimizationRequest] = useState(null);
 
@@ -1226,8 +1287,10 @@ function App() {
       day: scheduleData?.day,
       buses: scheduleData?.buses || [],
       unassigned_routes: scheduleData?.unassigned_routes || [],
+      workspace_id: activeWorkspaceId || null,
       metadata: {
         mode: scheduleData?.mode || 'draft',
+        workspace_id: activeWorkspaceId || null,
         ...(scheduleData?.stats || {}),
       },
     };
@@ -1293,7 +1356,26 @@ function App() {
           summary_metrics: mergedScheduleByDay?.[payload.day]?.stats || {},
         };
         if (intent === 'publish') {
-          await publishWorkspaceVersion(activeWorkspaceId, snapshotPayload);
+          const fleetPreview = await getWorkspaceFleetPreview(activeWorkspaceId, payload.day).catch(() => null);
+          if (fleetPreview?.blocked && Array.isArray(fleetPreview?.conflicts) && fleetPreview.conflicts.length > 0) {
+            setFleetConflictModal({
+              open: true,
+              conflicts: fleetPreview.conflicts,
+            });
+            throw new Error('Publicacion bloqueada por conflictos de flota');
+          }
+          try {
+            await publishWorkspaceVersion(activeWorkspaceId, snapshotPayload);
+          } catch (error) {
+            const publication = error?.payload?.detail?.fleet_publication;
+            if (publication?.blocked) {
+              setFleetConflictModal({
+                open: true,
+                conflicts: Array.isArray(publication?.conflicts) ? publication.conflicts : [],
+              });
+            }
+            throw error;
+          }
           notifications.success('Version publicada', 'Optimizacion activa en Control Hub');
         } else {
           await saveWorkspaceVersion(activeWorkspaceId, snapshotPayload);
@@ -1556,6 +1638,9 @@ function App() {
                 }}
               />
             )}
+            {viewMode === 'fleet' && (
+              <FleetPage />
+            )}
             {viewMode === 'studio' && (
               <StudioErrorBoundary
                 resetKey={`${activeWorkspaceId || ''}:${activeDay}:${routes.length}:${schedule.length}`}
@@ -1678,6 +1763,12 @@ function App() {
         }}
         onCancel={() => closeTextInputModal({ confirmed: false, value: '' })}
         onConfirm={() => closeTextInputModal({ confirmed: true, value: textInputModal.value })}
+      />
+
+      <FleetConflictModal
+        open={fleetConflictModal.open}
+        conflicts={fleetConflictModal.conflicts}
+        onClose={() => setFleetConflictModal({ open: false, conflicts: [] })}
       />
     </Layout>
   );

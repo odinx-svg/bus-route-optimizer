@@ -52,3 +52,14 @@ export const deleteFleetVehicle = async (vehicleId) => {
   return response.json();
 };
 
+export const testTelematicsLink = async (payload) => {
+  const response = await fetch(`${API_URL}/api/fleet/telematics/test-link`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};

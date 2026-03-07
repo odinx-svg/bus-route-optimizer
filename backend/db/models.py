@@ -122,11 +122,106 @@ class ManualScheduleModel(Base):
         return f"<ManualScheduleModel(day='{self.day}', updated_at='{self.updated_at}')>"
 
 
+class CompanyModel(Base):
+    """Logical tenant/company for fleet + workspaces."""
+    __tablename__ = "companies"
+
+    id = Column(String(64), primary_key=True)
+    name = Column(String, nullable=False)
+    is_default = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    fleet_vehicles = relationship(
+        "FleetVehicleModel",
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
+    workspaces = relationship(
+        "OptimizationWorkspaceModel",
+        back_populates="company",
+    )
+
+    def __repr__(self):
+        return f"<CompanyModel(id='{self.id}', name='{self.name}', is_default={self.is_default})>"
+
+
+class FleetVehicleModel(Base):
+    """Fleet vehicle persisted in database (DB-first fleet repository)."""
+    __tablename__ = "fleet_vehicles"
+    __table_args__ = (
+        UniqueConstraint("company_id", "vehicle_code", name="uq_fleet_vehicle_company_code"),
+        UniqueConstraint("company_id", "plate", name="uq_fleet_vehicle_company_plate"),
+    )
+
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(64), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    vehicle_code = Column(String(32), nullable=False)
+    plate = Column(String(32), nullable=False)
+    brand = Column(String(80), nullable=True)
+    model = Column(String(80), nullable=True)
+    year = Column(Integer, nullable=True)
+    seats_min = Column(Integer, nullable=False, default=1)
+    seats_max = Column(Integer, nullable=False, default=1)
+    status = Column(String(32), nullable=False, default="active")
+    fuel_type = Column(String(32), nullable=True)
+    accessibility = Column(Boolean, nullable=False, default=False)
+    mileage_km = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+    gps_provider = Column(String(64), nullable=True)
+    gps_external_id = Column(String(120), nullable=True)
+    gps_last_seen_at = Column(DateTime, nullable=True)
+    gps_last_position = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    company = relationship("CompanyModel", back_populates="fleet_vehicles")
+    documents = relationship(
+        "FleetVehicleDocumentModel",
+        back_populates="vehicle",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self):
+        return f"<FleetVehicleModel(id='{self.id}', code='{self.vehicle_code}', plate='{self.plate}')>"
+
+
+class FleetVehicleDocumentModel(Base):
+    """Documents associated with a fleet vehicle."""
+    __tablename__ = "fleet_vehicle_documents"
+
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    vehicle_id = Column(
+        UUIDType,
+        ForeignKey("fleet_vehicles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    doc_type = Column(String(80), nullable=False, default="")
+    reference = Column(String(120), nullable=False, default="")
+    issue_date = Column(String(32), nullable=True)
+    expiry_date = Column(String(32), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    vehicle = relationship("FleetVehicleModel", back_populates="documents")
+
+    def __repr__(self):
+        return f"<FleetVehicleDocumentModel(id='{self.id}', vehicle_id='{self.vehicle_id}', type='{self.doc_type}')>"
+
+
 class OptimizationWorkspaceModel(Base):
     """Optimization workspace root entity (draft/active/archive)."""
     __tablename__ = "optimization_workspaces"
 
     id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(
+        String(64),
+        ForeignKey("companies.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
     name = Column(String, nullable=False)
     city_label = Column(String, nullable=True)
     archived = Column(Boolean, nullable=False, default=False)
@@ -160,6 +255,7 @@ class OptimizationWorkspaceModel(Base):
         foreign_keys=[working_version_id],
         post_update=True,
     )
+    company = relationship("CompanyModel", back_populates="workspaces")
 
     def __repr__(self):
         return (
@@ -203,6 +299,46 @@ class OptimizationWorkspaceVersionModel(Base):
         return (
             f"<OptimizationWorkspaceVersionModel(id='{self.id}', workspace_id='{self.workspace_id}', "
             f"version={self.version_number}, save_kind='{self.save_kind}')>"
+        )
+
+
+class PublishedFleetAssignmentModel(Base):
+    """
+    Operational fleet reservations created only on workspace publish.
+    One row per route assignment interval.
+    """
+    __tablename__ = "published_fleet_assignments"
+
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(64), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(
+        UUIDType,
+        ForeignKey("optimization_workspaces.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    workspace_version_id = Column(
+        UUIDType,
+        ForeignKey("optimization_workspace_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    day = Column(String(8), nullable=False, index=True)
+    bus_id = Column(String(64), nullable=False)
+    route_id = Column(String(64), nullable=False)
+    start_minute = Column(Integer, nullable=False)
+    end_minute = Column(Integer, nullable=False)
+    assigned_vehicle_id = Column(String(96), nullable=True, index=True)
+    assignment_type = Column(String(16), nullable=False, default="virtual")  # real|virtual
+    active = Column(Boolean, nullable=False, default=True, index=True)
+    details = Column("metadata", JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return (
+            f"<PublishedFleetAssignmentModel(id='{self.id}', workspace_id='{self.workspace_id}', "
+            f"day='{self.day}', vehicle='{self.assigned_vehicle_id}', active={self.active})>"
         )
 
 

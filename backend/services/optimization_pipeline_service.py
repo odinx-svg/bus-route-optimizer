@@ -969,6 +969,7 @@ async def run_optimization_pipeline_by_day(
         try:
             assigned_raw_by_day, fleet_assignment_summary = assign_fleet_profiles_to_schedule_by_day(
                 candidate.get("schedule_by_day_raw", {}),
+                binding_state="preview",
             )
             assigned_schedule_by_day = _serialize_schedule_by_day(assigned_raw_by_day)
         except Exception:
@@ -977,6 +978,7 @@ async def run_optimization_pipeline_by_day(
         summary_metrics = dict(candidate["metrics"] or {})
         summary_metrics["fleet_assigned"] = int(fleet_assignment_summary.get("total_assigned", 0))
         summary_metrics["fleet_virtual_buses"] = int(fleet_assignment_summary.get("total_virtual_buses", 0))
+        summary_metrics["fleet_binding_state"] = "preview"
         add_history(
             "completed",
             100,

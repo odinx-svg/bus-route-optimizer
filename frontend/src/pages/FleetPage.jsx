@@ -21,6 +21,8 @@ const EMPTY_FORM = {
   accessibility: false,
   mileage_km: '',
   notes: '',
+  gps_provider: '',
+  gps_external_id: '',
   documents: [],
 };
 
@@ -43,6 +45,8 @@ const toPayload = (form) => ({
   accessibility: !!form.accessibility,
   mileage_km: form.mileage_km ? Number(form.mileage_km) : null,
   notes: String(form.notes || '').trim() || null,
+  gps_provider: String(form.gps_provider || '').trim() || null,
+  gps_external_id: String(form.gps_external_id || '').trim() || null,
   documents: (form.documents || [])
     .map((doc) => ({
       id: doc.id,
@@ -68,6 +72,8 @@ const fromVehicle = (vehicle) => ({
   accessibility: !!vehicle?.accessibility,
   mileage_km: vehicle?.mileage_km || '',
   notes: vehicle?.notes || '',
+  gps_provider: vehicle?.gps_provider || '',
+  gps_external_id: vehicle?.gps_external_id || '',
   documents: Array.isArray(vehicle?.documents) ? vehicle.documents : [],
 });
 
@@ -380,6 +386,14 @@ export default function FleetPage() {
                 <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Kilometraje</span>
                 <input type="number" value={activeForm.mileage_km} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, mileage_km: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
               </label>
+              <label className="space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">GPS Provider</span>
+                <input value={activeForm.gps_provider || ''} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, gps_provider: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">GPS Vehicle ID</span>
+                <input value={activeForm.gps_external_id || ''} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, gps_external_id: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70 data-mono" />
+              </label>
             </div>
 
             <label className="flex items-center gap-2 text-[12px] text-slate-300">
@@ -433,4 +447,3 @@ export default function FleetPage() {
     </div>
   );
 }
-

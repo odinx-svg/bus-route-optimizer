@@ -535,26 +535,31 @@ async def update_schedule(
     
     # Count routes and validate
     total_routes = sum(len(bus.items) for bus in schedule.buses)
-    
-    # Store in cache for retrieval
-    cache_key = f"schedule_{schedule.day}"
-    persisted_payload = {
-        "day": schedule.day,
-        "buses": [bus.model_dump() for bus in schedule.buses],
-        "unassigned_routes": [r.model_dump() for r in schedule.unassigned_routes],
-        "metadata": schedule.metadata,
-        "updated_at": datetime.utcnow().isoformat()
-    }
-    edited_schedules_cache[cache_key] = persisted_payload
-    
-    # Generate warnings for tight schedules
-    warnings = list(validation_result.warnings)
 
     workspace_id = (
         (schedule.workspace_id or "").strip()
         or str((schedule.metadata or {}).get("workspace_id", "")).strip()
         or None
     )
+
+    # Store in cache for retrieval
+    cache_workspace_key = f"schedule_{workspace_id or 'legacy'}_{schedule.day}"
+    cache_legacy_key = f"schedule_{schedule.day}"
+    persisted_payload = {
+        "day": schedule.day,
+        "buses": [bus.model_dump() for bus in schedule.buses],
+        "unassigned_routes": [r.model_dump() for r in schedule.unassigned_routes],
+        "metadata": {
+            **(schedule.metadata or {}),
+            "workspace_id": workspace_id,
+        },
+        "updated_at": datetime.utcnow().isoformat()
+    }
+    edited_schedules_cache[cache_workspace_key] = persisted_payload
+    edited_schedules_cache[cache_legacy_key] = persisted_payload
+    
+    # Generate warnings for tight schedules
+    warnings = list(validation_result.warnings)
 
     # Persist to DB when available (production-safe persistence).
     if is_database_available() and SessionLocal is not None:

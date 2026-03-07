@@ -236,8 +236,17 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
   const assignedVehiclePlate = bus.assigned_vehicle_plate || '';
   const assignedSeatsMin = Number(bus.assigned_vehicle_seats_min || 0);
   const assignedSeatsMax = Number(bus.assigned_vehicle_seats_max || 0);
-  const hasAssignedVehicle = Boolean(bus.uses_fleet_profile && (assignedVehicleCode || assignedVehiclePlate));
-  const displayBusId = hasAssignedVehicle ? (assignedVehicleCode || assignedVehiclePlate) : (busId || 'BUS');
+  const assignmentType = String(
+    bus.fleet_assignment_type
+    || (bus.uses_fleet_profile ? 'real' : 'virtual')
+    || 'virtual'
+  ).toLowerCase();
+  const bindingState = String(bus.fleet_binding_state || 'preview').toLowerCase();
+  const isVirtual = assignmentType === 'virtual';
+  const hasAssignedVehicle = Boolean(!isVirtual && (assignedVehicleCode || assignedVehiclePlate));
+  const displayBusId = hasAssignedVehicle
+    ? (assignedVehicleCode || assignedVehiclePlate)
+    : (isVirtual ? (assignedVehicleCode || busId || 'VIRTUAL') : (busId || 'BUS'));
   const orderedItems = useMemo(() => sortItemsByTimeAndNumber(getBusItems(bus)), [bus]);
   const entries = useMemo(() => orderedItems.filter(i => i.type === 'entry'), [orderedItems]);
   const exits = useMemo(() => orderedItems.filter(i => i.type === 'exit'), [orderedItems]);
@@ -282,6 +291,14 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
                   FLOTA {assignedSeatsMin > 0 ? `${assignedSeatsMin}-` : ''}{assignedSeatsMax}P
                 </span>
               )}
+              {isVirtual && (
+                <span className="px-1.5 py-0.5 rounded-md bg-rose-500/15 text-rose-300 font-medium">
+                  VIRTUAL
+                </span>
+              )}
+              <span className={`px-1.5 py-0.5 rounded-md font-medium ${bindingState === 'committed' ? 'bg-cyan-500/15 text-cyan-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                {bindingState === 'committed' ? 'COMMITTED' : 'PREVIEW'}
+              </span>
               {minSeatsNeeded > 0 && (
                 <span className="px-1.5 py-0.5 rounded-md bg-gt-info/10 text-gt-info font-medium">
                   MIN {minSeatsNeeded}P

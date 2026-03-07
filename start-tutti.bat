@@ -13,11 +13,11 @@ set "VENV_PYTHON=%VENV%\Scripts\python.exe"
 echo.
 echo  ========================================
 echo       TUTTI - Fleet Optimizer
-echo       Quick Start Script v2.3
+echo       Quick Start Script v2.4
 echo  ========================================
 echo.
 
-echo  [1/5] Checking Python...
+echo  [1/6] Checking Python...
 if not exist "%VENV_PYTHON%" (
     echo        Creating virtual environment...
     python -m venv "%VENV%"
@@ -34,7 +34,7 @@ if %errorlevel% neq 0 (
 for /f "tokens=2 delims= " %%v in ('"%VENV_PYTHON%" --version 2^>^&1') do echo        Python %%v
 echo.
 
-echo  [2/5] Checking Node.js...
+echo  [2/6] Checking Node.js...
 node --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo        ERROR: Node.js not found!
@@ -44,7 +44,7 @@ if %errorlevel% neq 0 (
 for /f "tokens=*" %%v in ('node --version 2^>^&1') do echo        Node %%v
 echo.
 
-echo  [3/5] Installing dependencies...
+echo  [3/6] Installing dependencies...
 "%VENV_PYTHON%" -m pip install -q --upgrade pip
 "%VENV_PYTHON%" -m pip install -q -r "%BACKEND%\requirements.txt"
 if %errorlevel% neq 0 (
@@ -52,7 +52,7 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-"%VENV_PYTHON%" -c "import reportlab, httpx, pulp, websockets, wsproto; from PIL import Image" >nul 2>&1 || "%VENV_PYTHON%" -m pip install -q reportlab pillow httpx pulp websockets wsproto
+"%VENV_PYTHON%" -c "import reportlab, httpx, pulp, websockets, wsproto, alembic; from PIL import Image" >nul 2>&1 || "%VENV_PYTHON%" -m pip install -q reportlab pillow httpx pulp websockets wsproto alembic
 if %errorlevel% neq 0 (
     echo        ERROR: Critical Python dependencies check failed
     pause
@@ -61,10 +61,26 @@ if %errorlevel% neq 0 (
 echo        Dependencies OK
 echo.
 
-echo  [4/5] Syncing frontend dependencies...
+echo  [4/6] Initializing database schema...
+if not exist "%BACKEND%\scripts\init_db.py" (
+    echo        WARNING: backend\scripts\init_db.py not found
+) else (
+    "%VENV_PYTHON%" "%BACKEND%\scripts\init_db.py" --skip-verify
+    if %errorlevel% neq 0 (
+        echo        WARNING: DB initialization failed, continuing in fallback mode if available
+    ) else (
+        echo        Database schema initialized
+    )
+)
+echo.
+
+echo  [5/6] Syncing frontend dependencies...
 if not exist "%BACKEND%\main.py" echo        WARNING: backend\main.py not found
 if not exist "%BACKEND%\models.py" echo        WARNING: backend\models.py not found
 if not exist "%BACKEND%\optimizer_v6.py" echo        WARNING: backend\optimizer_v6.py not found
+if not exist "%BACKEND%\services\fleet_repository.py" echo        WARNING: backend\services\fleet_repository.py not found
+if not exist "%BACKEND%\services\fleet_publication.py" echo        WARNING: backend\services\fleet_publication.py not found
+if not exist "%BACKEND%\services\telematics_provider.py" echo        WARNING: backend\services\telematics_provider.py not found
 
 echo        Running npm install to apply package updates...
 pushd "%FRONTEND%"
@@ -79,7 +95,7 @@ popd
 echo        Frontend dependencies OK
 echo.
 
-echo  [5/5] Starting servers...
+echo  [6/6] Starting servers...
 echo.
 
 :: Kill old processes
