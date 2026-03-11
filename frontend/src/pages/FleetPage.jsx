@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Save, X, FileText, Bus } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, FileText, Bus, Building2 } from 'lucide-react';
 import { notifications } from '../services/notifications';
 import {
   fetchFleetVehicles,
@@ -85,6 +85,7 @@ export default function FleetPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -183,7 +184,10 @@ export default function FleetPage() {
   };
 
   const filteredVehicles = useMemo(() => {
-    const sorted = [...vehicles];
+    const sorted = [...vehicles].filter((vehicle) => {
+      if (companyFilter === 'all') return true;
+      return String(vehicle?.company_id || '').trim() === companyFilter;
+    });
     if (!query.trim()) return sorted;
     const q = query.toLowerCase();
     return sorted.filter((v) => (
@@ -192,12 +196,76 @@ export default function FleetPage() {
       String(v.brand || '').toLowerCase().includes(q) ||
       String(v.model || '').toLowerCase().includes(q)
     ));
-  }, [vehicles, query]);
+  }, [vehicles, query, companyFilter]);
+
+  const groupedVehicles = useMemo(() => {
+    const groups = new Map();
+    for (const vehicle of filteredVehicles) {
+      const rawCompanyId = String(vehicle?.company_id || '').trim();
+      const rawCompanyName = String(vehicle?.company_name || '').trim();
+      const companyId = rawCompanyId || 'company_unassigned';
+      const companyName = rawCompanyName || rawCompanyId || 'Sin empresa';
+
+      if (!groups.has(companyId)) {
+        groups.set(companyId, {
+          companyId,
+          companyName,
+          vehicles: [],
+          totalSeatsMax: 0,
+          activeCount: 0,
+          maintenanceCount: 0,
+          inactiveCount: 0,
+        });
+      }
+      const group = groups.get(companyId);
+      group.vehicles.push(vehicle);
+      group.totalSeatsMax += Number(vehicle?.seats_max || 0);
+      if (String(vehicle?.status || '').toLowerCase() === 'active') group.activeCount += 1;
+      if (String(vehicle?.status || '').toLowerCase() === 'maintenance') group.maintenanceCount += 1;
+      if (String(vehicle?.status || '').toLowerCase() === 'inactive') group.inactiveCount += 1;
+    }
+
+    const grouped = Array.from(groups.values());
+    grouped.sort((a, b) => a.companyName.localeCompare(b.companyName, 'es', { sensitivity: 'base' }));
+
+    for (const group of grouped) {
+      group.vehicles.sort((a, b) => {
+        const codeA = String(a?.vehicle_code || '').trim();
+        const codeB = String(b?.vehicle_code || '').trim();
+        if (codeA !== codeB) {
+          return codeA.localeCompare(codeB, 'es', { sensitivity: 'base' });
+        }
+        return String(a?.plate || '').localeCompare(String(b?.plate || ''), 'es', { sensitivity: 'base' });
+      });
+    }
+
+    return grouped;
+  }, [filteredVehicles]);
+
+  const companyFilterOptions = useMemo(() => {
+    const map = new Map();
+    for (const vehicle of vehicles) {
+      const rawCompanyId = String(vehicle?.company_id || '').trim();
+      const rawCompanyName = String(vehicle?.company_name || '').trim();
+      const companyId = rawCompanyId || 'company_unassigned';
+      const companyName = rawCompanyName || rawCompanyId || 'Sin empresa';
+      if (!map.has(companyId)) {
+        map.set(companyId, { id: companyId, name: companyName });
+      }
+    }
+    const options = Array.from(map.values());
+    options.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+    return options;
+  }, [vehicles]);
 
   const selectedVehicle = useMemo(
     () => vehicles.find((v) => String(v.id) === String(selectedId)) || null,
     [vehicles, selectedId]
   );
+  const selectedVehicleCompany = useMemo(() => {
+    if (!selectedVehicle) return '';
+    return String(selectedVehicle.company_name || selectedVehicle.company_id || '').trim();
+  }, [selectedVehicle]);
 
   const startCreate = () => {
     setEditingId('new');
@@ -435,6 +503,48 @@ export default function FleetPage() {
             placeholder="Buscar por código, matrícula..."
             className="w-full px-3 py-2 text-[12px] bg-white/[0.03] border border-white/[0.08] rounded-[10px] focus:outline-none focus:border-cyan-500/40"
           />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Empresas</p>
+              <select
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="min-w-[140px] rounded-md border border-white/[0.14] bg-[#0b1320] px-2 py-1 text-[10px] text-slate-200"
+              >
+                <option value="all">Todas</option>
+                {companyFilterOptions.map((company) => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              <button
+                type="button"
+                onClick={() => setCompanyFilter('all')}
+                className={`px-2 py-1 rounded-md text-[10px] border transition-colors ${
+                  companyFilter === 'all'
+                    ? 'border-cyan-400/60 bg-cyan-500/[0.14] text-cyan-200'
+                    : 'border-white/[0.1] bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
+                }`}
+              >
+                Todas
+              </button>
+              {companyFilterOptions.slice(0, 4).map((company) => (
+                <button
+                  key={`chip-${company.id}`}
+                  type="button"
+                  onClick={() => setCompanyFilter(company.id)}
+                  className={`px-2 py-1 rounded-md text-[10px] border transition-colors ${
+                    companyFilter === company.id
+                      ? 'border-cyan-400/60 bg-cyan-500/[0.14] text-cyan-200'
+                      : 'border-white/[0.1] bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
+                  }`}
+                >
+                  {company.name}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid grid-cols-4 gap-1 text-[10px] data-mono">
             <div className="rounded-md bg-emerald-500/[0.12] text-emerald-300 px-2 py-1 text-center">{summary?.active ?? 0} A</div>
             <div className="rounded-md bg-amber-500/[0.12] text-amber-300 px-2 py-1 text-center">{summary?.maintenance ?? 0} T</div>
@@ -445,31 +555,62 @@ export default function FleetPage() {
 
         <div className="p-3 space-y-2">
           {loading && <p className="text-[11px] text-slate-500">Cargando flota...</p>}
-          {!loading && filteredVehicles.length === 0 && (
+          {!loading && groupedVehicles.length === 0 && (
             <p className="text-[11px] text-slate-500">No hay vehículos registrados</p>
           )}
-          {filteredVehicles.map((v) => {
-            const selected = String(v.id) === String(selectedId);
-            return (
-              <button
-                key={v.id}
-                onClick={() => {
-                  setSelectedId(v.id);
-                  if (!isEditing) setForm(fromVehicle(v));
-                }}
-                className={`w-full text-left p-3 rounded-[12px] border transition-all ${
-                  selected ? 'border-cyan-500/40 bg-cyan-500/[0.08]' : 'border-white/[0.08] hover:border-white/[0.2] bg-white/[0.02]'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[12px] font-semibold data-mono">{v.vehicle_code}</p>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.06] text-slate-300">{v.seats_min}-{v.seats_max}P</span>
+          {groupedVehicles.map((group) => (
+            <div
+              key={group.companyId}
+              className="rounded-[12px] border border-[#2a3f54] bg-[#0a1320]/80 p-2 space-y-2 shadow-[inset_0_1px_0_rgba(120,160,255,0.08)]"
+            >
+              <div className="flex items-center justify-between rounded-[10px] border border-white/[0.06] bg-[#101d2d] px-2 py-1.5">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Building2 size={12} className="text-cyan-300 shrink-0" />
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-300 truncate">{group.companyName}</p>
                 </div>
-                <p className="text-[11px] text-slate-300 mt-1 data-mono">{v.plate}</p>
-                <p className="text-[10px] text-slate-500 mt-1">{v.brand || 'Marca'} {v.model || ''}</p>
-              </button>
-            );
-          })}
+                <div className="flex items-center gap-1 text-[9px] data-mono">
+                  <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-slate-200">{group.vehicles.length} B</span>
+                  <span className="rounded bg-cyan-500/[0.16] px-1.5 py-0.5 text-cyan-200">{group.totalSeatsMax} P</span>
+                  <span className="rounded bg-emerald-500/[0.14] px-1.5 py-0.5 text-emerald-200">{group.activeCount} A</span>
+                </div>
+              </div>
+              {group.vehicles.map((v) => {
+                const selected = String(v.id) === String(selectedId);
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => {
+                      setSelectedId(v.id);
+                      if (!isEditing) setForm(fromVehicle(v));
+                    }}
+                    className={`w-full text-left p-3 rounded-[12px] border transition-all ${
+                      selected
+                        ? 'border-cyan-400/60 bg-cyan-500/[0.12] shadow-[0_0_0_1px_rgba(56,189,248,0.2)]'
+                        : 'border-white/[0.08] hover:border-white/[0.2] bg-white/[0.02] hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[12px] font-semibold data-mono">{v.vehicle_code}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.06] text-slate-300">{v.seats_min}-{v.seats_max}P</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <p className="text-[11px] text-slate-300 data-mono">{v.plate}</p>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${
+                        String(v.status) === 'active'
+                          ? 'bg-emerald-500/[0.16] text-emerald-200'
+                          : String(v.status) === 'maintenance'
+                            ? 'bg-amber-500/[0.16] text-amber-200'
+                            : 'bg-slate-500/[0.2] text-slate-300'
+                      }`}>
+                        {String(v.status || 'inactive').toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">{v.brand || 'Marca'} {v.model || ''}</p>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </aside>
 
@@ -478,6 +619,12 @@ export default function FleetPage() {
           <div>
             <p className="text-[14px] font-semibold uppercase tracking-[0.08em] data-mono">Perfil de Vehículo</p>
             <p className="text-[11px] text-slate-500">Datos operativos y documentación base</p>
+            {selectedVehicleCompany && (
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-cyan-400/30 bg-cyan-500/[0.10] px-2 py-1 text-[10px] text-cyan-100">
+                <Bus size={11} className="text-cyan-200" />
+                <span className="data-mono">{selectedVehicleCompany}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {selectedVehicle && !isEditing && (
