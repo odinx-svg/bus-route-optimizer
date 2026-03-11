@@ -314,7 +314,7 @@ export default function FleetPage() {
 
   return (
     <div className="h-full min-h-0 grid grid-cols-[360px_1fr] gap-3">
-      <aside className="control-panel rounded-[16px] overflow-hidden flex flex-col min-h-0">
+      <aside className="control-panel rounded-[16px] flex flex-col min-h-0 overflow-y-auto">
         <div className="p-4 border-b border-[#2b4056] space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -443,7 +443,7 @@ export default function FleetPage() {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+        <div className="p-3 space-y-2">
           {loading && <p className="text-[11px] text-slate-500">Cargando flota...</p>}
           {!loading && filteredVehicles.length === 0 && (
             <p className="text-[11px] text-slate-500">No hay vehículos registrados</p>

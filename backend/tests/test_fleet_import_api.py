@@ -97,3 +97,7 @@ def test_fleet_import_commit_and_ute_catalog_endpoints(monkeypatch):
     finally:
         db.close()
 
+    vehicles_response = client.get("/api/fleet/vehicles")
+    assert vehicles_response.status_code == 200
+    vehicles_body = vehicles_response.json()
+    assert len(vehicles_body["vehicles"]) == 3

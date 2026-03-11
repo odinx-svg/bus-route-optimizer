@@ -218,9 +218,12 @@ class FleetRepository:
             query = db.query(db_models.FleetVehicleModel)
             if normalized_company_ids:
                 query = query.filter(db_models.FleetVehicleModel.company_id.in_(normalized_company_ids))
-            else:
+            elif company_id:
                 resolved_company = self._resolve_company_id(db, company_id)
                 query = query.filter(db_models.FleetVehicleModel.company_id == resolved_company)
+            else:
+                # No scope explicitly provided: return all companies (multi-company fleet view).
+                pass
 
             rows = query.order_by(
                 db_models.FleetVehicleModel.company_id.asc(),
