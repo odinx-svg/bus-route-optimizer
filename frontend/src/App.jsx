@@ -7,6 +7,7 @@ import OptimizationProgress from './components/OptimizationProgress';
 import StudioErrorBoundary from './components/StudioErrorBoundary';
 import ControlHubPage from './pages/ControlHubPage';
 import FleetPage from './pages/FleetPage';
+import { listUTEs } from './services/fleetService';
 import { notifications } from './services/notifications';
 import { clearGeometryCache } from './services/RouteService';
 import { buildRouteCapacityMap, getItemCapacityNeeded } from './utils/capacity';
@@ -36,6 +37,8 @@ const DEFAULT_OPTIMIZATION_OPTIONS = {
   load_balance_hard_spread_limit: 2,
   load_balance_target_band: 1,
   route_load_constraints: [],
+  fleet_scope_mode: 'company',
+  fleet_scope_ute_id: null,
 };
 
 const createEmptyRouteLoadConstraint = () => ({
@@ -70,6 +73,8 @@ const normalizeOptimizationOptions = (raw) => {
     load_balance_hard_spread_limit: Math.max(1, Math.min(12, toInt(source.load_balance_hard_spread_limit, 2))),
     load_balance_target_band: Math.max(0, Math.min(6, toInt(source.load_balance_target_band, 1))),
     route_load_constraints: constraints,
+    fleet_scope_mode: String(source.fleet_scope_mode || 'company').toLowerCase() === 'ute' ? 'ute' : 'company',
+    fleet_scope_ute_id: String(source.fleet_scope_ute_id || '').trim() || null,
   };
 };
 const createEmptyScheduleByDay = () => (
@@ -269,6 +274,7 @@ function LoadOptionsModal({
   open = false,
   title = 'Restricciones de carga',
   initialValue = DEFAULT_OPTIMIZATION_OPTIONS,
+  uteOptions = [],
   onCancel,
   onSave,
 }) {
@@ -360,6 +366,50 @@ function LoadOptionsModal({
             />
             <p className="mt-1 text-[10px] text-slate-400">
               Cuanto puede alejarse cada bus del numero ideal de rutas.
+            </p>
+          </label>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
+            Alcance de flota
+            <select
+              value={value.fleet_scope_mode || 'company'}
+              onChange={(event) => setValue((prev) => ({
+                ...normalizeOptimizationOptions(prev),
+                fleet_scope_mode: event.target.value === 'ute' ? 'ute' : 'company',
+                fleet_scope_ute_id: event.target.value === 'ute'
+                  ? (prev.fleet_scope_ute_id || (uteOptions[0]?.id || null))
+                  : null,
+              }))}
+              className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1 text-[12px] text-white"
+            >
+              <option value="company">Empresa</option>
+              <option value="ute">UTE</option>
+            </select>
+            <p className="mt-1 text-[10px] text-slate-400">
+              Empresa: solo flota propia. UTE: flota conjunta de empresas miembro.
+            </p>
+          </label>
+
+          <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
+            UTE activa
+            <select
+              value={value.fleet_scope_ute_id || ''}
+              disabled={(value.fleet_scope_mode || 'company') !== 'ute'}
+              onChange={(event) => setValue((prev) => ({
+                ...normalizeOptimizationOptions(prev),
+                fleet_scope_ute_id: event.target.value || null,
+              }))}
+              className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1 text-[12px] text-white disabled:opacity-60"
+            >
+              <option value="">Selecciona UTE</option>
+              {uteOptions.map((ute) => (
+                <option key={ute.id} value={ute.id}>{ute.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[10px] text-slate-400">
+              Se usa para preview/publicacion y deteccion de conflictos cruzados.
             </p>
           </label>
         </div>
@@ -577,6 +627,7 @@ function App() {
   const [ingestionPanelOpen, setIngestionPanelOpen] = useState(false);
   const [createFlowMode, setCreateFlowMode] = useState(false);
   const [optimizationOptionsByWorkspace, setOptimizationOptionsByWorkspace] = useState({});
+  const [uteOptions, setUteOptions] = useState([]);
   const [activeOptimizationOptions, setActiveOptimizationOptions] = useState(
     normalizeOptimizationOptions(DEFAULT_OPTIMIZATION_OPTIONS)
   );
@@ -674,6 +725,18 @@ function App() {
     }
   }, []);
 
+  const refreshUTEOptions = useCallback(async () => {
+    try {
+      const items = await listUTEs({ activeOnly: true });
+      const normalized = Array.isArray(items) ? items : [];
+      setUteOptions(normalized);
+      return normalized;
+    } catch {
+      setUteOptions([]);
+      return [];
+    }
+  }, []);
+
   const openLoadOptionsModal = useCallback(async ({ workspaceId = null, workspaceName = '' } = {}) => {
     const normalizedName = String(workspaceName || '').trim();
     const title = workspaceId
@@ -683,12 +746,13 @@ function App() {
       const loaded = await fetchAndStoreWorkspaceOptions(workspaceId);
       setActiveOptimizationOptions(loaded);
     }
+    await refreshUTEOptions();
     setLoadOptionsModal({
       open: true,
       workspaceId: workspaceId || null,
       title,
     });
-  }, [fetchAndStoreWorkspaceOptions]);
+  }, [fetchAndStoreWorkspaceOptions, refreshUTEOptions]);
 
   const closeLoadOptionsModal = useCallback(() => {
     setLoadOptionsModal({ open: false, workspaceId: null, title: 'Restricciones de carga' });
@@ -1719,6 +1783,7 @@ function App() {
             ? (optimizationOptionsByWorkspace?.[loadOptionsModal.workspaceId] || activeOptimizationOptions)
             : activeOptimizationOptions
         }
+        uteOptions={uteOptions}
         onCancel={closeLoadOptionsModal}
         onSave={handleSaveLoadOptions}
       />

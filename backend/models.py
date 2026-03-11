@@ -95,6 +95,10 @@ class BusSchedule(BaseModel):
     assigned_vehicle_id: Optional[str] = None
     assigned_vehicle_code: Optional[str] = None
     assigned_vehicle_plate: Optional[str] = None
+    assigned_company_id: Optional[str] = None
+    assigned_company_name: Optional[str] = None
+    assigned_vehicle_seats_base: Optional[int] = None
+    assigned_vehicle_seats_pmr: Optional[int] = None
     assigned_vehicle_seats_min: Optional[int] = None
     assigned_vehicle_seats_max: Optional[int] = None
     fleet_binding_state: Optional[str] = None  # preview|committed

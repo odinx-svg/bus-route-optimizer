@@ -105,7 +105,7 @@ def serialize_assigned_schedule_by_day(
 
 
 def _iter_assignment_intervals(
-    company_id: str,
+    fallback_company_id: str,
     schedule_by_day: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
@@ -118,6 +118,7 @@ def _iter_assignment_intervals(
             bus_id = str(bus.get("bus_id", "") or "")
             vehicle_id = str(bus.get("assigned_vehicle_id", "") or "")
             assignment_type = str(bus.get("fleet_assignment_type", "virtual") or "virtual").lower()
+            bus_company_id = str(bus.get("assigned_company_id", "") or "").strip() or fallback_company_id
             items = bus.get("items", []) if isinstance(bus.get("items"), list) else []
             for item in items:
                 if not isinstance(item, dict):
@@ -128,7 +129,7 @@ def _iter_assignment_intervals(
                     end_minute = start_minute + 1
                 rows.append(
                     {
-                        "company_id": company_id,
+                        "company_id": bus_company_id,
                         "day": day,
                         "bus_id": bus_id,
                         "route_id": str(item.get("route_id", "") or ""),
@@ -145,10 +146,14 @@ def detect_publication_conflicts(
     db,
     *,
     company_id: str,
+    scope_company_ids: Optional[List[str]] = None,
     candidate_rows: List[Dict[str, Any]],
     exclude_workspace_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     conflicts: List[Dict[str, Any]] = []
+    normalized_scope = [str(cid).strip() for cid in (scope_company_ids or []) if str(cid).strip()]
+    if not normalized_scope:
+        normalized_scope = [str(company_id)]
     for row in candidate_rows:
         if row.get("assignment_type") != "real":
             continue
@@ -156,7 +161,7 @@ def detect_publication_conflicts(
         if not vehicle_id:
             continue
         query = db.query(db_models.PublishedFleetAssignmentModel).filter(
-            db_models.PublishedFleetAssignmentModel.company_id == company_id,
+            db_models.PublishedFleetAssignmentModel.company_id.in_(normalized_scope),
             db_models.PublishedFleetAssignmentModel.day == str(row.get("day", "")),
             db_models.PublishedFleetAssignmentModel.assignment_type == "real",
             db_models.PublishedFleetAssignmentModel.active.is_(True),
@@ -196,6 +201,7 @@ def preview_workspace_publication(
     db,
     *,
     company_id: str,
+    scope_company_ids: Optional[List[str]] = None,
     schedule_by_day: Dict[str, Any],
     exclude_workspace_id: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -203,6 +209,7 @@ def preview_workspace_publication(
     assigned_raw_by_day, fleet_assignment_summary = assign_fleet_profiles_to_schedule_by_day(
         raw_by_day,
         company_id=company_id,
+        company_ids=scope_company_ids,
         binding_state="committed",
     )
     assigned_schedule_by_day = serialize_assigned_schedule_by_day(schedule_by_day, assigned_raw_by_day)
@@ -210,6 +217,7 @@ def preview_workspace_publication(
     conflicts = detect_publication_conflicts(
         db,
         company_id=company_id,
+        scope_company_ids=scope_company_ids,
         candidate_rows=candidate_rows,
         exclude_workspace_id=exclude_workspace_id,
     )
@@ -224,6 +232,7 @@ def preview_workspace_publication(
         "real_assigned": real_assigned,
         "virtual_created": virtual_created,
         "days": days_summary,
+        "scope_company_ids": [str(cid) for cid in (scope_company_ids or [company_id])],
         "schedule_by_day": assigned_schedule_by_day,
         "candidate_rows": candidate_rows,
     }
@@ -246,7 +255,7 @@ def persist_publication_assignments(
         db.add(
             db_models.PublishedFleetAssignmentModel(
                 id=str(uuid4()),
-                company_id=company_id,
+                company_id=str(row.get("company_id", "") or company_id),
                 workspace_id=str(workspace_id),
                 workspace_version_id=str(workspace_version_id),
                 day=str(row.get("day", "")),
@@ -258,9 +267,8 @@ def persist_publication_assignments(
                 assignment_type=str(row.get("assignment_type", "virtual")),
                 active=True,
                 details={
-                    "company_id": company_id,
+                    "company_id": str(row.get("company_id", "") or company_id),
                     "bus_id": str(row.get("bus_id", "")),
                 },
             )
         )
-

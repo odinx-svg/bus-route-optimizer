@@ -107,7 +107,13 @@ def test_preview_workspace_publication_marks_blocked(monkeypatch):
         )
         db.commit()
 
-        def _fake_assign(schedule_by_day, fleet_profiles=None, company_id=None, binding_state="preview"):
+        def _fake_assign(
+            schedule_by_day,
+            fleet_profiles=None,
+            company_id=None,
+            company_ids=None,
+            binding_state="preview",
+        ):
             bus = BusSchedule(
                 bus_id="B010",
                 items=[
@@ -205,4 +211,3 @@ def test_persist_publication_assignments_replaces_previous_workspace_rows():
         assert active_rows[0].route_id == "R_NEW"
     finally:
         db.close()
-

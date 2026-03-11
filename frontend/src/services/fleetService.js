@@ -63,3 +63,41 @@ export const testTelematicsLink = async (payload) => {
   }
   return response.json();
 };
+
+export const previewFleetImport = async (file) => {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await fetch(`${API_URL}/api/fleet/import/preview`, {
+    method: 'POST',
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
+export const commitFleetImport = async ({ file, primarySheetName, uteName = '' }) => {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('primary_sheet_name', primarySheetName);
+  if (uteName && String(uteName).trim()) {
+    form.append('ute_name', String(uteName).trim());
+  }
+  const response = await fetch(`${API_URL}/api/fleet/import/commit`, {
+    method: 'POST',
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
+export const listUTEs = async ({ activeOnly = true } = {}) => {
+  const response = await fetch(`${API_URL}/api/fleet/utes?active_only=${activeOnly ? 'true' : 'false'}`);
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};

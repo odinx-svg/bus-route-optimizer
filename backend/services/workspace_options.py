@@ -15,6 +15,8 @@ DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS: Dict[str, Any] = {
     "load_balance_hard_spread_limit": 2,
     "load_balance_target_band": 1,
     "route_load_constraints": [],
+    "fleet_scope_mode": "company",  # company|ute
+    "fleet_scope_ute_id": None,
 }
 
 
@@ -62,11 +64,18 @@ def sanitize_workspace_optimization_options(raw: Any) -> Dict[str, Any]:
     except Exception:
         band = int(DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS["load_balance_target_band"])
 
+    fleet_scope_mode = str(data.get("fleet_scope_mode", "company") or "company").strip().lower()
+    if fleet_scope_mode not in {"company", "ute"}:
+        fleet_scope_mode = "company"
+    fleet_scope_ute_id = str(data.get("fleet_scope_ute_id", "") or "").strip() or None
+
     return {
         "balance_load": bool(data.get("balance_load", DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS["balance_load"])),
         "load_balance_hard_spread_limit": max(1, min(12, spread)),
         "load_balance_target_band": max(0, min(6, band)),
         "route_load_constraints": _normalize_route_load_constraints(data.get("route_load_constraints", [])),
+        "fleet_scope_mode": fleet_scope_mode,
+        "fleet_scope_ute_id": fleet_scope_ute_id,
     }
 
 
@@ -83,4 +92,3 @@ def set_workspace_optimization_options(db, workspace_id: str, options: Dict[str,
     key = workspace_optimization_options_key(workspace_id)
     db_crud.set_app_meta(db, key, sanitized)
     return sanitized
-

@@ -107,6 +107,35 @@ class FleetRegistry:
         return normalized
 
     @staticmethod
+    def _derive_seat_fields(payload: Dict[str, Any]) -> Dict[str, int]:
+        seats_base_raw = payload.get("seats_base")
+        seats_pmr_raw = payload.get("seats_pmr")
+        seats_min_raw = payload.get("seats_min")
+        seats_max_raw = payload.get("seats_max")
+
+        seats_base = int(seats_base_raw) if seats_base_raw is not None else 0
+        seats_pmr = int(seats_pmr_raw) if seats_pmr_raw is not None else 0
+        seats_min = int(seats_min_raw) if seats_min_raw is not None else 0
+        seats_max = int(seats_max_raw) if seats_max_raw is not None else 0
+
+        if seats_base <= 0:
+            seats_base = max(1, seats_min or seats_max or 1)
+        if seats_pmr < 0:
+            seats_pmr = 0
+        if seats_min <= 0:
+            seats_min = seats_base
+        if seats_max <= 0:
+            seats_max = seats_base + seats_pmr
+        if seats_min > seats_max:
+            seats_max = seats_min
+        return {
+            "seats_base": seats_base,
+            "seats_pmr": seats_pmr,
+            "seats_min": seats_min,
+            "seats_max": seats_max,
+        }
+
+    @staticmethod
     def _sort_key(vehicle: Dict[str, Any]) -> tuple:
         code = str(vehicle.get("vehicle_code", "") or "")
         numeric = "".join(ch for ch in code if ch.isdigit())
@@ -158,6 +187,7 @@ class FleetRegistry:
             vehicles = data.get("vehicles", [])
             self._validate_unique_constraints(vehicles, payload)
             now = datetime.utcnow().isoformat()
+            seats = self._derive_seat_fields(payload)
             vehicle = {
                 "id": str(uuid4()),
                 "company_id": str(payload.get("company_id", "") or "company_main").strip() or "company_main",
@@ -166,8 +196,10 @@ class FleetRegistry:
                 "brand": str(payload.get("brand", "") or "").strip() or None,
                 "model": str(payload.get("model", "") or "").strip() or None,
                 "year": payload.get("year"),
-                "seats_min": int(payload.get("seats_min") or 0),
-                "seats_max": int(payload.get("seats_max") or 0),
+                "seats_base": int(seats["seats_base"]),
+                "seats_pmr": int(seats["seats_pmr"]),
+                "seats_min": int(seats["seats_min"]),
+                "seats_max": int(seats["seats_max"]),
                 "status": str(payload.get("status", "active") or "active"),
                 "fuel_type": str(payload.get("fuel_type", "") or "").strip() or None,
                 "accessibility": bool(payload.get("accessibility", False)),
@@ -200,6 +232,7 @@ class FleetRegistry:
             existing = vehicles[idx]
             self._validate_unique_constraints(vehicles, payload, exclude_id=str(vehicle_id))
             now = datetime.utcnow().isoformat()
+            seats = self._derive_seat_fields(payload)
             updated = {
                 "id": str(existing.get("id", vehicle_id)),
                 "company_id": str(payload.get("company_id", existing.get("company_id", "company_main")) or "company_main").strip() or "company_main",
@@ -208,8 +241,10 @@ class FleetRegistry:
                 "brand": str(payload.get("brand", "") or "").strip() or None,
                 "model": str(payload.get("model", "") or "").strip() or None,
                 "year": payload.get("year"),
-                "seats_min": int(payload.get("seats_min") or 0),
-                "seats_max": int(payload.get("seats_max") or 0),
+                "seats_base": int(seats["seats_base"]),
+                "seats_pmr": int(seats["seats_pmr"]),
+                "seats_min": int(seats["seats_min"]),
+                "seats_max": int(seats["seats_max"]),
                 "status": str(payload.get("status", "active") or "active"),
                 "fuel_type": str(payload.get("fuel_type", "") or "").strip() or None,
                 "accessibility": bool(payload.get("accessibility", False)),

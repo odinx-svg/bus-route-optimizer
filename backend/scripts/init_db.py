@@ -40,6 +40,8 @@ from services.fleet_repository import FleetRepository  # noqa: E402
 
 REQUIRED_TABLES: List[str] = [
     "companies",
+    "utes",
+    "ute_members",
     "fleet_vehicles",
     "fleet_vehicle_documents",
     "published_fleet_assignments",

@@ -234,6 +234,7 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
   const color = getBusColor(busId);
   const assignedVehicleCode = bus.assigned_vehicle_code || '';
   const assignedVehiclePlate = bus.assigned_vehicle_plate || '';
+  const assignedCompanyName = String(bus.assigned_company_name || '').trim();
   const assignedSeatsMin = Number(bus.assigned_vehicle_seats_min || 0);
   const assignedSeatsMax = Number(bus.assigned_vehicle_seats_max || 0);
   const assignmentType = String(
@@ -282,6 +283,11 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
               {hasAssignedVehicle && (
                 <p className="text-[9px] text-gt-text-muted mt-0.5 truncate">
                   Plan: {busId}{assignedVehiclePlate ? ` · ${assignedVehiclePlate}` : ''}
+                </p>
+              )}
+              {hasAssignedVehicle && assignedCompanyName && (
+                <p className="text-[9px] text-cyan-300/80 mt-0.5 truncate">
+                  Empresa: {assignedCompanyName}
                 </p>
               )}
             </div>
@@ -517,3 +523,5 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
 };
 
 export default BusListPanel;
+
+

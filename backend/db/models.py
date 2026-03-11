@@ -137,6 +137,16 @@ class CompanyModel(Base):
         back_populates="company",
         cascade="all, delete-orphan",
     )
+    owned_utes = relationship(
+        "UTEModel",
+        back_populates="owner_company",
+        cascade="all, delete-orphan",
+    )
+    ute_memberships = relationship(
+        "UTEMemberModel",
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
     workspaces = relationship(
         "OptimizationWorkspaceModel",
         back_populates="company",
@@ -161,6 +171,8 @@ class FleetVehicleModel(Base):
     brand = Column(String(80), nullable=True)
     model = Column(String(80), nullable=True)
     year = Column(Integer, nullable=True)
+    seats_base = Column(Integer, nullable=True)
+    seats_pmr = Column(Integer, nullable=True, default=0)
     seats_min = Column(Integer, nullable=False, default=1)
     seats_max = Column(Integer, nullable=False, default=1)
     status = Column(String(32), nullable=False, default="active")
@@ -184,6 +196,52 @@ class FleetVehicleModel(Base):
 
     def __repr__(self):
         return f"<FleetVehicleModel(id='{self.id}', code='{self.vehicle_code}', plate='{self.plate}')>"
+
+
+class UTEModel(Base):
+    """UTE (Union Temporal de Empresas) grouping companies for joint fleet scope."""
+    __tablename__ = "utes"
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_ute_name"),
+    )
+
+    id = Column(String(64), primary_key=True)
+    name = Column(String(120), nullable=False)
+    owner_company_id = Column(String(64), ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False, index=True)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    owner_company = relationship("CompanyModel", back_populates="owned_utes")
+    members = relationship(
+        "UTEMemberModel",
+        back_populates="ute",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self):
+        return f"<UTEModel(id='{self.id}', name='{self.name}', owner='{self.owner_company_id}')>"
+
+
+class UTEMemberModel(Base):
+    """Company membership in a UTE."""
+    __tablename__ = "ute_members"
+    __table_args__ = (
+        UniqueConstraint("ute_id", "company_id", name="uq_ute_member"),
+    )
+
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    ute_id = Column(String(64), ForeignKey("utes.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_id = Column(String(64), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(32), nullable=False, default="partner")  # owner|partner
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    ute = relationship("UTEModel", back_populates="members")
+    company = relationship("CompanyModel", back_populates="ute_memberships")
+
+    def __repr__(self):
+        return f"<UTEMemberModel(ute='{self.ute_id}', company='{self.company_id}', role='{self.role}')>"
 
 
 class FleetVehicleDocumentModel(Base):

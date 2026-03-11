@@ -304,6 +304,8 @@ class WorkspaceOptimizationOptions(BaseModel):
     load_balance_hard_spread_limit: int = Field(default=2, ge=1, le=12)
     load_balance_target_band: int = Field(default=1, ge=0, le=6)
     route_load_constraints: List[RouteLoadConstraint] = Field(default_factory=list)
+    fleet_scope_mode: str = Field(default="company")
+    fleet_scope_ute_id: Optional[str] = None
 
 
 class WorkspaceVersionCreate(BaseModel):
@@ -320,6 +322,10 @@ class WorkspaceVersionCreate(BaseModel):
 
 class FleetPublicationSummary(BaseModel):
     company_id: Optional[str] = None
+    scope_mode: Optional[str] = None
+    scope_company_ids: List[str] = Field(default_factory=list)
+    ute_id: Optional[str] = None
+    ute_name: Optional[str] = None
     real_assigned: int = 0
     virtual_created: int = 0
     conflicts: List[Dict[str, Any]] = Field(default_factory=list)

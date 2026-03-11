@@ -6,6 +6,8 @@ import {
   createFleetVehicle,
   updateFleetVehicle,
   deleteFleetVehicle,
+  previewFleetImport,
+  commitFleetImport,
 } from '../services/fleetService';
 
 const EMPTY_FORM = {
@@ -86,6 +88,13 @@ export default function FleetPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreviewData, setImportPreviewData] = useState(null);
+  const [importSummary, setImportSummary] = useState(null);
+  const [primarySheetName, setPrimarySheetName] = useState('');
+  const [uteName, setUteName] = useState('');
+  const [previewingImport, setPreviewingImport] = useState(false);
+  const [committingImport, setCommittingImport] = useState(false);
 
   const loadFleet = async () => {
     setLoading(true);
@@ -107,6 +116,71 @@ export default function FleetPage() {
     loadFleet();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const resetImportWorkflow = () => {
+    setImportPreviewData(null);
+    setImportSummary(null);
+    setPrimarySheetName('');
+    setUteName('');
+  };
+
+  const handlePreviewImport = async () => {
+    if (!importFile) {
+      notifications.warning('Archivo requerido', 'Selecciona un Excel para analizar');
+      return;
+    }
+    setPreviewingImport(true);
+    try {
+      const preview = await previewFleetImport(importFile);
+      setImportPreviewData(preview || null);
+      setImportSummary(null);
+      const sheets = Array.isArray(preview?.sheets) ? preview.sheets : [];
+      const firstValidSheet = (
+        sheets.find((sheet) => sheet?.header_detected)?.sheet_name
+        || preview?.sheet_names?.[0]
+        || ''
+      );
+      setPrimarySheetName(String(firstValidSheet || ''));
+      const defaultUteName = String(firstValidSheet || '').trim()
+        ? `UTE ${String(firstValidSheet).trim()}`
+        : '';
+      setUteName(defaultUteName);
+      notifications.success('Preview generado', `${sheets.length || 0} hojas analizadas`);
+    } catch (error) {
+      notifications.error('No se pudo analizar el Excel', error.message);
+    } finally {
+      setPreviewingImport(false);
+    }
+  };
+
+  const handleCommitImport = async () => {
+    if (!importFile) {
+      notifications.warning('Archivo requerido', 'Selecciona un Excel para importar');
+      return;
+    }
+    if (!primarySheetName) {
+      notifications.warning('Empresa principal', 'Selecciona la hoja principal antes de confirmar');
+      return;
+    }
+    setCommittingImport(true);
+    try {
+      const result = await commitFleetImport({
+        file: importFile,
+        primarySheetName,
+        uteName,
+      });
+      setImportSummary(result || null);
+      notifications.success(
+        'Importacion completada',
+        `${result?.total_created || 0} creados, ${result?.total_updated || 0} actualizados`
+      );
+      await loadFleet();
+    } catch (error) {
+      notifications.error('No se pudo confirmar la importacion', error.message);
+    } finally {
+      setCommittingImport(false);
+    }
+  };
 
   const filteredVehicles = useMemo(() => {
     const sorted = [...vehicles];
@@ -251,6 +325,109 @@ export default function FleetPage() {
               <Plus size={12} />
               Nuevo
             </button>
+          </div>
+          <div className="rounded-[12px] border border-white/[0.1] bg-white/[0.02] p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-cyan-300">Importar Excel Flota</p>
+              {(importPreviewData || importSummary || importFile) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportFile(null);
+                    resetImportWorkflow();
+                  }}
+                  className="text-[10px] text-slate-400 hover:text-slate-200"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+            <input
+              type="file"
+              accept=".xlsx,.xlsm,.xls"
+              onChange={(event) => {
+                const file = event.target.files?.[0] || null;
+                setImportFile(file);
+                resetImportWorkflow();
+              }}
+              className="w-full text-[10px] text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-cyan-500/20 file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-cyan-200"
+            />
+            <button
+              type="button"
+              disabled={!importFile || previewingImport}
+              onClick={handlePreviewImport}
+              className="w-full px-2 py-1.5 rounded-md text-[10px] border border-cyan-500/35 text-cyan-200 hover:bg-cyan-500/[0.12] disabled:opacity-50"
+            >
+              {previewingImport ? 'Analizando...' : '1) Preview Excel'}
+            </button>
+
+            {importPreviewData && (
+              <div className="space-y-2 rounded-[10px] border border-white/[0.08] bg-[#0f1723] p-2">
+                <label className="block">
+                  <span className="text-[10px] text-slate-400">Empresa principal (hoja)</span>
+                  <select
+                    value={primarySheetName}
+                    onChange={(event) => setPrimarySheetName(event.target.value)}
+                    className="mt-1 w-full rounded-md border border-white/[0.14] bg-[#0b1320] px-2 py-1 text-[11px]"
+                  >
+                    {(importPreviewData.sheet_names || []).map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-slate-400">Nombre UTE (opcional)</span>
+                  <input
+                    value={uteName}
+                    onChange={(event) => setUteName(event.target.value)}
+                    placeholder="UTE Operativa"
+                    className="mt-1 w-full rounded-md border border-white/[0.14] bg-[#0b1320] px-2 py-1 text-[11px]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={!primarySheetName || committingImport}
+                  onClick={handleCommitImport}
+                  className="w-full px-2 py-1.5 rounded-md text-[10px] border border-emerald-500/35 text-emerald-200 hover:bg-emerald-500/[0.12] disabled:opacity-50"
+                >
+                  {committingImport ? 'Importando...' : '2) Confirmar Importacion'}
+                </button>
+                <div className="text-[10px] text-slate-400 space-y-1">
+                  <p>Hojas: {importPreviewData.sheet_names?.length || 0}</p>
+                  <p>Advertencias: {importPreviewData.warnings?.length || 0}</p>
+                </div>
+                <div className="max-h-[120px] overflow-y-auto space-y-1">
+                  {(importPreviewData.sheets || []).map((sheet) => (
+                    <div key={sheet.sheet_name} className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-slate-300">
+                      <p className="font-semibold">{sheet.sheet_name}</p>
+                      <p>
+                        Validas {sheet.valid_rows || 0} | Invalidas {sheet.invalid_rows || 0}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {importSummary && (
+              <div className="rounded-[10px] border border-emerald-500/30 bg-emerald-500/[0.08] p-2 text-[10px] text-emerald-100 space-y-1">
+                <p>Principal: {importSummary.primary_company_id}</p>
+                <p>UTE: {importSummary.ute_name} ({importSummary.ute_id})</p>
+                <p>
+                  Creados {importSummary.total_created || 0} | Actualizados {importSummary.total_updated || 0} | Invalidos {importSummary.total_invalid || 0}
+                </p>
+                <div className="max-h-[120px] overflow-y-auto space-y-1">
+                  {(importSummary.summary_by_company || []).map((row) => (
+                    <div key={row.company_id} className="rounded-md border border-emerald-500/30 bg-black/20 px-2 py-1">
+                      <p className="font-semibold">{row.company_name || row.company_id}</p>
+                      <p>
+                        Creados {row.created || 0} | Actualizados {row.updated || 0} | Invalidos {row.invalid || 0}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <input
             value={query}

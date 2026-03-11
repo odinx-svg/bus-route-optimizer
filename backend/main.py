@@ -197,6 +197,11 @@ except ImportError:
         sanitize_workspace_optimization_options,
     )
 
+try:
+    from services.fleet_scope import resolve_workspace_fleet_scope
+except ImportError:
+    from backend.services.fleet_scope import resolve_workspace_fleet_scope
+
 logger = logging.getLogger(__name__)
 LOCAL_PIPELINE_TASKS: Dict[str, asyncio.Task] = {}
 _LAST_RUNTIME_SNAPSHOT_PERSISTED_AT: Dict[str, datetime] = {}
@@ -1469,6 +1474,10 @@ class PipelineConfigPayload(BaseModel):
     load_balance_hard_spread_limit: int = 2
     load_balance_target_band: int = 1
     route_load_constraints: List[Dict[str, Any]] = Field(default_factory=list)
+    fleet_scope_mode: str = "company"
+    fleet_scope_ute_id: Optional[str] = None
+    fleet_scope_company_ids: List[str] = Field(default_factory=list)
+    fleet_primary_company_id: Optional[str] = None
 
 
 class PipelineOptimizationRequest(BaseModel):
@@ -1948,6 +1957,7 @@ async def optimize_pipeline_for_workspace(
     payload = request.model_dump()
     incoming_config = payload.get("config") if isinstance(payload.get("config"), dict) else {}
     stored_config: Dict[str, Any] = {}
+    scope_payload: Dict[str, Any] = {}
 
     if is_database_available() and SessionLocal is not None:
         db = SessionLocal()
@@ -1957,6 +1967,7 @@ async def optimize_pipeline_for_workspace(
             if workspace is None:
                 raise HTTPException(status_code=404, detail="Workspace not found")
             stored_config = load_workspace_optimization_options(db, workspace_id)
+            scope_payload = resolve_workspace_fleet_scope(db, workspace, stored_config)
         finally:
             db.close()
 
@@ -1973,9 +1984,16 @@ async def optimize_pipeline_for_workspace(
                 "load_balance_hard_spread_limit": merged_config.get("load_balance_hard_spread_limit"),
                 "load_balance_target_band": merged_config.get("load_balance_target_band"),
                 "route_load_constraints": merged_config.get("route_load_constraints"),
+                "fleet_scope_mode": merged_config.get("fleet_scope_mode"),
+                "fleet_scope_ute_id": merged_config.get("fleet_scope_ute_id"),
             }
         )
     )
+    if scope_payload:
+        merged_config["fleet_scope_mode"] = str(scope_payload.get("scope_mode", "company"))
+        merged_config["fleet_scope_ute_id"] = scope_payload.get("ute_id")
+        merged_config["fleet_scope_company_ids"] = list(scope_payload.get("scope_company_ids") or [])
+        merged_config["fleet_primary_company_id"] = scope_payload.get("primary_company_id")
 
     payload["config"] = PipelineConfigPayload(**merged_config).model_dump()
     payload["workspace_id"] = workspace_id

@@ -69,6 +69,10 @@ class PipelineConfig:
     load_balance_hard_spread_limit: int = 2
     load_balance_target_band: int = 1
     route_load_constraints: List[Dict[str, Any]] = field(default_factory=list)
+    fleet_scope_mode: str = "company"
+    fleet_scope_ute_id: Optional[str] = None
+    fleet_scope_company_ids: List[str] = field(default_factory=list)
+    fleet_primary_company_id: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> "PipelineConfig":
@@ -87,6 +91,14 @@ class PipelineConfig:
             load_balance_hard_spread_limit=max(1, int(data.get("load_balance_hard_spread_limit", 2))),
             load_balance_target_band=max(0, int(data.get("load_balance_target_band", 1))),
             route_load_constraints=normalized_constraints,
+            fleet_scope_mode=str(data.get("fleet_scope_mode", "company") or "company"),
+            fleet_scope_ute_id=str(data.get("fleet_scope_ute_id", "") or "").strip() or None,
+            fleet_scope_company_ids=[
+                str(item).strip()
+                for item in (data.get("fleet_scope_company_ids") or [])
+                if str(item).strip()
+            ],
+            fleet_primary_company_id=str(data.get("fleet_primary_company_id", "") or "").strip() or None,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -101,6 +113,10 @@ class PipelineConfig:
             "load_balance_hard_spread_limit": self.load_balance_hard_spread_limit,
             "load_balance_target_band": self.load_balance_target_band,
             "route_load_constraints": list(self.route_load_constraints or []),
+            "fleet_scope_mode": self.fleet_scope_mode,
+            "fleet_scope_ute_id": self.fleet_scope_ute_id,
+            "fleet_scope_company_ids": list(self.fleet_scope_company_ids or []),
+            "fleet_primary_company_id": self.fleet_primary_company_id,
         }
 
 
@@ -967,8 +983,16 @@ async def run_optimization_pipeline_by_day(
             "days": {},
         }
         try:
+            scope_company_ids = [
+                str(cid).strip()
+                for cid in (config.fleet_scope_company_ids or [])
+                if str(cid).strip()
+            ]
+            primary_company_id = str(config.fleet_primary_company_id or "").strip() or None
             assigned_raw_by_day, fleet_assignment_summary = assign_fleet_profiles_to_schedule_by_day(
                 candidate.get("schedule_by_day_raw", {}),
+                company_id=primary_company_id,
+                company_ids=scope_company_ids or None,
                 binding_state="preview",
             )
             assigned_schedule_by_day = _serialize_schedule_by_day(assigned_raw_by_day)
@@ -979,6 +1003,13 @@ async def run_optimization_pipeline_by_day(
         summary_metrics["fleet_assigned"] = int(fleet_assignment_summary.get("total_assigned", 0))
         summary_metrics["fleet_virtual_buses"] = int(fleet_assignment_summary.get("total_virtual_buses", 0))
         summary_metrics["fleet_binding_state"] = "preview"
+        summary_metrics["fleet_scope_mode"] = str(config.fleet_scope_mode or "company")
+        summary_metrics["fleet_scope_ute_id"] = str(config.fleet_scope_ute_id or "") or None
+        summary_metrics["fleet_scope_company_ids"] = [
+            str(cid).strip()
+            for cid in (config.fleet_scope_company_ids or [])
+            if str(cid).strip()
+        ]
         add_history(
             "completed",
             100,

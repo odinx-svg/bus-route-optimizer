@@ -71,11 +71,21 @@ def _normalize_vehicle(vehicle: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
     seats_min = _safe_int(vehicle.get("seats_min"), 1)
     seats_min = max(1, min(seats_min, seats_max))
+    seats_base = _safe_int(vehicle.get("seats_base"), seats_min)
+    if seats_base <= 0:
+        seats_base = seats_min
+    seats_pmr = _safe_int(vehicle.get("seats_pmr"), max(0, seats_max - seats_base))
+    if seats_pmr < 0:
+        seats_pmr = 0
     return {
         "id": str(vehicle.get("id", "") or ""),
         "vehicle_code": str(vehicle.get("vehicle_code", "") or "").strip(),
         "plate": str(vehicle.get("plate", "") or "").strip(),
         "status": str(vehicle.get("status", "active") or "active").strip().lower(),
+        "company_id": str(vehicle.get("company_id", "") or "").strip() or None,
+        "company_name": str(vehicle.get("company_name", "") or "").strip() or None,
+        "seats_base": seats_base,
+        "seats_pmr": seats_pmr,
         "seats_min": seats_min,
         "seats_max": seats_max,
     }
@@ -95,10 +105,13 @@ def _fleet_score_for_requirement(vehicle: Dict[str, Any], required: int) -> Tupl
     return (small_service_penalty + under_min_penalty + overflow, seats_max, seats_min)
 
 
-def load_active_fleet_profiles(company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def load_active_fleet_profiles(
+    company_id: Optional[str] = None,
+    company_ids: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
     repository = FleetRepository()
     profiles: List[Dict[str, Any]] = []
-    for raw in repository.list_active_profiles(company_id=company_id):
+    for raw in repository.list_active_profiles(company_id=company_id, company_ids=company_ids):
         normalized = _normalize_vehicle(raw)
         if not normalized:
             continue
@@ -111,6 +124,7 @@ def assign_fleet_profiles_to_schedule(
     schedule: List[BusSchedule],
     fleet_profiles: Optional[List[Dict[str, Any]]] = None,
     company_id: Optional[str] = None,
+    company_ids: Optional[List[str]] = None,
     binding_state: str = "preview",
 ) -> Tuple[List[BusSchedule], Dict[str, Any]]:
     """
@@ -128,7 +142,11 @@ def assign_fleet_profiles_to_schedule(
             "unmatched_bus_ids": [],
         }
 
-    fleet = list(fleet_profiles) if fleet_profiles is not None else load_active_fleet_profiles(company_id=company_id)
+    fleet = (
+        list(fleet_profiles)
+        if fleet_profiles is not None
+        else load_active_fleet_profiles(company_id=company_id, company_ids=company_ids)
+    )
     normalized_fleet: List[Dict[str, Any]] = []
     for raw in fleet:
         normalized = _normalize_vehicle(raw)
@@ -169,6 +187,10 @@ def assign_fleet_profiles_to_schedule(
             bus.assigned_vehicle_id = str(chosen["id"] or "")
             bus.assigned_vehicle_code = str(chosen["vehicle_code"] or "") or None
             bus.assigned_vehicle_plate = str(chosen["plate"] or "") or None
+            bus.assigned_company_id = str(chosen.get("company_id") or "") or None
+            bus.assigned_company_name = str(chosen.get("company_name") or "") or None
+            bus.assigned_vehicle_seats_base = int(chosen.get("seats_base") or chosen["seats_min"])
+            bus.assigned_vehicle_seats_pmr = int(chosen.get("seats_pmr") or 0)
             bus.assigned_vehicle_seats_min = int(chosen["seats_min"])
             bus.assigned_vehicle_seats_max = int(chosen["seats_max"])
             assigned_count += 1
@@ -180,6 +202,10 @@ def assign_fleet_profiles_to_schedule(
             bus.assigned_vehicle_id = f"virtual:{str(bus.bus_id)}"
             bus.assigned_vehicle_code = virtual_label
             bus.assigned_vehicle_plate = None
+            bus.assigned_company_id = None
+            bus.assigned_company_name = None
+            bus.assigned_vehicle_seats_base = None
+            bus.assigned_vehicle_seats_pmr = None
             bus.assigned_vehicle_seats_min = None
             bus.assigned_vehicle_seats_max = None
             unmatched.append(str(bus.bus_id))
@@ -197,9 +223,14 @@ def assign_fleet_profiles_to_schedule_by_day(
     schedule_by_day: Dict[str, List[BusSchedule]],
     fleet_profiles: Optional[List[Dict[str, Any]]] = None,
     company_id: Optional[str] = None,
+    company_ids: Optional[List[str]] = None,
     binding_state: str = "preview",
 ) -> Tuple[Dict[str, List[BusSchedule]], Dict[str, Any]]:
-    fleet = list(fleet_profiles) if fleet_profiles is not None else load_active_fleet_profiles(company_id=company_id)
+    fleet = (
+        list(fleet_profiles)
+        if fleet_profiles is not None
+        else load_active_fleet_profiles(company_id=company_id, company_ids=company_ids)
+    )
     assigned_by_day: Dict[str, List[BusSchedule]] = {}
     summary_by_day: Dict[str, Any] = {}
     total_assigned = 0
@@ -209,6 +240,7 @@ def assign_fleet_profiles_to_schedule_by_day(
             day_schedule,
             fleet_profiles=fleet,
             company_id=company_id,
+            company_ids=company_ids,
             binding_state=binding_state,
         )
         assigned_by_day[day] = assigned_schedule

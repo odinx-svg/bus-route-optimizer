@@ -5,7 +5,7 @@ Fleet repository with DB-first persistence and JSON fallback.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 from uuid import uuid4
 
 from db import crud as db_crud
@@ -24,6 +24,46 @@ class FleetRepository:
     def _normalize_company_id(value: Optional[str]) -> Optional[str]:
         normalized = str(value or "").strip()
         return normalized or None
+
+    @classmethod
+    def _normalize_company_ids(cls, values: Optional[Iterable[str]]) -> List[str]:
+        if values is None:
+            return []
+        normalized: List[str] = []
+        for value in values:
+            item = cls._normalize_company_id(value)
+            if item and item not in normalized:
+                normalized.append(item)
+        return normalized
+
+    @staticmethod
+    def _derive_seat_fields(payload: Dict[str, Any]) -> Dict[str, int]:
+        seats_base_raw = payload.get("seats_base")
+        seats_pmr_raw = payload.get("seats_pmr")
+        seats_min_raw = payload.get("seats_min")
+        seats_max_raw = payload.get("seats_max")
+
+        seats_base = int(seats_base_raw) if seats_base_raw is not None else 0
+        seats_pmr = int(seats_pmr_raw) if seats_pmr_raw is not None else 0
+        seats_min = int(seats_min_raw) if seats_min_raw is not None else 0
+        seats_max = int(seats_max_raw) if seats_max_raw is not None else 0
+
+        if seats_base <= 0:
+            seats_base = max(1, seats_min or seats_max or 1)
+        if seats_pmr < 0:
+            seats_pmr = 0
+        if seats_max <= 0:
+            seats_max = max(1, seats_base + seats_pmr)
+        if seats_min <= 0:
+            seats_min = max(1, seats_base)
+        if seats_min > seats_max:
+            seats_max = seats_min
+        return {
+            "seats_base": seats_base,
+            "seats_pmr": seats_pmr,
+            "seats_min": seats_min,
+            "seats_max": seats_max,
+        }
 
     @staticmethod
     def _normalize_documents(documents: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -69,6 +109,11 @@ class FleetRepository:
         normalized = dict(vehicle or {})
         company_id = str(normalized.get("company_id", "") or db_crud.DEFAULT_COMPANY_ID).strip() or db_crud.DEFAULT_COMPANY_ID
         normalized["company_id"] = company_id
+        seat_fields = FleetRepository._derive_seat_fields(normalized)
+        normalized["seats_base"] = int(seat_fields["seats_base"])
+        normalized["seats_pmr"] = int(seat_fields["seats_pmr"])
+        normalized["seats_min"] = int(seat_fields["seats_min"])
+        normalized["seats_max"] = int(seat_fields["seats_max"])
         last_seen = normalized.get("gps_last_seen_at")
         if isinstance(last_seen, datetime):
             normalized["gps_last_seen_at"] = last_seen.isoformat()
@@ -94,11 +139,14 @@ class FleetRepository:
         return {
             "id": str(model.id),
             "company_id": str(model.company_id),
+            "company_name": str(model.company.name or "") if model.company else None,
             "vehicle_code": str(model.vehicle_code or ""),
             "plate": str(model.plate or ""),
             "brand": model.brand,
             "model": model.model,
             "year": model.year,
+            "seats_base": int(model.seats_base or model.seats_min or 0),
+            "seats_pmr": int(model.seats_pmr or 0),
             "seats_min": int(model.seats_min or 0),
             "seats_max": int(model.seats_max or 0),
             "status": str(model.status or "active"),
@@ -145,21 +193,39 @@ class FleetRepository:
     def _db_available(self) -> bool:
         return bool(is_database_available() and SessionLocal is not None)
 
-    def list_vehicles(self, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_vehicles(
+        self,
+        company_id: Optional[str] = None,
+        company_ids: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        normalized_company_ids = self._normalize_company_ids(company_ids)
+        if company_id:
+            company_single = self._normalize_company_id(company_id)
+            if company_single and company_single not in normalized_company_ids:
+                normalized_company_ids.append(company_single)
+
         if not self._db_available():
             legacy = [self._normalize_legacy_vehicle(v) for v in self.registry.list_vehicles()]
-            if company_id:
-                company_norm = self._normalize_company_id(company_id)
-                if company_norm:
-                    legacy = [v for v in legacy if str(v.get("company_id", "") or "") == str(company_norm)]
+            if normalized_company_ids:
+                legacy = [
+                    v for v in legacy
+                    if str(v.get("company_id", "") or "") in normalized_company_ids
+                ]
             return legacy
 
         db = SessionLocal()
         try:
-            resolved_company = self._resolve_company_id(db, company_id)
-            rows = db.query(db_models.FleetVehicleModel).filter(
-                db_models.FleetVehicleModel.company_id == resolved_company
-            ).order_by(db_models.FleetVehicleModel.vehicle_code.asc()).all()
+            query = db.query(db_models.FleetVehicleModel)
+            if normalized_company_ids:
+                query = query.filter(db_models.FleetVehicleModel.company_id.in_(normalized_company_ids))
+            else:
+                resolved_company = self._resolve_company_id(db, company_id)
+                query = query.filter(db_models.FleetVehicleModel.company_id == resolved_company)
+
+            rows = query.order_by(
+                db_models.FleetVehicleModel.company_id.asc(),
+                db_models.FleetVehicleModel.vehicle_code.asc(),
+            ).all()
             return [self._vehicle_to_dict(row) for row in rows]
         finally:
             db.close()
@@ -198,6 +264,7 @@ class FleetRepository:
             resolved_company = self._resolve_company_id(db, company_id or payload.get("company_id"))
             self._validate_unique(db, company_id=resolved_company, payload=payload)
             now = datetime.utcnow()
+            seat_fields = self._derive_seat_fields(payload)
             row = db_models.FleetVehicleModel(
                 id=str(uuid4()),
                 company_id=resolved_company,
@@ -206,8 +273,10 @@ class FleetRepository:
                 brand=str(payload.get("brand", "") or "").strip() or None,
                 model=str(payload.get("model", "") or "").strip() or None,
                 year=payload.get("year"),
-                seats_min=max(1, int(payload.get("seats_min") or 0)),
-                seats_max=max(1, int(payload.get("seats_max") or 0)),
+                seats_base=int(seat_fields["seats_base"]),
+                seats_pmr=int(seat_fields["seats_pmr"]),
+                seats_min=int(seat_fields["seats_min"]),
+                seats_max=int(seat_fields["seats_max"]),
                 status=str(payload.get("status", "active") or "active"),
                 fuel_type=str(payload.get("fuel_type", "") or "").strip() or None,
                 accessibility=bool(payload.get("accessibility", False)),
@@ -261,14 +330,17 @@ class FleetRepository:
             self._validate_unique(db, company_id=resolved_company, payload=payload, exclude_id=str(vehicle_id))
 
             now = datetime.utcnow()
+            seat_fields = self._derive_seat_fields(payload)
             row.company_id = resolved_company
             row.vehicle_code = str(payload.get("vehicle_code", "") or "").strip()
             row.plate = str(payload.get("plate", "") or "").strip()
             row.brand = str(payload.get("brand", "") or "").strip() or None
             row.model = str(payload.get("model", "") or "").strip() or None
             row.year = payload.get("year")
-            row.seats_min = max(1, int(payload.get("seats_min") or 0))
-            row.seats_max = max(1, int(payload.get("seats_max") or 0))
+            row.seats_base = int(seat_fields["seats_base"])
+            row.seats_pmr = int(seat_fields["seats_pmr"])
+            row.seats_min = int(seat_fields["seats_min"])
+            row.seats_max = int(seat_fields["seats_max"])
             row.status = str(payload.get("status", "active") or "active")
             row.fuel_type = str(payload.get("fuel_type", "") or "").strip() or None
             row.accessibility = bool(payload.get("accessibility", False))
@@ -328,8 +400,12 @@ class FleetRepository:
         finally:
             db.close()
 
-    def list_active_profiles(self, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        rows = self.list_vehicles(company_id=company_id)
+    def list_active_profiles(
+        self,
+        company_id: Optional[str] = None,
+        company_ids: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        rows = self.list_vehicles(company_id=company_id, company_ids=company_ids)
         active = [row for row in rows if str(row.get("status", "active") or "").lower() == "active"]
         active.sort(
             key=lambda row: (

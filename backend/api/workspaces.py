@@ -23,6 +23,7 @@ from services.fleet_publication import (
     preview_workspace_publication,
     persist_publication_assignments,
 )
+from services.fleet_scope import resolve_workspace_fleet_scope
 from services.workspace_options import (
     DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS,
     get_workspace_optimization_options,
@@ -51,6 +52,14 @@ def _to_version_response(version: Optional[OptimizationWorkspaceVersionModel]) -
     if isinstance(fleet_snapshot, dict):
         publication = schemas.FleetPublicationSummary(
             company_id=fleet_snapshot.get("company_id"),
+            scope_mode=fleet_snapshot.get("scope_mode"),
+            scope_company_ids=(
+                fleet_snapshot.get("scope_company_ids", [])
+                if isinstance(fleet_snapshot.get("scope_company_ids"), list)
+                else []
+            ),
+            ute_id=fleet_snapshot.get("ute_id"),
+            ute_name=fleet_snapshot.get("ute_name"),
             real_assigned=int(fleet_snapshot.get("real_assigned", 0) or 0),
             virtual_created=int(fleet_snapshot.get("virtual_created", 0) or 0),
             conflicts=fleet_snapshot.get("conflicts", []) if isinstance(fleet_snapshot.get("conflicts"), list) else [],
@@ -403,10 +412,16 @@ async def get_workspace_fleet_preview(
         if working_version is None:
             raise HTTPException(status_code=409, detail="Workspace has no version to preview")
         schedule_by_day = db_crud.normalize_schedule_by_day(working_version.schedule_by_day or {})
-        company_id = _workspace_company_id(db, workspace)
+        scope = resolve_workspace_fleet_scope(db, workspace)
+        company_id = str(scope.get("primary_company_id") or _workspace_company_id(db, workspace))
+        scope_company_ids = [
+            str(cid) for cid in (scope.get("scope_company_ids") or [])
+            if str(cid).strip()
+        ]
         preview = preview_workspace_publication(
             db,
             company_id=company_id,
+            scope_company_ids=scope_company_ids,
             schedule_by_day=schedule_by_day,
             exclude_workspace_id=str(workspace.id),
         )
@@ -414,6 +429,10 @@ async def get_workspace_fleet_preview(
             return {
                 "workspace_id": workspace_id,
                 "company_id": company_id,
+                "scope_mode": scope.get("scope_mode"),
+                "scope_company_ids": scope_company_ids,
+                "ute_id": scope.get("ute_id"),
+                "ute_name": scope.get("ute_name"),
                 "day": day,
                 "blocked": bool(preview.get("blocked", False)),
                 "conflicts": [c for c in preview.get("conflicts", []) if c.get("day") == day],
@@ -425,6 +444,10 @@ async def get_workspace_fleet_preview(
         return {
             "workspace_id": workspace_id,
             "company_id": company_id,
+            "scope_mode": scope.get("scope_mode"),
+            "scope_company_ids": scope_company_ids,
+            "ute_id": scope.get("ute_id"),
+            "ute_name": scope.get("ute_name"),
             "blocked": bool(preview.get("blocked", False)),
             "conflicts": preview.get("conflicts", []),
             "real_assigned": int(preview.get("real_assigned", 0)),
@@ -455,12 +478,18 @@ async def publish_workspace(
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
 
-        company_id = _workspace_company_id(db, workspace)
+        scope = resolve_workspace_fleet_scope(db, workspace)
+        company_id = str(scope.get("primary_company_id") or _workspace_company_id(db, workspace))
+        scope_company_ids = [
+            str(cid) for cid in (scope.get("scope_company_ids") or [])
+            if str(cid).strip()
+        ]
         publish_payload = _build_publish_payload(workspace, payload)
         normalized_schedule = db_crud.normalize_schedule_by_day(publish_payload.schedule_by_day or {})
         preview = preview_workspace_publication(
             db,
             company_id=company_id,
+            scope_company_ids=scope_company_ids,
             schedule_by_day=normalized_schedule,
             exclude_workspace_id=str(workspace.id),
         )
@@ -471,6 +500,10 @@ async def publish_workspace(
                     "message": "Publicacion bloqueada por conflictos de flota publicados",
                     "fleet_publication": {
                         "company_id": company_id,
+                        "scope_mode": scope.get("scope_mode"),
+                        "scope_company_ids": scope_company_ids,
+                        "ute_id": scope.get("ute_id"),
+                        "ute_name": scope.get("ute_name"),
                         "real_assigned": int(preview.get("real_assigned", 0)),
                         "virtual_created": int(preview.get("virtual_created", 0)),
                         "conflicts": preview.get("conflicts", []),
@@ -482,6 +515,10 @@ async def publish_workspace(
 
         fleet_snapshot = {
             "company_id": company_id,
+            "scope_mode": scope.get("scope_mode"),
+            "scope_company_ids": scope_company_ids,
+            "ute_id": scope.get("ute_id"),
+            "ute_name": scope.get("ute_name"),
             "real_assigned": int(preview.get("real_assigned", 0)),
             "virtual_created": int(preview.get("virtual_created", 0)),
             "conflicts": [],
@@ -596,11 +633,17 @@ async def restore_workspace(workspace_id: str) -> schemas.WorkspaceResponse:
 
         # Re-activate only if no conflict for published version.
         if restored.published_version and isinstance(restored.published_version.schedule_by_day, dict):
-            company_id = _workspace_company_id(db, restored)
+            scope = resolve_workspace_fleet_scope(db, restored)
+            company_id = str(scope.get("primary_company_id") or _workspace_company_id(db, restored))
+            scope_company_ids = [
+                str(cid) for cid in (scope.get("scope_company_ids") or [])
+                if str(cid).strip()
+            ]
             schedule_by_day = db_crud.normalize_schedule_by_day(restored.published_version.schedule_by_day)
             preview = preview_workspace_publication(
                 db,
                 company_id=company_id,
+                scope_company_ids=scope_company_ids,
                 schedule_by_day=schedule_by_day,
                 exclude_workspace_id=str(restored.id),
             )
@@ -612,6 +655,10 @@ async def restore_workspace(workspace_id: str) -> schemas.WorkspaceResponse:
                         "message": "No se puede restaurar: conflictos de flota con optimizaciones publicadas",
                         "fleet_publication": {
                             "company_id": company_id,
+                            "scope_mode": scope.get("scope_mode"),
+                            "scope_company_ids": scope_company_ids,
+                            "ute_id": scope.get("ute_id"),
+                            "ute_name": scope.get("ute_name"),
                             "real_assigned": int(preview.get("real_assigned", 0)),
                             "virtual_created": int(preview.get("virtual_created", 0)),
                             "conflicts": preview.get("conflicts", []),

@@ -8,9 +8,10 @@ Provides functions to create, read, update, and delete:
 """
 
 import logging
+import re
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
@@ -53,6 +54,147 @@ def get_company(db: Session, company_id: str) -> Optional[models.CompanyModel]:
     return db.query(models.CompanyModel).filter(
         models.CompanyModel.id == company_id
     ).first()
+
+
+def list_companies(db: Session, *, active_only: bool = True) -> List[models.CompanyModel]:
+    """
+    List logical companies.
+    """
+    query = db.query(models.CompanyModel)
+    if active_only:
+        # Companies do not have active flag today; keep placeholder for compatibility.
+        query = query.filter(models.CompanyModel.id.isnot(None))
+    return query.order_by(models.CompanyModel.name.asc()).all()
+
+
+def _slugify_company_id(name: str) -> str:
+    raw = str(name or "").strip().lower()
+    normalized = re.sub(r"[^a-z0-9]+", "_", raw).strip("_")
+    return normalized or "company"
+
+
+def ensure_company(db: Session, *, name: str, preferred_id: Optional[str] = None) -> models.CompanyModel:
+    """
+    Ensure a company exists by id/name and return it.
+    """
+    normalized_name = str(name or "").strip()
+    if not normalized_name:
+        normalized_name = "Empresa"
+
+    candidate_id = str(preferred_id or "").strip() or _slugify_company_id(normalized_name)
+    company = get_company(db, candidate_id)
+    if company is not None:
+        if not str(company.name or "").strip():
+            company.name = normalized_name
+            company.updated_at = datetime.utcnow()
+            db.flush()
+        return company
+
+    # Try by case-insensitive name to avoid duplicates with different ids.
+    by_name = db.query(models.CompanyModel).filter(
+        func.lower(models.CompanyModel.name) == normalized_name.lower()
+    ).first()
+    if by_name is not None:
+        return by_name
+
+    unique_id = candidate_id
+    suffix = 2
+    while get_company(db, unique_id) is not None:
+        unique_id = f"{candidate_id}_{suffix}"
+        suffix += 1
+
+    company = models.CompanyModel(
+        id=unique_id,
+        name=normalized_name,
+        is_default=False,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(company)
+    db.flush()
+    return company
+
+
+def get_ute(db: Session, ute_id: str) -> Optional[models.UTEModel]:
+    if not ute_id:
+        return None
+    return db.query(models.UTEModel).options(
+        joinedload(models.UTEModel.members).joinedload(models.UTEMemberModel.company),
+        joinedload(models.UTEModel.owner_company),
+    ).filter(models.UTEModel.id == str(ute_id)).first()
+
+
+def list_utes(db: Session, *, active_only: bool = True) -> List[models.UTEModel]:
+    query = db.query(models.UTEModel).options(
+        joinedload(models.UTEModel.members).joinedload(models.UTEMemberModel.company),
+        joinedload(models.UTEModel.owner_company),
+    )
+    if active_only:
+        query = query.filter(models.UTEModel.active.is_(True))
+    return query.order_by(models.UTEModel.name.asc()).all()
+
+
+def create_or_update_ute(
+    db: Session,
+    *,
+    ute_name: str,
+    owner_company_id: str,
+    member_company_ids: List[str],
+) -> models.UTEModel:
+    """
+    Create or update a UTE by normalized name with explicit membership replacement.
+    """
+    normalized_name = str(ute_name or "").strip() or "UTE"
+    ute_id = _slugify_company_id(normalized_name)
+
+    ute = db.query(models.UTEModel).filter(models.UTEModel.id == ute_id).first()
+    if ute is None:
+        ute = models.UTEModel(
+            id=ute_id,
+            name=normalized_name,
+            owner_company_id=str(owner_company_id),
+            active=True,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(ute)
+        db.flush()
+    else:
+        ute.name = normalized_name
+        ute.owner_company_id = str(owner_company_id)
+        ute.active = True
+        ute.updated_at = datetime.utcnow()
+        db.flush()
+
+    unique_members = []
+    seen = set()
+    for company_id in member_company_ids:
+        normalized = str(company_id or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_members.append(normalized)
+    if str(owner_company_id) not in seen:
+        unique_members.insert(0, str(owner_company_id))
+
+    db.query(models.UTEMemberModel).filter(
+        models.UTEMemberModel.ute_id == str(ute.id)
+    ).delete()
+    now = datetime.utcnow()
+    for company_id in unique_members:
+        role = "owner" if str(company_id) == str(owner_company_id) else "partner"
+        db.add(
+            models.UTEMemberModel(
+                id=str(uuid4()),
+                ute_id=str(ute.id),
+                company_id=str(company_id),
+                role=role,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+    db.flush()
+    return get_ute(db, str(ute.id)) or ute
 
 
 # =============================================================================
