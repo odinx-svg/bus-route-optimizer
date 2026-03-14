@@ -17,6 +17,7 @@ DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS: Dict[str, Any] = {
     "route_load_constraints": [],
     "fleet_scope_mode": "company",  # company|ute
     "fleet_scope_ute_id": None,
+    "virtual_bus_publish_policy": "allow",  # allow|block
 }
 
 
@@ -68,6 +69,12 @@ def sanitize_workspace_optimization_options(raw: Any) -> Dict[str, Any]:
     if fleet_scope_mode not in {"company", "ute"}:
         fleet_scope_mode = "company"
     fleet_scope_ute_id = str(data.get("fleet_scope_ute_id", "") or "").strip() or None
+    virtual_bus_publish_policy = str(
+        data.get("virtual_bus_publish_policy", DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS["virtual_bus_publish_policy"])
+        or DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS["virtual_bus_publish_policy"]
+    ).strip().lower()
+    if virtual_bus_publish_policy not in {"allow", "block"}:
+        virtual_bus_publish_policy = "allow"
 
     return {
         "balance_load": bool(data.get("balance_load", DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS["balance_load"])),
@@ -76,6 +83,7 @@ def sanitize_workspace_optimization_options(raw: Any) -> Dict[str, Any]:
         "route_load_constraints": _normalize_route_load_constraints(data.get("route_load_constraints", [])),
         "fleet_scope_mode": fleet_scope_mode,
         "fleet_scope_ute_id": fleet_scope_ute_id,
+        "virtual_bus_publish_policy": virtual_bus_publish_policy,
     }
 
 

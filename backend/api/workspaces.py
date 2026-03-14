@@ -413,6 +413,10 @@ async def get_workspace_fleet_preview(
             raise HTTPException(status_code=409, detail="Workspace has no version to preview")
         schedule_by_day = db_crud.normalize_schedule_by_day(working_version.schedule_by_day or {})
         scope = resolve_workspace_fleet_scope(db, workspace)
+        options = get_workspace_optimization_options(db, workspace_id)
+        virtual_policy = str(options.get("virtual_bus_publish_policy", "allow") or "allow").strip().lower()
+        if virtual_policy not in {"allow", "block"}:
+            virtual_policy = "allow"
         company_id = str(scope.get("primary_company_id") or _workspace_company_id(db, workspace))
         scope_company_ids = [
             str(cid) for cid in (scope.get("scope_company_ids") or [])
@@ -438,7 +442,13 @@ async def get_workspace_fleet_preview(
                 "conflicts": [c for c in preview.get("conflicts", []) if c.get("day") == day],
                 "real_assigned": int(preview.get("real_assigned", 0)),
                 "virtual_created": int(preview.get("virtual_created", 0)),
+                "virtual_publish_policy": virtual_policy,
+                "requires_reconciliation": bool(
+                    virtual_policy == "block"
+                    and int(preview.get("virtual_created", 0) or 0) > 0
+                ),
                 "day_payload": preview.get("schedule_by_day", {}).get(day, {}),
+                "reconciliation": preview.get("reconciliation", {}),
                 "days": preview.get("days", {}),
             }
         return {
@@ -452,9 +462,79 @@ async def get_workspace_fleet_preview(
             "conflicts": preview.get("conflicts", []),
             "real_assigned": int(preview.get("real_assigned", 0)),
             "virtual_created": int(preview.get("virtual_created", 0)),
+            "virtual_publish_policy": virtual_policy,
+            "requires_reconciliation": bool(
+                virtual_policy == "block"
+                and int(preview.get("virtual_created", 0) or 0) > 0
+            ),
             "schedule_by_day": preview.get("schedule_by_day", {}),
+            "reconciliation": preview.get("reconciliation", {}),
             "days": preview.get("days", {}),
         }
+    finally:
+        db.close()
+
+
+@router.get("/{workspace_id}/fleet-reconciliation")
+async def get_workspace_fleet_reconciliation(
+    workspace_id: str,
+    day: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    """Get pending virtual buses and candidate real replacements (post-optimization reconciliation)."""
+    if not is_database_available() or SessionLocal is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    _ensure_tables_ready()
+
+    db = SessionLocal()
+    try:
+        workspace = db_crud.get_workspace(db, workspace_id)
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        working_version = workspace.working_version or workspace.published_version
+        if working_version is None:
+            raise HTTPException(status_code=409, detail="Workspace has no version to reconcile")
+
+        schedule_by_day = db_crud.normalize_schedule_by_day(working_version.schedule_by_day or {})
+        scope = resolve_workspace_fleet_scope(db, workspace)
+        options = get_workspace_optimization_options(db, workspace_id)
+        virtual_policy = str(options.get("virtual_bus_publish_policy", "allow") or "allow").strip().lower()
+        if virtual_policy not in {"allow", "block"}:
+            virtual_policy = "allow"
+        company_id = str(scope.get("primary_company_id") or _workspace_company_id(db, workspace))
+        scope_company_ids = [
+            str(cid) for cid in (scope.get("scope_company_ids") or [])
+            if str(cid).strip()
+        ]
+        preview = preview_workspace_publication(
+            db,
+            company_id=company_id,
+            scope_company_ids=scope_company_ids,
+            schedule_by_day=schedule_by_day,
+            exclude_workspace_id=str(workspace.id),
+        )
+        reconciliation = preview.get("reconciliation", {}) if isinstance(preview.get("reconciliation"), dict) else {}
+        response: Dict[str, Any] = {
+            "workspace_id": workspace_id,
+            "company_id": company_id,
+            "scope_mode": scope.get("scope_mode"),
+            "scope_company_ids": scope_company_ids,
+            "ute_id": scope.get("ute_id"),
+            "ute_name": scope.get("ute_name"),
+            "virtual_publish_policy": virtual_policy,
+            "requires_reconciliation": bool(
+                virtual_policy == "block"
+                and int(preview.get("virtual_created", 0) or 0) > 0
+            ),
+            "real_assigned": int(preview.get("real_assigned", 0)),
+            "virtual_created": int(preview.get("virtual_created", 0)),
+            "reconciliation": reconciliation,
+        }
+        if day:
+            day_key = str(day)
+            by_day = reconciliation.get("by_day", {}) if isinstance(reconciliation.get("by_day"), dict) else {}
+            response["day"] = day_key
+            response["reconciliation_day"] = by_day.get(day_key, {"pending_virtual": 0, "items": []})
+        return response
     finally:
         db.close()
 
@@ -479,6 +559,10 @@ async def publish_workspace(
             raise HTTPException(status_code=404, detail="Workspace not found")
 
         scope = resolve_workspace_fleet_scope(db, workspace)
+        options = get_workspace_optimization_options(db, workspace_id)
+        virtual_policy = str(options.get("virtual_bus_publish_policy", "allow") or "allow").strip().lower()
+        if virtual_policy not in {"allow", "block"}:
+            virtual_policy = "allow"
         company_id = str(scope.get("primary_company_id") or _workspace_company_id(db, workspace))
         scope_company_ids = [
             str(cid) for cid in (scope.get("scope_company_ids") or [])
@@ -513,6 +597,29 @@ async def publish_workspace(
                 },
             )
 
+        if virtual_policy == "block" and int(preview.get("virtual_created", 0) or 0) > 0:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Publicacion bloqueada: hay buses ficticios pendientes de asignar a flota real",
+                    "reason": "virtual_reconciliation_required",
+                    "fleet_publication": {
+                        "company_id": company_id,
+                        "scope_mode": scope.get("scope_mode"),
+                        "scope_company_ids": scope_company_ids,
+                        "ute_id": scope.get("ute_id"),
+                        "ute_name": scope.get("ute_name"),
+                        "real_assigned": int(preview.get("real_assigned", 0)),
+                        "virtual_created": int(preview.get("virtual_created", 0)),
+                        "conflicts": [],
+                        "blocked": True,
+                        "days": preview.get("days", {}),
+                        "virtual_publish_policy": virtual_policy,
+                        "reconciliation": preview.get("reconciliation", {}),
+                    },
+                },
+            )
+
         fleet_snapshot = {
             "company_id": company_id,
             "scope_mode": scope.get("scope_mode"),
@@ -524,11 +631,14 @@ async def publish_workspace(
             "conflicts": [],
             "blocked": False,
             "days": preview.get("days", {}),
+            "virtual_publish_policy": virtual_policy,
+            "reconciliation": preview.get("reconciliation", {}),
         }
         merged_summary = dict(publish_payload.summary_metrics or {})
         merged_summary["fleet_real_assigned"] = int(preview.get("real_assigned", 0))
         merged_summary["fleet_virtual_created"] = int(preview.get("virtual_created", 0))
         merged_summary["fleet_binding_state"] = "committed"
+        merged_summary["fleet_virtual_publish_policy"] = virtual_policy
 
         final_payload = publish_payload.model_copy(
             update={

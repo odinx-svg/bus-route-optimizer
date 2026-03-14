@@ -149,3 +149,9 @@ export async function getWorkspaceFleetPreview(workspaceId, day = null) {
   const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/fleet-preview${suffix}`);
   return parseResponse(response);
 }
+
+export async function getWorkspaceFleetReconciliation(workspaceId, day = null) {
+  const suffix = day ? `?day=${encodeURIComponent(day)}` : '';
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/fleet-reconciliation${suffix}`);
+  return parseResponse(response);
+}

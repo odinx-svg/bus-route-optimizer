@@ -306,6 +306,7 @@ class WorkspaceOptimizationOptions(BaseModel):
     route_load_constraints: List[RouteLoadConstraint] = Field(default_factory=list)
     fleet_scope_mode: str = Field(default="company")
     fleet_scope_ute_id: Optional[str] = None
+    virtual_bus_publish_policy: str = Field(default="allow")  # allow|block
 
 
 class WorkspaceVersionCreate(BaseModel):

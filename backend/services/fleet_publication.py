@@ -14,6 +14,7 @@ from uuid import uuid4
 from db import models as db_models
 from models import BusSchedule
 from services.fleet_assignment import assign_fleet_profiles_to_schedule_by_day
+from services.fleet_repository import FleetRepository
 
 
 ALL_DAYS = ("L", "M", "Mc", "X", "V")
@@ -142,6 +143,153 @@ def _iter_assignment_intervals(
     return rows
 
 
+def _bus_required_seats_from_payload(bus: Dict[str, Any]) -> int:
+    required = int(bus.get("min_required_seats", 0) or 0)
+    if required > 0:
+        return required
+    items = bus.get("items", []) if isinstance(bus.get("items"), list) else []
+    max_needed = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        max_needed = max(max_needed, int(item.get("capacity_needed", 0) or 0))
+    return max(1, max_needed or 1)
+
+
+def _bus_time_window_from_payload(bus: Dict[str, Any]) -> Tuple[int, int]:
+    items = bus.get("items", []) if isinstance(bus.get("items"), list) else []
+    start_minute: Optional[int] = None
+    end_minute: Optional[int] = None
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_start = _to_minutes(item.get("start_time"))
+        item_end = _to_minutes(item.get("end_time"))
+        if item_end <= item_start:
+            item_end = item_start + 1
+        start_minute = item_start if start_minute is None else min(start_minute, item_start)
+        end_minute = item_end if end_minute is None else max(end_minute, item_end)
+    if start_minute is None or end_minute is None:
+        return (0, 1)
+    return (int(start_minute), int(max(end_minute, start_minute + 1)))
+
+
+def _window_overlaps(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
+    return (a_start < b_end) and (a_end > b_start)
+
+
+def _build_virtual_reconciliation_report(
+    *,
+    company_id: str,
+    scope_company_ids: Optional[List[str]],
+    assigned_schedule_by_day: Dict[str, Any],
+) -> Dict[str, Any]:
+    repository = FleetRepository()
+    vehicles = repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids)
+    vehicle_pool: List[Dict[str, Any]] = []
+    for raw in vehicles:
+        seats_max = int(raw.get("seats_max", 0) or 0)
+        if seats_max <= 0:
+            continue
+        vehicle_pool.append(
+            {
+                "id": str(raw.get("id", "") or ""),
+                "vehicle_code": str(raw.get("vehicle_code", "") or "").strip(),
+                "plate": str(raw.get("plate", "") or "").strip(),
+                "company_id": str(raw.get("company_id", "") or "").strip() or None,
+                "company_name": str(raw.get("company_name", "") or "").strip() or None,
+                "seats_max": seats_max,
+            }
+        )
+
+    occupied: Dict[str, Dict[str, List[Tuple[int, int]]]] = {}
+    for day in ALL_DAYS:
+        occupied.setdefault(day, {})
+        day_payload = assigned_schedule_by_day.get(day, {}) if isinstance(assigned_schedule_by_day, dict) else {}
+        buses = day_payload.get("schedule", []) if isinstance(day_payload, dict) else []
+        for bus in buses:
+            if not isinstance(bus, dict):
+                continue
+            if str(bus.get("fleet_assignment_type", "virtual") or "virtual").lower() != "real":
+                continue
+            vehicle_id = str(bus.get("assigned_vehicle_id", "") or "").strip()
+            if not vehicle_id:
+                continue
+            start_minute, end_minute = _bus_time_window_from_payload(bus)
+            occupied[day].setdefault(vehicle_id, []).append((start_minute, end_minute))
+
+    items: List[Dict[str, Any]] = []
+    for day in ALL_DAYS:
+        day_payload = assigned_schedule_by_day.get(day, {}) if isinstance(assigned_schedule_by_day, dict) else {}
+        buses = day_payload.get("schedule", []) if isinstance(day_payload, dict) else []
+        for bus in buses:
+            if not isinstance(bus, dict):
+                continue
+            if str(bus.get("fleet_assignment_type", "virtual") or "virtual").lower() != "virtual":
+                continue
+
+            start_minute, end_minute = _bus_time_window_from_payload(bus)
+            required = _bus_required_seats_from_payload(bus)
+            suggestions: List[Dict[str, Any]] = []
+            for vehicle in vehicle_pool:
+                if int(vehicle["seats_max"]) < required:
+                    continue
+                vehicle_windows = occupied.get(day, {}).get(str(vehicle["id"]), [])
+                has_overlap = any(
+                    _window_overlaps(start_minute, end_minute, win_start, win_end)
+                    for (win_start, win_end) in vehicle_windows
+                )
+                if has_overlap:
+                    continue
+                suggestions.append(
+                    {
+                        "vehicle_id": str(vehicle["id"]),
+                        "vehicle_code": str(vehicle["vehicle_code"]),
+                        "plate": str(vehicle["plate"]),
+                        "company_id": vehicle.get("company_id"),
+                        "company_name": vehicle.get("company_name"),
+                        "seats_max": int(vehicle["seats_max"]),
+                        "overflow": max(0, int(vehicle["seats_max"]) - required),
+                    }
+                )
+            suggestions.sort(key=lambda row: (int(row.get("overflow", 0)), int(row.get("seats_max", 0)), str(row.get("vehicle_code", ""))))
+            top_suggestions = suggestions[:5]
+
+            route_ids: List[str] = []
+            for item in (bus.get("items", []) if isinstance(bus.get("items"), list) else []):
+                if not isinstance(item, dict):
+                    continue
+                route_id = str(item.get("route_id", "") or "").strip()
+                if route_id:
+                    route_ids.append(route_id)
+
+            items.append(
+                {
+                    "day": day,
+                    "bus_id": str(bus.get("bus_id", "") or ""),
+                    "required_seats": int(required),
+                    "start_minute": int(start_minute),
+                    "end_minute": int(end_minute),
+                    "route_ids": route_ids,
+                    "suggestions": top_suggestions,
+                }
+            )
+
+    by_day: Dict[str, Any] = {}
+    for day in ALL_DAYS:
+        day_items = [row for row in items if row.get("day") == day]
+        by_day[day] = {
+            "pending_virtual": len(day_items),
+            "items": day_items,
+        }
+
+    return {
+        "pending_count": len(items),
+        "by_day": by_day,
+        "items": items,
+    }
+
+
 def detect_publication_conflicts(
     db,
     *,
@@ -224,6 +372,11 @@ def preview_workspace_publication(
     real_assigned = int(fleet_assignment_summary.get("total_assigned", 0))
     virtual_created = int(fleet_assignment_summary.get("total_virtual_buses", 0))
     days_summary = fleet_assignment_summary.get("days", {}) if isinstance(fleet_assignment_summary.get("days"), dict) else {}
+    reconciliation = _build_virtual_reconciliation_report(
+        company_id=company_id,
+        scope_company_ids=scope_company_ids,
+        assigned_schedule_by_day=assigned_schedule_by_day,
+    )
 
     return {
         "company_id": company_id,
@@ -235,6 +388,7 @@ def preview_workspace_publication(
         "scope_company_ids": [str(cid) for cid in (scope_company_ids or [company_id])],
         "schedule_by_day": assigned_schedule_by_day,
         "candidate_rows": candidate_rows,
+        "reconciliation": reconciliation,
     }
 
 

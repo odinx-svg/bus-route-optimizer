@@ -39,6 +39,7 @@ const DEFAULT_OPTIMIZATION_OPTIONS = {
   route_load_constraints: [],
   fleet_scope_mode: 'company',
   fleet_scope_ute_id: null,
+  virtual_bus_publish_policy: 'allow',
 };
 
 const createEmptyRouteLoadConstraint = () => ({
@@ -75,6 +76,9 @@ const normalizeOptimizationOptions = (raw) => {
     route_load_constraints: constraints,
     fleet_scope_mode: String(source.fleet_scope_mode || 'company').toLowerCase() === 'ute' ? 'ute' : 'company',
     fleet_scope_ute_id: String(source.fleet_scope_ute_id || '').trim() || null,
+    virtual_bus_publish_policy: String(source.virtual_bus_publish_policy || 'allow').toLowerCase() === 'block'
+      ? 'block'
+      : 'allow',
   };
 };
 const createEmptyScheduleByDay = () => (
@@ -370,7 +374,7 @@ function LoadOptionsModal({
           </label>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
             Alcance de flota
             <select
@@ -410,6 +414,23 @@ function LoadOptionsModal({
             </select>
             <p className="mt-1 text-[10px] text-slate-400">
               Se usa para preview/publicacion y deteccion de conflictos cruzados.
+            </p>
+          </label>
+          <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
+            Publicar con ficticios
+            <select
+              value={value.virtual_bus_publish_policy || 'allow'}
+              onChange={(event) => setValue((prev) => ({
+                ...normalizeOptimizationOptions(prev),
+                virtual_bus_publish_policy: event.target.value === 'block' ? 'block' : 'allow',
+              }))}
+              className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1 text-[12px] text-white"
+            >
+              <option value="allow">Permitir con aviso</option>
+              <option value="block">Bloquear hasta reconciliar</option>
+            </select>
+            <p className="mt-1 text-[10px] text-slate-400">
+              Recomendado en produccion: bloquear y reasignar virtuales a buses reales antes de publicar.
             </p>
           </label>
         </div>
@@ -606,6 +627,71 @@ function FleetConflictModal({
   );
 }
 
+function FleetReconciliationModal({
+  open = false,
+  items = [],
+  onClose,
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[1265] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative w-full max-w-3xl rounded-xl border border-amber-500/35 bg-[#0b141f] p-4 shadow-2xl">
+        <h3 className="text-[16px] font-semibold text-white">Reconciliacion requerida antes de publicar</h3>
+        <p className="mt-2 text-[12px] text-[#8ba3bd]">
+          Hay buses ficticios pendientes. Asigna esas rutas a buses reales en Studio (post-optimizacion) y vuelve a publicar.
+        </p>
+        <div className="mt-3 max-h-[360px] overflow-auto rounded-md border border-[#2a4057]">
+          <table className="w-full text-[11px]">
+            <thead className="bg-[#101a26] text-slate-400">
+              <tr>
+                <th className="px-2 py-1.5 text-left">Dia</th>
+                <th className="px-2 py-1.5 text-left">Bus virtual</th>
+                <th className="px-2 py-1.5 text-left">Franja</th>
+                <th className="px-2 py-1.5 text-left">Plazas min.</th>
+                <th className="px-2 py-1.5 text-left">Sugerencias</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((row, idx) => (
+                <tr key={`${row?.day || 'D'}-${row?.bus_id || 'BUS'}-${idx}`} className="border-t border-[#253a4f]">
+                  <td className="px-2 py-1.5 text-slate-200">{row?.day || '-'}</td>
+                  <td className="px-2 py-1.5 text-amber-200 data-mono">{row?.bus_id || '-'}</td>
+                  <td className="px-2 py-1.5 text-slate-300 data-mono">
+                    {Number.isFinite(Number(row?.start_minute)) && Number.isFinite(Number(row?.end_minute))
+                      ? `${String(Math.floor(Number(row.start_minute) / 60)).padStart(2, '0')}:${String(Number(row.start_minute) % 60).padStart(2, '0')} - ${String(Math.floor(Number(row.end_minute) / 60)).padStart(2, '0')}:${String(Number(row.end_minute) % 60).padStart(2, '0')}`
+                      : '-'}
+                  </td>
+                  <td className="px-2 py-1.5 text-cyan-200 data-mono">{row?.required_seats ?? '-'}</td>
+                  <td className="px-2 py-1.5 text-slate-300">
+                    {Array.isArray(row?.suggestions) && row.suggestions.length > 0
+                      ? row.suggestions.slice(0, 3).map((s) => `${s.vehicle_code || s.vehicle_id} (${s.seats_max}P)`).join(', ')
+                      : 'Sin sugerencias libres'}
+                  </td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td className="px-2 py-3 text-center text-slate-500" colSpan={5}>Sin detalle de buses ficticios pendientes.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [routes, setRoutes] = useState([]);
   const [parseReport, setParseReport] = useState(null);
@@ -644,6 +730,10 @@ function App() {
   const [fleetConflictModal, setFleetConflictModal] = useState({
     open: false,
     conflicts: [],
+  });
+  const [fleetReconciliationModal, setFleetReconciliationModal] = useState({
+    open: false,
+    items: [],
   });
   const [pendingOptimizationRequest, setPendingOptimizationRequest] = useState(null);
 
@@ -1428,11 +1518,42 @@ function App() {
             });
             throw new Error('Publicacion bloqueada por conflictos de flota');
           }
+          const resolvedPolicy = String(
+            fleetPreview?.virtual_publish_policy
+            || activeOptimizationOptions?.virtual_bus_publish_policy
+            || 'allow'
+          ).toLowerCase();
+          if (
+            resolvedPolicy === 'block'
+            && Number(fleetPreview?.virtual_created || 0) > 0
+          ) {
+            const pendingItems = Array.isArray(fleetPreview?.reconciliation?.items)
+              ? fleetPreview.reconciliation.items
+              : [];
+            setFleetReconciliationModal({
+              open: true,
+              items: pendingItems,
+            });
+            throw new Error('Publicacion bloqueada: hay buses ficticios pendientes de reconciliar');
+          }
           try {
             await publishWorkspaceVersion(activeWorkspaceId, snapshotPayload);
           } catch (error) {
-            const publication = error?.payload?.detail?.fleet_publication;
-            if (publication?.blocked) {
+            const detail = error?.payload?.detail;
+            const publication = detail?.fleet_publication;
+            const isReconciliationBlocked = String(
+              detail?.reason
+              || publication?.reason
+              || ''
+            ).toLowerCase() === 'virtual_reconciliation_required';
+            if (isReconciliationBlocked) {
+              setFleetReconciliationModal({
+                open: true,
+                items: Array.isArray(publication?.reconciliation?.items)
+                  ? publication.reconciliation.items
+                  : [],
+              });
+            } else if (publication?.blocked) {
               setFleetConflictModal({
                 open: true,
                 conflicts: Array.isArray(publication?.conflicts) ? publication.conflicts : [],
@@ -1834,6 +1955,11 @@ function App() {
         open={fleetConflictModal.open}
         conflicts={fleetConflictModal.conflicts}
         onClose={() => setFleetConflictModal({ open: false, conflicts: [] })}
+      />
+      <FleetReconciliationModal
+        open={fleetReconciliationModal.open}
+        items={fleetReconciliationModal.items}
+        onClose={() => setFleetReconciliationModal({ open: false, items: [] })}
       />
     </Layout>
   );

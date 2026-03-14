@@ -250,3 +250,97 @@ def test_fleet_preview_respects_ute_scope(monkeypatch):
     assert body["scope_company_ids"] == ["company_main", "company_partner"]
     assert captured["company_id"] == "company_main"
     assert captured["scope_company_ids"] == ["company_main", "company_partner"]
+
+
+def test_publish_workspace_blocks_when_virtual_policy_is_block(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+
+    db = Session()
+    try:
+        workspace = _seed_workspace(db)
+    finally:
+        db.close()
+
+    monkeypatch.setattr(
+        workspaces_api,
+        "get_workspace_optimization_options",
+        lambda db, workspace_id: {"virtual_bus_publish_policy": "block"},
+    )
+
+    def _preview_virtual(*args, **kwargs):
+        return {
+            "blocked": False,
+            "conflicts": [],
+            "real_assigned": 0,
+            "virtual_created": 2,
+            "days": {"L": {"fleet_assigned": 0, "virtual_buses": 2}},
+            "schedule_by_day": {"L": {"schedule": []}},
+            "candidate_rows": [],
+            "reconciliation": {
+                "pending_count": 2,
+                "items": [
+                    {
+                        "day": "L",
+                        "bus_id": "B-V1",
+                        "required_seats": 44,
+                        "start_minute": 480,
+                        "end_minute": 560,
+                        "route_ids": ["R001"],
+                        "suggestions": [],
+                    }
+                ],
+            },
+        }
+
+    monkeypatch.setattr(workspaces_api, "preview_workspace_publication", _preview_virtual)
+
+    response = client.post(f"/api/workspaces/{workspace.id}/publish", json={})
+    assert response.status_code == 409
+    body = response.json()
+    assert body["detail"]["reason"] == "virtual_reconciliation_required"
+    publication = body["detail"]["fleet_publication"]
+    assert publication["blocked"] is True
+    assert publication["virtual_created"] == 2
+    assert publication["virtual_publish_policy"] == "block"
+    assert publication["reconciliation"]["pending_count"] == 2
+
+
+def test_fleet_preview_includes_reconciliation_when_policy_block(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+
+    db = Session()
+    try:
+        workspace = _seed_workspace(db)
+    finally:
+        db.close()
+
+    monkeypatch.setattr(
+        workspaces_api,
+        "get_workspace_optimization_options",
+        lambda db, workspace_id: {"virtual_bus_publish_policy": "block"},
+    )
+
+    def _preview_virtual(*args, **kwargs):
+        return {
+            "blocked": False,
+            "conflicts": [],
+            "real_assigned": 1,
+            "virtual_created": 1,
+            "days": {"L": {"fleet_assigned": 1, "virtual_buses": 1}},
+            "schedule_by_day": {"L": {"schedule": []}},
+            "candidate_rows": [],
+            "reconciliation": {
+                "pending_count": 1,
+                "by_day": {"L": {"pending_virtual": 1, "items": [{"bus_id": "B-V1"}]}},
+                "items": [{"day": "L", "bus_id": "B-V1", "required_seats": 40}],
+            },
+        }
+
+    monkeypatch.setattr(workspaces_api, "preview_workspace_publication", _preview_virtual)
+
+    response = client.get(f"/api/workspaces/{workspace.id}/fleet-preview")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["virtual_publish_policy"] == "block"
+    assert body["requires_reconciliation"] is True
+    assert body["reconciliation"]["pending_count"] == 1
