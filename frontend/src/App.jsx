@@ -622,7 +622,7 @@ function PreOptimizeRestrictionsModal({
   );
 }
 
-function PublicationStatusCard({ title, value, tone = 'neutral', helper = '' }) {
+function PublicationStatusCard({ title, value, tone = 'neutral', helper = '', compact = false }) {
   const toneClass = {
     success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
     warning: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
@@ -631,10 +631,10 @@ function PublicationStatusCard({ title, value, tone = 'neutral', helper = '' }) 
   }[tone] || 'border-white/10 bg-white/[0.03] text-slate-100';
 
   return (
-    <div className={`rounded-xl border px-3 py-3 ${toneClass}`}>
+    <div className={`rounded-xl border ${compact ? 'px-3 py-2.5' : 'px-3 py-3'} ${toneClass}`}>
       <p className="text-[10px] uppercase tracking-[0.1em] opacity-80">{title}</p>
-      <p className="mt-1 text-[18px] font-semibold data-mono">{value}</p>
-      {helper ? <p className="mt-1 text-[11px] opacity-80">{helper}</p> : null}
+      <p className={`mt-1 font-semibold data-mono ${compact ? 'text-[16px]' : 'text-[18px]'}`}>{value}</p>
+      {helper ? <p className={`mt-1 opacity-80 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{helper}</p> : null}
     </div>
   );
 }
@@ -649,6 +649,7 @@ function PlanningOverviewBar({
 }) {
   if (!workspace) return null;
 
+  const [isExpanded, setIsExpanded] = useState(false);
   const readiness = getWorkspaceReadinessConfig(workspace.readiness_state);
   const pendingLabel = getWorkspacePendingLabel(workspace);
   const nextActionLabel = getNextActionLabel(workspace.next_recommended_action);
@@ -663,8 +664,8 @@ function PlanningOverviewBar({
     : 0;
 
   return (
-    <div className="mb-3 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4 space-y-4">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <div className="mb-2 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-3 space-y-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Planificacion</p>
@@ -692,6 +693,13 @@ function PlanningOverviewBar({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            className="rounded-md border border-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-100 hover:bg-white/5"
+          >
+            {isExpanded ? 'Ocultar detalle' : 'Ver detalle'}
+          </button>
+          <button
+            type="button"
             onClick={onOpenRules}
             className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
           >
@@ -707,17 +715,15 @@ function PlanningOverviewBar({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
-        <PublicationStatusCard title="Buses usados" value={stats?.buses ?? 0} />
-        <PublicationStatusCard title="Rutas" value={stats?.routes ?? 0} />
-        <PublicationStatusCard title="Flota real" value={fleetReal} tone="success" />
-        <PublicationStatusCard title="Provisionales" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} />
-        <PublicationStatusCard title="Conflictos" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} />
-        <PublicationStatusCard title="Siguiente paso" value={nextActionLabel} helper="La accion recomendada segun el estado actual." />
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <PublicationStatusCard title="Buses usados" value={stats?.buses ?? 0} compact />
+        <PublicationStatusCard title="Rutas" value={stats?.routes ?? 0} compact />
+        <PublicationStatusCard title="Provisionales" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} compact />
+        <PublicationStatusCard title="Siguiente paso" value={nextActionLabel} helper="Accion recomendada ahora." compact />
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-[#09111b] p-3">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="rounded-xl border border-white/10 bg-[#09111b] p-2.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {stageItems.map((item) => (
             <div key={item.key} className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${item.done ? 'bg-emerald-400' : (item.active ? 'bg-cyan-300' : 'bg-slate-600')}`} />
@@ -729,41 +735,49 @@ function PlanningOverviewBar({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
-        <PublicationStatusCard title="Estado de publicacion" value={readiness.label} helper="Resumen del estado operativo actual." />
-        <PublicationStatusCard title="Buses provisionales pendientes" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={fleetVirtual > 0 ? 'Requieren asignacion real antes de publicar.' : 'No quedan pendientes.'} />
-        <PublicationStatusCard title="Conflictos reales" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} helper={hasConflict ? 'Hay una colision real con otra publicacion.' : 'No hay bloqueos detectados.'} />
-        <PublicationStatusCard title="Advertencias" value={workspace?.blocking_reason ? 1 : 0} tone={workspace?.blocking_reason ? 'warning' : 'success'} helper={blockingText || 'Sin advertencias relevantes.'} />
-      </div>
+      {isExpanded && (
+        <>
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
+            <PublicationStatusCard title="Flota real" value={fleetReal} tone="success" helper="Buses reales ya vinculados." />
+            <PublicationStatusCard title="Estado de publicacion" value={readiness.label} helper="Resumen del estado operativo actual." />
+            <PublicationStatusCard title="Buses provisionales pendientes" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={fleetVirtual > 0 ? 'Requieren asignacion real antes de publicar.' : 'No quedan pendientes.'} />
+            <PublicationStatusCard title="Conflictos reales" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} helper={hasConflict ? 'Hay una colision real con otra publicacion.' : 'No hay bloqueos detectados.'} />
+          </div>
 
-      <div className="rounded-xl border border-white/10 bg-[#09111b] p-3">
-        <p className="text-[10px] uppercase tracking-[0.1em] text-slate-500">Reglas activas</p>
-        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-            Ambito: {optimizationOptions?.fleet_scope_mode === 'ute' ? 'UTE' : 'Empresa'}
-          </span>
-          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-            Balanceo: {optimizationOptions?.balance_load === false ? 'Flexible' : 'Activo'}
-          </span>
-          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-            Diferencia max: {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
-          </span>
-          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-            Ventanas: {routeRulesCount}
-          </span>
-          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-            Publicacion: {optimizationOptions?.virtual_bus_publish_policy === 'block' ? 'Bloquear provisionales' : 'Permitir con aviso'}
-          </span>
-        </div>
-      </div>
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-1">
+            <PublicationStatusCard title="Advertencias" value={workspace?.blocking_reason ? 1 : 0} tone={workspace?.blocking_reason ? 'warning' : 'success'} helper={blockingText || 'Sin advertencias relevantes.'} />
+          </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-        <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Ruta</span>
-        <span className="rounded-md border border-slate-500/20 bg-slate-500/10 px-2 py-1 text-slate-200">Posicionamiento</span>
-        <span className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-rose-100">Conflicto</span>
-        <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-100">Bus provisional</span>
-        <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Bus publicado</span>
-      </div>
+          <div className="rounded-xl border border-white/10 bg-[#09111b] p-3">
+            <p className="text-[10px] uppercase tracking-[0.1em] text-slate-500">Reglas activas</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+                Ambito: {optimizationOptions?.fleet_scope_mode === 'ute' ? 'UTE' : 'Empresa'}
+              </span>
+              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+                Balanceo: {optimizationOptions?.balance_load === false ? 'Flexible' : 'Activo'}
+              </span>
+              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+                Diferencia max: {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
+              </span>
+              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+                Ventanas: {routeRulesCount}
+              </span>
+              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+                Publicacion: {optimizationOptions?.virtual_bus_publish_policy === 'block' ? 'Bloquear provisionales' : 'Permitir con aviso'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+            <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Ruta</span>
+            <span className="rounded-md border border-slate-500/20 bg-slate-500/10 px-2 py-1 text-slate-200">Posicionamiento</span>
+            <span className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-rose-100">Conflicto</span>
+            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-100">Bus provisional</span>
+            <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Bus publicado</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -101,25 +101,33 @@ export default function OptimizationStudio({
   }, [isDraggingSplit]);
 
   return (
-    <div className="h-full w-full min-h-0 flex flex-col gap-3">
-      <div className="gt-glass rounded-xl p-2 flex items-center gap-2">
-        {STUDIO_TABS.map((tab) => {
-          const active = studioTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setStudioTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
-                active
-                  ? 'bg-gt-accent text-white shadow-gt-glow'
-                  : 'text-gt-text-muted hover:text-gt-text hover:bg-white/5'
-              }`}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+    <div className="h-full w-full min-h-0 flex flex-col gap-2">
+      <div className="rounded-xl border border-[#2a4057] bg-[#0b1521]/92 px-3 py-2">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Vista de trabajo</p>
+            <p className="text-[11px] text-slate-300">Cambia entre mapa, horario o vista mixta sin salir de la planificacion.</p>
+          </div>
+          <div className="inline-flex w-fit items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            {STUDIO_TABS.map((tab) => {
+              const active = studioTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStudioTab(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold uppercase tracking-[0.08em] transition-all ${
+                    active
+                      ? 'bg-gt-accent text-white shadow-gt-glow'
+                      : 'text-gt-text-muted hover:text-gt-text hover:bg-white/5'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0">

@@ -1,5 +1,5 @@
-import React from 'react';
-import { LayoutGrid, Activity, Gauge, Bus } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { LayoutGrid, Gauge, Bus, ChevronDown, ChevronUp } from 'lucide-react';
 import tuttiSymbol from '../assets/tutti-symbol.svg';
 import {
   getWorkspacePendingLabel,
@@ -105,6 +105,7 @@ const Header = ({
   const hasSchedule = scheduleByDay && Object.values(scheduleByDay).some(day => day?.schedule?.length > 0);
   const showOperationalHeader = viewMode === 'studio';
   const readiness = getWorkspaceReadinessConfig(workspaceContext?.readiness_state);
+  const [isCompact, setIsCompact] = useState(viewMode === 'studio');
   const sectionCopy = {
     dashboard: {
       title: 'Panel',
@@ -123,22 +124,34 @@ const Header = ({
     subtitle: 'Control operativo',
   };
 
+  useEffect(() => {
+    if (viewMode === 'studio') {
+      setIsCompact(true);
+      return;
+    }
+    setIsCompact(false);
+  }, [viewMode]);
+
   return (
-    <header className="gt-header-gradient gt-border-b flex items-center px-5 py-3 flex-shrink-0 z-50 gap-5">
-      <div className="flex items-center gap-3 mr-2">
-        <div className="w-9 h-9 rounded-lg gt-glass flex items-center justify-center overflow-hidden">
+    <header className="gt-header-gradient gt-border-b flex items-center px-4 py-2.5 flex-shrink-0 z-50 gap-3">
+      <div className="flex items-center gap-2.5 mr-1">
+        <div className="w-10 h-10 rounded-[14px] border border-cyan-400/20 bg-[#0a1a29] flex items-center justify-center overflow-hidden shadow-[0_12px_32px_rgba(5,18,30,0.35)]">
           <img src={tuttiSymbol} alt="TUTTI" className="w-full h-full object-cover" />
         </div>
-        <div className="flex flex-col">
+        <div className="flex flex-col leading-tight">
           <span className="text-[12px] font-semibold text-gt-text tracking-[0.12em] uppercase data-mono">TUTTI</span>
-          <span className="text-[9px] text-gt-text-muted font-medium -mt-0.5 tracking-[0.16em] uppercase">Centro de control operativo</span>
+          <span className="text-[9px] text-cyan-200/70 font-medium tracking-[0.16em] uppercase">
+            {showOperationalHeader ? 'Operacion activa' : 'Centro de control'}
+          </span>
         </div>
       </div>
 
-      <div className="min-w-[220px]">
-        <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">{sectionCopy.title}</p>
-        <p className="text-[11px] text-gt-text-muted mt-0.5">{sectionCopy.subtitle}</p>
-      </div>
+      {!isCompact && (
+        <div className="min-w-[200px]">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">{sectionCopy.title}</p>
+          <p className="text-[11px] text-gt-text-muted mt-0.5">{sectionCopy.subtitle}</p>
+        </div>
+      )}
 
       <ViewTabs
         viewMode={viewMode}
@@ -147,7 +160,7 @@ const Header = ({
       />
 
       {workspaceContext && (
-        <div className="hidden xl:flex items-center gap-3 ml-2 rounded-xl border border-[#2a4057] bg-[#091425]/90 px-3 py-2 min-w-[340px]">
+        <div className={`items-center gap-3 ml-1 rounded-xl border border-[#2a4057] bg-[#091425]/90 px-3 ${isCompact ? 'py-1.5 min-w-[260px]' : 'py-2 min-w-[320px]'} ${showOperationalHeader ? 'hidden lg:flex' : 'hidden xl:flex'}`}>
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Estado actual</p>
             <p className="text-[12px] font-semibold text-white truncate">
@@ -161,18 +174,22 @@ const Header = ({
             <span className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${readiness.chipClass}`}>
               {readiness.label}
             </span>
-            <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
-              {getWorkspaceStatusLabel(workspaceContext)}
-            </span>
-            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-100">
-              {getWorkspacePendingLabel(workspaceContext)}
-            </span>
+            {!isCompact && (
+              <>
+                <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
+                  {getWorkspaceStatusLabel(workspaceContext)}
+                </span>
+                <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-100">
+                  {getWorkspacePendingLabel(workspaceContext)}
+                </span>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {showOperationalHeader && scheduleByDay && (
-        <div className="ml-3">
+        <div className="ml-1">
           <DaySelector
             scheduleByDay={scheduleByDay}
             activeDay={activeDay}
@@ -183,51 +200,12 @@ const Header = ({
 
       <div className="flex-1" />
 
-      {showOperationalHeader && stats && hasSchedule && (
-        <div className="flex items-center gap-2">
-          {stats.buses > 0 && (
-            <MetricBadge
-              value={stats.buses}
-              label="buses"
-              color="text-indigo-400"
-              icon={Activity}
-            />
-          )}
-          {stats.total_entries > 0 && (
-            <MetricBadge
-              value={stats.total_entries}
-              label="entradas"
-              color="text-indigo-300"
-            />
-          )}
-          {stats.total_exits > 0 && (
-            <MetricBadge
-              value={stats.total_exits}
-              label="salidas"
-              color="text-amber-400"
-            />
-          )}
-          {stats.avg_routes_per_bus > 0 && (
-            <MetricBadge
-              value={stats.avg_routes_per_bus}
-              label="media/bus"
-              color="text-emerald-400"
-            />
-          )}
-          {stats.median_routes_per_bus > 0 && (
-            <MetricBadge
-              value={stats.median_routes_per_bus}
-              label="mediana"
-              color="text-cyan-300"
-            />
-          )}
-          {(stats.max_routes_per_bus || 0) > 0 && (
-            <MetricBadge
-              value={`${stats.min_routes_per_bus || 0}-${stats.max_routes_per_bus || 0}`}
-              label="carga min/max"
-              color="text-slate-200"
-            />
-          )}
+      {showOperationalHeader && stats && hasSchedule && !isCompact && (
+        <div className="hidden 2xl:flex items-center gap-2">
+          {stats.buses > 0 && <MetricBadge value={stats.buses} label="buses" color="text-indigo-400" />}
+          {stats.total_entries > 0 && <MetricBadge value={stats.total_entries} label="entradas" color="text-indigo-300" />}
+          {stats.total_exits > 0 && <MetricBadge value={stats.total_exits} label="salidas" color="text-amber-400" />}
+          {stats.avg_routes_per_bus > 0 && <MetricBadge value={stats.avg_routes_per_bus} label="media/bus" color="text-emerald-400" />}
           {(stats.load_spread_routes || 0) > 0 && (
             <MetricBadge
               value={stats.load_spread_routes}
@@ -236,6 +214,20 @@ const Header = ({
             />
           )}
         </div>
+      )}
+
+      {showOperationalHeader && (
+        <button
+          type="button"
+          onClick={() => setIsCompact((prev) => !prev)}
+          className="ml-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-100 hover:bg-white/[0.08]"
+          title={isCompact ? 'Mostrar detalles de la cabecera' : 'Compactar cabecera'}
+        >
+          <span className="flex items-center gap-1.5">
+            {isCompact ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            {isCompact ? 'Expandir barra' : 'Compactar barra'}
+          </span>
+        </button>
       )}
     </header>
   );
@@ -264,7 +256,7 @@ const Layout = ({
         hasStudioAccess={hasStudioAccess}
         workspaceContext={workspaceContext}
       />
-      <main className="flex-1 flex overflow-hidden p-4 gap-4">
+      <main className="flex-1 flex overflow-hidden px-4 pb-4 pt-2 gap-4">
         {children}
       </main>
     </div>
