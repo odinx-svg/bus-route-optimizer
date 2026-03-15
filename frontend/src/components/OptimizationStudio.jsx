@@ -14,6 +14,7 @@ export default function OptimizationStudio({
   routes = [],
   scheduleByDay = null,
   activeDay = 'L',
+  onDayChange = null,
   validationReport = null,
   onValidationReportChange,
   onSave,
@@ -154,6 +155,7 @@ export default function OptimizationStudio({
                 initialSchedule={workspaceInitialSchedule}
                 scheduleByDay={scheduleByDay}
                 activeDay={activeDay}
+                onDayChange={onDayChange}
                 validationReport={validationReport}
                 onValidationReportChange={onValidationReportChange}
                 onSave={onSave}
@@ -209,6 +211,7 @@ export default function OptimizationStudio({
               initialSchedule={workspaceInitialSchedule}
               scheduleByDay={scheduleByDay}
               activeDay={activeDay}
+              onDayChange={onDayChange}
               validationReport={validationReport}
               onValidationReportChange={onValidationReportChange}
               onSave={onSave}

@@ -2134,6 +2134,7 @@ function App() {
                       routes={routes}
                       scheduleByDay={scheduleByDay}
                       activeDay={activeDay}
+                      onDayChange={handleDayChange}
                       validationReport={validationReport}
                       onValidationReportChange={setValidationReport}
                       onSave={async (data) => {

@@ -68,6 +68,13 @@ const STORAGE_KEY_DRAFT = 'unified_workspace_draft';
 const STORAGE_KEY_STATUS = 'unified_workspace_status';
 const STORAGE_KEY_AUTO_REASSIGN = 'unified_workspace_auto_reassign_critical_v1';
 const ALL_DAYS = ['L', 'M', 'Mc', 'X', 'V'];
+const DAY_LABELS = {
+  L: 'Lunes',
+  M: 'Martes',
+  Mc: 'Miercoles',
+  X: 'Jueves',
+  V: 'Viernes',
+};
 const TIMELINE_BUS_INFO_WIDTH = 118;
 const CRITICAL_GLOBAL_ISSUE_TYPES = new Set(['INSUFFICIENT_TIME', 'OVERLAPPING_ROUTES', 'INVALID_TIME_RANGE']);
 const CRITICAL_LOCAL_ISSUE_TYPES = new Set(['positioning_infeasible', 'overlap']);
@@ -441,6 +448,7 @@ export function UnifiedWorkspace({
   initialSchedule = null,
   scheduleByDay = null,
   activeDay: externalActiveDay = null,
+  onDayChange = null,
   validationReport = null,
   onValidationReportChange = null,
   onSave,
@@ -2371,6 +2379,32 @@ export function UnifiedWorkspace({
             />
 
             <div className="w-px h-5 bg-slate-700" />
+
+            <div className="flex items-center gap-1 rounded-md border border-[#2b4056] bg-[#101a26] p-0.5">
+              {ALL_DAYS.map((dayCode) => {
+                const selected = activeDay === dayCode;
+                const dayBuses = scheduleByDay?.[dayCode]?.stats?.total_buses || 0;
+                return (
+                  <button
+                    key={dayCode}
+                    type="button"
+                    onClick={() => {
+                      setActiveDay(dayCode);
+                      if (typeof onDayChange === 'function') onDayChange(dayCode);
+                    }}
+                    title={`${DAY_LABELS[dayCode] || dayCode}: ${dayBuses} buses`}
+                    className={`min-w-[42px] rounded px-2 py-1 text-[10px] font-semibold transition-all ${
+                      selected
+                        ? 'bg-[#214a63] text-[#d8edf8] border border-cyan-400/30'
+                        : 'text-slate-500 hover:text-slate-200 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="leading-none">{dayCode}</div>
+                    <div className={`mt-0.5 text-[9px] leading-none ${selected ? 'text-white/80' : 'text-slate-600'}`}>{dayBuses}</div>
+                  </button>
+                );
+              })}
+            </div>
 
             {/* Toggle Vista Timeline/Lista */}
             <div className="flex bg-[#101a26] rounded-md p-0.5 border border-[#2b4056]">
