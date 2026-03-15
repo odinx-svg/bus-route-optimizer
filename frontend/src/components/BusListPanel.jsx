@@ -293,59 +293,30 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
               )}
             </div>
             <div className="flex items-center gap-1.5 text-[10px]">
-              {hasAssignedVehicle && assignedSeatsMax > 0 && (
-                <span className="px-1.5 py-0.5 rounded-md bg-gt-success/10 text-gt-success font-medium">
-                  FLOTA {assignedSeatsMin > 0 ? `${assignedSeatsMin}-` : ''}{assignedSeatsMax}P
-                </span>
-              )}
-              {isVirtual && (
-                <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-200 font-medium">
-                  PROVISIONAL
-                </span>
-              )}
-              <span className={`px-1.5 py-0.5 rounded-md font-medium ${bindingState === 'committed' ? 'bg-cyan-500/15 text-cyan-300' : 'bg-amber-500/15 text-amber-300'}`}>
+              <span className={`px-1.5 py-0.5 rounded-md font-medium ${isVirtual ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/10 text-emerald-200'}`}>
+                {isVirtual ? 'PROVISIONAL' : 'REAL'}
+              </span>
+              <span className={`px-1.5 py-0.5 rounded-md font-medium ${bindingState === 'committed' ? 'bg-cyan-500/15 text-cyan-300' : 'bg-white/10 text-slate-300'}`}>
                 {bindingState === 'committed' ? 'PUBLICADO' : 'SIMULACION'}
               </span>
               {minSeatsNeeded > 0 && (
-                <span className="px-1.5 py-0.5 rounded-md bg-gt-info/10 text-gt-info font-medium">
-                  MIN {minSeatsNeeded}P
-                </span>
-              )}
-              {entries.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-md bg-gt-info/10 text-gt-info font-medium">
-                  {entries.length}E
-                </span>
-              )}
-              {exits.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-md bg-gt-warning/10 text-gt-warning font-medium">
-                  {exits.length}X
-                </span>
-              )}
-              {conflictConnections > 0 && (
-                <span className="px-1.5 py-0.5 rounded-md bg-rose-500/15 text-rose-300 font-medium">
-                  {conflictConnections} conflicto
+                <span className="px-1.5 py-0.5 rounded-md bg-white/[0.05] text-slate-200 font-medium">
+                  {minSeatsNeeded}P
                 </span>
               )}
             </div>
           </div>
           <MiniTimeline items={orderedItems} />
-          {isVirtual && (
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-[10px] text-amber-100">Pendiente de asignar a flota real.</p>
-              {typeof onOpenReconciliation === 'function' && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenReconciliation(busId);
-                  }}
-                  className="rounded-md border border-amber-500/35 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
-                >
-                  Asignar bus real
-                </button>
-              )}
-            </div>
-          )}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400">
+            {hasAssignedVehicle && assignedSeatsMax > 0 && (
+              <span>Flota {assignedSeatsMin > 0 ? `${assignedSeatsMin}-` : ''}{assignedSeatsMax}P</span>
+            )}
+            <span>{orderedItems.length || 0} rutas</span>
+            {entries.length > 0 && <span>{entries.length} entradas</span>}
+            {exits.length > 0 && <span>{exits.length} salidas</span>}
+            {conflictConnections > 0 && <span className="text-rose-300">{conflictConnections} conflicto(s)</span>}
+            {isVirtual && <span className="text-amber-100">Pendiente de asignacion real</span>}
+          </div>
         </div>
 
         <div className="flex-shrink-0 text-gt-text-muted">
@@ -388,6 +359,20 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
             <span>{orderedItems.length || 0} rutas</span>
             {minSeatsNeeded > 0 && <span>min plazas {minSeatsNeeded}</span>}
           </div>
+          {isVirtual && typeof onOpenReconciliation === 'function' && (
+            <div className="pt-2 px-1">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenReconciliation(busId);
+                }}
+                className="w-full rounded-md border border-amber-500/35 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
+              >
+                Asignar bus real
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -460,7 +445,6 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
             <p className="text-[10px] text-gt-text-muted">{schedule.length} buses</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* View toggle */}
             <div className="flex items-center gt-glass rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode('list')}
@@ -479,10 +463,10 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
             </div>
             <button
               onClick={onExport}
-              className="text-[11px] text-gt-text-muted hover:text-gt-accent flex items-center gap-1.5 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/5 border border-transparent hover:border-gt-border"
+              className="text-gt-text-muted hover:text-gt-accent transition-colors p-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-gt-border"
+              title="Descargar PDF"
             >
               <Download size={12} />
-              Descargar PDF
             </button>
           </div>
         </div>

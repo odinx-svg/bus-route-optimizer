@@ -662,6 +662,8 @@ function PlanningOverviewBar({
   const routeRulesCount = Array.isArray(optimizationOptions?.route_load_constraints)
     ? optimizationOptions.route_load_constraints.filter((row) => row?.enabled !== false).length
     : 0;
+  const primaryActionLabel = fleetVirtual > 0 ? 'Reconciliar flota' : 'Abrir reglas';
+  const primaryActionHandler = fleetVirtual > 0 ? onOpenReconciliation : onOpenRules;
 
   return (
     <div className="mb-2 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-3 space-y-3">
@@ -693,33 +695,43 @@ function PlanningOverviewBar({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={primaryActionHandler}
+            className={`rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+              fleetVirtual > 0
+                ? 'border border-amber-500/35 text-amber-100 hover:bg-amber-500/10'
+                : 'border border-cyan-500/35 text-cyan-100 hover:bg-cyan-500/10'
+            }`}
+          >
+            {primaryActionLabel}
+          </button>
+          <button
+            type="button"
             onClick={() => setIsExpanded((prev) => !prev)}
             className="rounded-md border border-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-100 hover:bg-white/5"
           >
-            {isExpanded ? 'Ocultar detalle' : 'Ver detalle'}
-          </button>
-          <button
-            type="button"
-            onClick={onOpenRules}
-            className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
-          >
-            Reglas de optimizacion
-          </button>
-          <button
-            type="button"
-            onClick={onOpenReconciliation}
-            className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
-          >
-            Reconciliar flota
+            {isExpanded ? 'Menos' : 'Mas'}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <PublicationStatusCard title="Buses usados" value={stats?.buses ?? 0} compact />
-        <PublicationStatusCard title="Rutas" value={stats?.routes ?? 0} compact />
-        <PublicationStatusCard title="Provisionales" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} compact />
-        <PublicationStatusCard title="Siguiente paso" value={nextActionLabel} helper="Accion recomendada ahora." compact />
+      <div className="rounded-xl border border-white/10 bg-[#09111b] px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
+            {stats?.buses ?? 0} buses
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
+            {stats?.routes ?? 0} rutas
+          </span>
+          <span className={`rounded-full border px-2.5 py-1 ${fleetVirtual > 0 ? 'border-amber-500/25 bg-amber-500/10 text-amber-100' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'}`}>
+            {fleetVirtual} provisionales
+          </span>
+          <span className={`rounded-full border px-2.5 py-1 ${hasConflict ? 'border-rose-500/25 bg-rose-500/10 text-rose-100' : 'border-white/10 bg-white/[0.03] text-slate-300'}`}>
+            {workspace?.conflict_count ?? 0} conflictos
+          </span>
+          <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-100">
+            Siguiente: {nextActionLabel}
+          </span>
+        </div>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-[#09111b] p-2.5">
@@ -737,6 +749,25 @@ function PlanningOverviewBar({
 
       {isExpanded && (
         <>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenRules}
+              className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
+            >
+              Reglas de optimizacion
+            </button>
+            {fleetVirtual > 0 && (
+              <button
+                type="button"
+                onClick={onOpenReconciliation}
+                className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
+              >
+                Reconciliar flota
+              </button>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
             <PublicationStatusCard title="Flota real" value={fleetReal} tone="success" helper="Buses reales ya vinculados." />
             <PublicationStatusCard title="Estado de publicacion" value={readiness.label} helper="Resumen del estado operativo actual." />
