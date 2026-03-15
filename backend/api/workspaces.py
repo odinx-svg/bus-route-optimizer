@@ -7,7 +7,7 @@ Provides versioned optimization workspaces with save/publish semantics.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query, status
 
@@ -32,6 +32,136 @@ from services.workspace_options import (
 )
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
+
+
+def _safe_dict(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _safe_list(value: Any) -> List[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _workspace_status_value(workspace: OptimizationWorkspaceModel) -> str:
+    if workspace.archived:
+        return "inactive"
+    if workspace.published_version_id and (
+        workspace.working_version_id is None
+        or workspace.published_version_id == workspace.working_version_id
+    ):
+        return "active"
+    return "draft"
+
+
+def _has_schedule_payload(version: Optional[OptimizationWorkspaceVersionModel]) -> bool:
+    schedule_by_day = _safe_dict(version.schedule_by_day if version is not None else None)
+    for day_payload in schedule_by_day.values():
+        if isinstance(day_payload, dict) and isinstance(day_payload.get("schedule"), list) and day_payload.get("schedule"):
+            return True
+        if isinstance(day_payload, list) and day_payload:
+            return True
+    return False
+
+
+def _build_scope_summary(
+    workspace: OptimizationWorkspaceModel,
+    fleet_snapshot: Dict[str, Any],
+) -> schemas.WorkspaceScopeSummary:
+    scope_mode = str(fleet_snapshot.get("scope_mode") or "company").strip().lower()
+    scope_company_ids = [
+        str(company_id).strip()
+        for company_id in _safe_list(fleet_snapshot.get("scope_company_ids"))
+        if str(company_id).strip()
+    ]
+    company_id = str(
+        fleet_snapshot.get("company_id")
+        or workspace.company_id
+        or db_crud.DEFAULT_COMPANY_ID
+    ).strip()
+    if not scope_company_ids:
+        scope_company_ids = [company_id]
+    ute_name = str(fleet_snapshot.get("ute_name") or "").strip() or None
+    label = f"UTE · {ute_name}" if scope_mode == "ute" and ute_name else (
+        "UTE" if scope_mode == "ute" else "Empresa"
+    )
+    return schemas.WorkspaceScopeSummary(
+        mode="ute" if scope_mode == "ute" else "company",
+        label=label,
+        company_id=company_id or None,
+        company_count=max(1, len(scope_company_ids)),
+        ute_id=str(fleet_snapshot.get("ute_id") or "").strip() or None,
+        ute_name=ute_name,
+    )
+
+
+def _build_readiness_summary(workspace: OptimizationWorkspaceModel) -> schemas.WorkspaceReadinessSummary:
+    status_value = _workspace_status_value(workspace)
+    working = workspace.working_version
+    published = workspace.published_version
+    source_version = working or published
+    source_summary = _safe_dict(source_version.summary_metrics if source_version is not None else None)
+    fleet_snapshot = _safe_dict(source_version.fleet_snapshot if source_version is not None else None)
+    reconciliation = _safe_dict(fleet_snapshot.get("reconciliation"))
+    conflicts = _safe_list(fleet_snapshot.get("conflicts"))
+    pending_virtual_count = int(
+        reconciliation.get("pending_count")
+        or fleet_snapshot.get("virtual_created")
+        or source_summary.get("fleet_virtual_created")
+        or source_summary.get("fleet_virtual_buses")
+        or 0
+    )
+    conflict_count = len(conflicts)
+    virtual_policy = str(
+        fleet_snapshot.get("virtual_publish_policy")
+        or source_summary.get("fleet_virtual_publish_policy")
+        or "allow"
+    ).strip().lower()
+    scope_summary = _build_scope_summary(workspace, fleet_snapshot)
+    has_schedule = _has_schedule_payload(working or published)
+
+    workflow_stage = "draft"
+    readiness_state: schemas.ReadinessState = "warning"
+    blocking_reason: Optional[str] = None
+    next_action: schemas.NextRecommendedAction = "review"
+
+    if status_value == "inactive":
+        workflow_stage = "archived"
+        readiness_state = "warning"
+        blocking_reason = "workspace_archived"
+        next_action = "review"
+    elif status_value == "active":
+        workflow_stage = "published"
+        readiness_state = "published"
+        next_action = "review"
+    elif not has_schedule:
+        workflow_stage = "draft"
+        readiness_state = "warning"
+        blocking_reason = "no_schedule"
+        next_action = "optimize"
+    elif conflict_count > 0:
+        workflow_stage = "blocked_conflict"
+        readiness_state = "blocked"
+        blocking_reason = "fleet_conflict"
+        next_action = "resolve_conflict"
+    elif pending_virtual_count > 0 and virtual_policy == "block":
+        workflow_stage = "pending_reconciliation"
+        readiness_state = "warning"
+        blocking_reason = "virtual_reconciliation_required"
+        next_action = "reconcile"
+    else:
+        workflow_stage = "ready_to_publish"
+        readiness_state = "ready"
+        next_action = "publish"
+
+    return schemas.WorkspaceReadinessSummary(
+        workflow_stage=workflow_stage,
+        readiness_state=readiness_state,
+        blocking_reason=blocking_reason,
+        next_recommended_action=next_action,
+        pending_virtual_count=max(0, pending_virtual_count),
+        conflict_count=max(0, conflict_count),
+        scope_summary=scope_summary,
+    )
 
 
 def _ensure_tables_ready() -> None:
@@ -86,14 +216,8 @@ def _to_version_response(version: Optional[OptimizationWorkspaceVersionModel]) -
 def _to_workspace_response(workspace: OptimizationWorkspaceModel) -> schemas.WorkspaceResponse:
     working = workspace.working_version
     published = workspace.published_version
-    status_value = "inactive" if workspace.archived else (
-        "active"
-        if workspace.published_version_id and (
-            workspace.working_version_id is None
-            or workspace.published_version_id == workspace.working_version_id
-        )
-        else "draft"
-    )
+    status_value = _workspace_status_value(workspace)
+    readiness_summary = _build_readiness_summary(workspace)
     return schemas.WorkspaceResponse(
         id=str(workspace.id),
         company_id=str(workspace.company_id or "") or None,
@@ -107,6 +231,13 @@ def _to_workspace_response(workspace: OptimizationWorkspaceModel) -> schemas.Wor
         working_version_number=int(working.version_number) if working else None,
         version_count=len(workspace.versions or []),
         summary_metrics=(working.summary_metrics if working and isinstance(working.summary_metrics, dict) else None),
+        workflow_stage=readiness_summary.workflow_stage,
+        readiness_state=readiness_summary.readiness_state,
+        blocking_reason=readiness_summary.blocking_reason,
+        next_recommended_action=readiness_summary.next_recommended_action,
+        pending_virtual_count=readiness_summary.pending_virtual_count,
+        conflict_count=readiness_summary.conflict_count,
+        scope_summary=readiness_summary.scope_summary,
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
     )
@@ -114,10 +245,12 @@ def _to_workspace_response(workspace: OptimizationWorkspaceModel) -> schemas.Wor
 
 def _to_workspace_detail_response(workspace: OptimizationWorkspaceModel) -> schemas.WorkspaceDetailResponse:
     base = _to_workspace_response(workspace)
+    readiness_summary = _build_readiness_summary(workspace)
     return schemas.WorkspaceDetailResponse(
         **base.model_dump(),
         working_version=_to_version_response(workspace.working_version),
         published_version=_to_version_response(workspace.published_version),
+        readiness_summary=readiness_summary,
     )
 
 
@@ -125,6 +258,41 @@ def _workspace_company_id(db, workspace: OptimizationWorkspaceModel) -> str:
     default_company = db_crud.ensure_default_company(db)
     company_id = str(workspace.company_id or "").strip() or str(default_company.id)
     return company_id
+
+
+def _build_scope_label(scope_mode: Any, ute_name: Any = None) -> str:
+    normalized_mode = str(scope_mode or "company").strip().lower()
+    normalized_ute_name = str(ute_name or "").strip()
+    if normalized_mode == "ute":
+        return f"UTE · {normalized_ute_name}" if normalized_ute_name else "UTE"
+    return "Empresa"
+
+
+def _normalize_reconciliation_payload(reconciliation: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = reconciliation if isinstance(reconciliation, dict) else {}
+    items = normalized.get("items", []) if isinstance(normalized.get("items"), list) else []
+    normalized_items: List[Dict[str, Any]] = []
+    for row in items:
+        if not isinstance(row, dict):
+            continue
+        normalized_items.append(
+            {
+                **row,
+                "required_capacity": int(row.get("required_seats", 0) or 0),
+                "time_window": {
+                    "start_minute": int(row.get("start_minute", 0) or 0),
+                    "end_minute": int(row.get("end_minute", 0) or 0),
+                },
+                "suggested_real_vehicles": row.get("suggestions", []) if isinstance(row.get("suggestions"), list) else [],
+            }
+        )
+    by_day = normalized.get("by_day", {}) if isinstance(normalized.get("by_day"), dict) else {}
+    return {
+        **normalized,
+        "items": normalized_items,
+        "days": by_day,
+        "pending_assignments": normalized_items,
+    }
 
 
 def _build_publish_payload(
@@ -429,11 +597,16 @@ async def get_workspace_fleet_preview(
             schedule_by_day=schedule_by_day,
             exclude_workspace_id=str(workspace.id),
         )
+        normalized_reconciliation = _normalize_reconciliation_payload(
+            preview.get("reconciliation", {}) if isinstance(preview.get("reconciliation"), dict) else {}
+        )
+        scope_label = _build_scope_label(scope.get("scope_mode"), scope.get("ute_name"))
         if day and day in preview.get("schedule_by_day", {}):
             return {
                 "workspace_id": workspace_id,
                 "company_id": company_id,
                 "scope_mode": scope.get("scope_mode"),
+                "scope_label": scope_label,
                 "scope_company_ids": scope_company_ids,
                 "ute_id": scope.get("ute_id"),
                 "ute_name": scope.get("ute_name"),
@@ -448,13 +621,14 @@ async def get_workspace_fleet_preview(
                     and int(preview.get("virtual_created", 0) or 0) > 0
                 ),
                 "day_payload": preview.get("schedule_by_day", {}).get(day, {}),
-                "reconciliation": preview.get("reconciliation", {}),
+                "reconciliation": normalized_reconciliation,
                 "days": preview.get("days", {}),
             }
         return {
             "workspace_id": workspace_id,
             "company_id": company_id,
             "scope_mode": scope.get("scope_mode"),
+            "scope_label": scope_label,
             "scope_company_ids": scope_company_ids,
             "ute_id": scope.get("ute_id"),
             "ute_name": scope.get("ute_name"),
@@ -468,7 +642,7 @@ async def get_workspace_fleet_preview(
                 and int(preview.get("virtual_created", 0) or 0) > 0
             ),
             "schedule_by_day": preview.get("schedule_by_day", {}),
-            "reconciliation": preview.get("reconciliation", {}),
+            "reconciliation": normalized_reconciliation,
             "days": preview.get("days", {}),
         }
     finally:
@@ -512,11 +686,14 @@ async def get_workspace_fleet_reconciliation(
             schedule_by_day=schedule_by_day,
             exclude_workspace_id=str(workspace.id),
         )
-        reconciliation = preview.get("reconciliation", {}) if isinstance(preview.get("reconciliation"), dict) else {}
+        reconciliation = _normalize_reconciliation_payload(
+            preview.get("reconciliation", {}) if isinstance(preview.get("reconciliation"), dict) else {}
+        )
         response: Dict[str, Any] = {
             "workspace_id": workspace_id,
             "company_id": company_id,
             "scope_mode": scope.get("scope_mode"),
+            "scope_label": _build_scope_label(scope.get("scope_mode"), scope.get("ute_name")),
             "scope_company_ids": scope_company_ids,
             "ute_id": scope.get("ute_id"),
             "ute_name": scope.get("ute_name"),
@@ -528,10 +705,12 @@ async def get_workspace_fleet_reconciliation(
             "real_assigned": int(preview.get("real_assigned", 0)),
             "virtual_created": int(preview.get("virtual_created", 0)),
             "reconciliation": reconciliation,
+            "days": reconciliation.get("days", {}),
+            "pending_assignments": reconciliation.get("pending_assignments", []),
         }
         if day:
             day_key = str(day)
-            by_day = reconciliation.get("by_day", {}) if isinstance(reconciliation.get("by_day"), dict) else {}
+            by_day = reconciliation.get("days", {}) if isinstance(reconciliation.get("days"), dict) else {}
             response["day"] = day_key
             response["reconciliation_day"] = by_day.get(day_key, {"pending_virtual": 0, "items": []})
         return response

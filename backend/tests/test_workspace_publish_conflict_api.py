@@ -344,3 +344,109 @@ def test_fleet_preview_includes_reconciliation_when_policy_block(monkeypatch):
     assert body["virtual_publish_policy"] == "block"
     assert body["requires_reconciliation"] is True
     assert body["reconciliation"]["pending_count"] == 1
+
+
+def test_workspace_list_and_detail_include_readiness_fields(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+
+    db = Session()
+    try:
+        workspace = _seed_workspace(db)
+        workspace = crud.get_workspace(db, str(workspace.id))
+        assert workspace is not None
+        assert workspace.working_version is not None
+        workspace.working_version.summary_metrics = {
+            "fleet_virtual_created": 2,
+            "fleet_virtual_publish_policy": "block",
+        }
+        workspace.working_version.fleet_snapshot = {
+            "scope_mode": "ute",
+            "scope_company_ids": ["company_main", "company_partner"],
+            "ute_id": "ute_demo",
+            "ute_name": "UTE Demo",
+            "virtual_publish_policy": "block",
+            "virtual_created": 2,
+            "conflicts": [],
+            "reconciliation": {
+                "pending_count": 2,
+            },
+        }
+        db.commit()
+    finally:
+        db.close()
+
+    list_response = client.get("/api/workspaces")
+    assert list_response.status_code == 200
+    item = list_response.json()["items"][0]
+    assert item["workflow_stage"] == "pending_reconciliation"
+    assert item["readiness_state"] == "warning"
+    assert item["blocking_reason"] == "virtual_reconciliation_required"
+    assert item["next_recommended_action"] == "reconcile"
+    assert item["pending_virtual_count"] == 2
+    assert item["scope_summary"]["mode"] == "ute"
+    assert item["scope_summary"]["label"] == "UTE · UTE Demo"
+
+    detail_response = client.get(f"/api/workspaces/{item['id']}")
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["readiness_summary"]["workflow_stage"] == "pending_reconciliation"
+    assert detail["readiness_summary"]["next_recommended_action"] == "reconcile"
+    assert detail["readiness_summary"]["pending_virtual_count"] == 2
+
+
+def test_fleet_reconciliation_endpoint_normalizes_pending_assignments(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+
+    db = Session()
+    try:
+        workspace = _seed_workspace(db)
+    finally:
+        db.close()
+
+    def _preview_virtual(*args, **kwargs):
+        return {
+            "blocked": False,
+            "conflicts": [],
+            "real_assigned": 1,
+            "virtual_created": 1,
+            "days": {"L": {"fleet_assigned": 1, "virtual_buses": 1}},
+            "schedule_by_day": {"L": {"schedule": []}},
+            "candidate_rows": [],
+            "reconciliation": {
+                "pending_count": 1,
+                "by_day": {
+                    "L": {
+                        "pending_virtual": 1,
+                        "items": [
+                            {
+                                "day": "L",
+                                "bus_id": "B-V1",
+                                "required_seats": 40,
+                                "start_minute": 480,
+                                "end_minute": 560,
+                                "suggestions": [{"vehicle_id": "veh-1", "vehicle_code": "B001", "seats_max": 55}],
+                            }
+                        ],
+                    }
+                },
+                "items": [
+                    {
+                        "day": "L",
+                        "bus_id": "B-V1",
+                        "required_seats": 40,
+                        "start_minute": 480,
+                        "end_minute": 560,
+                        "suggestions": [{"vehicle_id": "veh-1", "vehicle_code": "B001", "seats_max": 55}],
+                    }
+                ],
+            },
+        }
+
+    monkeypatch.setattr(workspaces_api, "preview_workspace_publication", _preview_virtual)
+
+    response = client.get(f"/api/workspaces/{workspace.id}/fleet-reconciliation")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["pending_assignments"][0]["required_capacity"] == 40
+    assert body["pending_assignments"][0]["time_window"] == {"start_minute": 480, "end_minute": 560}
+    assert body["pending_assignments"][0]["suggested_real_vehicles"][0]["vehicle_code"] == "B001"

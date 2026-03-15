@@ -1,6 +1,11 @@
 import React from 'react';
 import { LayoutGrid, Activity, Gauge, Bus } from 'lucide-react';
 import tuttiSymbol from '../assets/tutti-symbol.svg';
+import {
+  getWorkspacePendingLabel,
+  getWorkspaceReadinessConfig,
+  getWorkspaceStatusLabel,
+} from '../utils/workspaceStatus';
 
 const DAY_CONFIG = [
   { key: 'L', label: 'L', full: 'Lunes' },
@@ -53,9 +58,9 @@ const DaySelector = ({ scheduleByDay, activeDay, onDayChange }) => {
 
 const ViewTabs = ({ viewMode, setViewMode, hasStudioAccess }) => {
   const tabs = [
-    { id: 'dashboard', label: 'Control', icon: Gauge, requiresSchedule: false },
+    { id: 'dashboard', label: 'Panel', icon: Gauge, requiresSchedule: false },
     { id: 'fleet', label: 'Flota', icon: Bus, requiresSchedule: false },
-    { id: 'studio', label: 'Studio', icon: LayoutGrid, requiresSchedule: false },
+    { id: 'studio', label: 'Planificacion', icon: LayoutGrid, requiresSchedule: false },
   ];
 
   return (
@@ -76,7 +81,7 @@ const ViewTabs = ({ viewMode, setViewMode, hasStudioAccess }) => {
                 : 'text-gt-text-muted hover:text-gt-text hover:bg-white/5'
             }
           `}
-          title={disabled ? 'Abre una optimizacion desde Control para entrar al Studio' : label}
+          title={disabled ? 'Abre una optimizacion desde Panel para entrar en Planificacion' : label}
         >
           <Icon className="w-3.5 h-3.5" />
           {label}
@@ -94,21 +99,45 @@ const Header = ({
   onDayChange,
   viewMode,
   setViewMode,
-  hasStudioAccess
+  hasStudioAccess,
+  workspaceContext,
 }) => {
   const hasSchedule = scheduleByDay && Object.values(scheduleByDay).some(day => day?.schedule?.length > 0);
   const showOperationalHeader = viewMode === 'studio';
+  const readiness = getWorkspaceReadinessConfig(workspaceContext?.readiness_state);
+  const sectionCopy = {
+    dashboard: {
+      title: 'Panel',
+      subtitle: 'Centro de operaciones y seguimiento de optimizaciones',
+    },
+    fleet: {
+      title: 'Flota',
+      subtitle: 'Catalogo de vehiculos, empresas y carga masiva',
+    },
+    studio: {
+      title: 'Planificacion',
+      subtitle: 'Revision operativa, reconciliacion y publicacion',
+    },
+  }[viewMode] || {
+    title: 'Tutti',
+    subtitle: 'Control operativo',
+  };
 
   return (
-    <header className="h-[62px] gt-header-gradient gt-border-b flex items-center px-5 flex-shrink-0 z-50">
-      <div className="flex items-center gap-3 mr-8">
+    <header className="gt-header-gradient gt-border-b flex items-center px-5 py-3 flex-shrink-0 z-50 gap-5">
+      <div className="flex items-center gap-3 mr-2">
         <div className="w-9 h-9 rounded-lg gt-glass flex items-center justify-center overflow-hidden">
           <img src={tuttiSymbol} alt="TUTTI" className="w-full h-full object-cover" />
         </div>
         <div className="flex flex-col">
           <span className="text-[12px] font-semibold text-gt-text tracking-[0.12em] uppercase data-mono">TUTTI</span>
-          <span className="text-[9px] text-gt-text-muted font-medium -mt-0.5 tracking-[0.16em] uppercase">Fleet Control Center</span>
+          <span className="text-[9px] text-gt-text-muted font-medium -mt-0.5 tracking-[0.16em] uppercase">Centro de control operativo</span>
         </div>
+      </div>
+
+      <div className="min-w-[220px]">
+        <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">{sectionCopy.title}</p>
+        <p className="text-[11px] text-gt-text-muted mt-0.5">{sectionCopy.subtitle}</p>
       </div>
 
       <ViewTabs
@@ -117,8 +146,33 @@ const Header = ({
         hasStudioAccess={hasStudioAccess}
       />
 
+      {workspaceContext && (
+        <div className="hidden xl:flex items-center gap-3 ml-2 rounded-xl border border-[#2a4057] bg-[#091425]/90 px-3 py-2 min-w-[340px]">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Estado actual</p>
+            <p className="text-[12px] font-semibold text-white truncate">
+              {workspaceContext.name || 'Sin optimizacion abierta'}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              {showOperationalHeader ? `Dia ${workspaceContext.activeDayLabel || activeDay || '-'}` : 'Vista general'}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${readiness.chipClass}`}>
+              {readiness.label}
+            </span>
+            <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
+              {getWorkspaceStatusLabel(workspaceContext)}
+            </span>
+            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-100">
+              {getWorkspacePendingLabel(workspaceContext)}
+            </span>
+          </div>
+        </div>
+      )}
+
       {showOperationalHeader && scheduleByDay && (
-        <div className="ml-6">
+        <div className="ml-3">
           <DaySelector
             scheduleByDay={scheduleByDay}
             activeDay={activeDay}
@@ -196,6 +250,7 @@ const Layout = ({
   viewMode,
   setViewMode,
   hasStudioAccess = false,
+  workspaceContext = null,
 }) => {
   return (
     <div className="flex flex-col h-screen w-screen gt-bg text-gt-text font-sans overflow-hidden">
@@ -207,6 +262,7 @@ const Layout = ({
         viewMode={viewMode}
         setViewMode={setViewMode}
         hasStudioAccess={hasStudioAccess}
+        workspaceContext={workspaceContext}
       />
       <main className="flex-1 flex overflow-hidden p-4 gap-4">
         {children}

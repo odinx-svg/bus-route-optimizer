@@ -1,13 +1,37 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, ArchiveRestore, Bus, FolderOpen, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ArchiveRestore,
+  Bus,
+  CheckCircle2,
+  FolderOpen,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { fetchFleetVehicles } from '../services/fleetService';
 import { notifications } from '../services/notifications';
+import {
+  getBlockingReasonText,
+  getNextActionLabel,
+  getScopeLabel,
+  getWorkspacePendingLabel,
+  getWorkspaceReadinessConfig,
+  getWorkspaceStatusLabel,
+} from '../utils/workspaceStatus';
 
-const STATUS_LABEL = {
-  active: { text: 'Activa', cls: 'text-emerald-300 border-emerald-500/35 bg-emerald-500/10' },
-  draft: { text: 'Borrador', cls: 'text-amber-300 border-amber-500/35 bg-amber-500/10' },
-  inactive: { text: 'Inactiva', cls: 'text-slate-300 border-slate-500/35 bg-slate-500/10' },
-};
+const FILTERS = [
+  { id: 'all', label: 'Todas' },
+  { id: 'draft', label: 'Borrador' },
+  { id: 'ready', label: 'Listas para publicar' },
+  { id: 'blocked', label: 'Con conflicto' },
+  { id: 'active', label: 'Publicadas' },
+  { id: 'inactive', label: 'Archivadas' },
+];
 
 export default function ControlHubPage({
   workspaces = [],
@@ -21,6 +45,9 @@ export default function ControlHubPage({
   onConfigureWorkspaceOptions,
 }) {
   const [fleetSummary, setFleetSummary] = useState(null);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [menuWorkspaceId, setMenuWorkspaceId] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
     workspace: null,
@@ -39,35 +66,54 @@ export default function ControlHubPage({
       }
     };
     loadFleetSummary();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const metrics = useMemo(() => {
+  const workspaceMetrics = useMemo(() => {
     const total = workspaces.length;
-    const active = workspaces.filter((ws) => ws.status === 'active').length;
+    const published = workspaces.filter((ws) => ws.status === 'active').length;
     const drafts = workspaces.filter((ws) => ws.status === 'draft').length;
-    const inactive = workspaces.filter((ws) => ws.status === 'inactive').length;
-    return { total, active, drafts, inactive };
+    const blocked = workspaces.filter((ws) => ws.readiness_state === 'blocked').length;
+    const pendingReconciliation = workspaces.filter((ws) => Number(ws.pending_virtual_count || 0) > 0).length;
+    return { total, published, drafts, blocked, pendingReconciliation };
   }, [workspaces]);
+
+  const filteredWorkspaces = useMemo(() => {
+    const normalizedQuery = String(query || '').trim().toLowerCase();
+    return workspaces.filter((workspace) => {
+      if (filter === 'draft' && workspace.status !== 'draft') return false;
+      if (filter === 'ready' && workspace.readiness_state !== 'ready') return false;
+      if (filter === 'blocked' && workspace.readiness_state !== 'blocked') return false;
+      if (filter === 'active' && workspace.status !== 'active') return false;
+      if (filter === 'inactive' && workspace.status !== 'inactive') return false;
+
+      if (!normalizedQuery) return true;
+      const haystack = [
+        workspace.name,
+        workspace.city_label,
+        workspace.scope_summary?.label,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [filter, query, workspaces]);
+
+  const pendingToday = useMemo(() => ({
+    unpublished: workspaces.filter((ws) => ws.status === 'draft').length,
+    provisional: workspaces.filter((ws) => Number(ws.pending_virtual_count || 0) > 0).length,
+    blocked: workspaces.filter((ws) => Number(ws.conflict_count || 0) > 0 || ws.readiness_state === 'blocked').length,
+  }), [workspaces]);
 
   const expectedDeleteName = String(deleteDialog.workspace?.name || '');
   const canConfirmDelete = expectedDeleteName.length > 0 && deleteDialog.typedName.trim() === expectedDeleteName;
 
-  const openDeleteDialog = (workspace) => {
-    setDeleteDialog({
-      open: true,
-      workspace,
-      typedName: '',
-    });
-  };
-
   const closeDeleteDialog = () => {
     if (deletingWorkspaceId) return;
-    setDeleteDialog({
-      open: false,
-      workspace: null,
-      typedName: '',
-    });
+    setDeleteDialog({ open: false, workspace: null, typedName: '' });
   };
 
   const handleConfirmDelete = async () => {
@@ -77,11 +123,7 @@ export default function ControlHubPage({
     try {
       await onDeleteWorkspace?.(target.id, expectedDeleteName);
       notifications.success('Optimizacion eliminada', `${expectedDeleteName} se borro de forma permanente`);
-      setDeleteDialog({
-        open: false,
-        workspace: null,
-        typedName: '',
-      });
+      setDeleteDialog({ open: false, workspace: null, typedName: '' });
     } catch (error) {
       notifications.error('No se pudo borrar', error?.message || 'Error al eliminar la optimizacion');
     } finally {
@@ -89,148 +131,249 @@ export default function ControlHubPage({
     }
   };
 
-  return (
-    <div className="h-full w-full overflow-auto control-panel rounded-[16px] p-4 md:p-5 space-y-4">
-      <div className="flex items-end justify-between border-b border-[#2a4056] pb-3">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Control Hub</p>
-          <h2 className="text-[22px] font-semibold text-[#ecf4fb] mt-1" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
-            Optimizaciones Guardadas
-          </h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onRefresh}
-            className="px-2.5 py-1.5 control-btn rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Refrescar
-          </button>
-          <button
-            onClick={onCreateWorkspace}
-            className="px-2.5 py-1.5 control-btn-primary rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Nueva
-          </button>
-        </div>
-      </div>
+  const openDeleteDialog = (workspace) => {
+    setDeleteDialog({ open: true, workspace, typedName: '' });
+    setMenuWorkspaceId(null);
+  };
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <div className="control-card rounded-[14px] p-3.5 border border-[#304a62]">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Total</p>
-          <p className="text-[24px] font-semibold data-mono text-slate-100 mt-1">{metrics.total}</p>
+  return (
+    <div className="h-full w-full overflow-auto rounded-[18px] control-panel p-4 md:p-5 space-y-4">
+      <div className="rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Panel operativo</p>
+            <h2 className="mt-1 text-[24px] font-semibold text-[#ecf4fb]" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+              Centro de optimizaciones
+            </h2>
+            <p className="mt-1 text-[12px] text-slate-400">
+              Revisa el estado de cada planificacion, detecta bloqueos y entra directo en el siguiente paso.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRefresh}
+              className="px-2.5 py-1.5 control-btn rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Actualizar
+            </button>
+            <button
+              onClick={onCreateWorkspace}
+              className="px-3 py-1.5 control-btn-primary rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Nueva optimizacion
+            </button>
+          </div>
         </div>
-        <div className="control-card rounded-[14px] p-3.5 border border-[#304a62]">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Activas</p>
-          <p className="text-[24px] font-semibold data-mono text-emerald-300 mt-1">{metrics.active}</p>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_320px]">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Total</p>
+              <p className="mt-1 text-[24px] font-semibold data-mono text-white">{workspaceMetrics.total}</p>
+            </div>
+            <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Publicadas</p>
+              <p className="mt-1 text-[24px] font-semibold data-mono text-cyan-300">{workspaceMetrics.published}</p>
+            </div>
+            <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Borradores</p>
+              <p className="mt-1 text-[24px] font-semibold data-mono text-amber-300">{workspaceMetrics.drafts}</p>
+            </div>
+            <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Flota activa</p>
+              <p className="mt-1 text-[24px] font-semibold data-mono text-emerald-300">{fleetSummary?.active ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Que falta hoy</p>
+            <div className="mt-3 space-y-2 text-[12px]">
+              <div className="flex items-center justify-between rounded-md border border-white/5 bg-white/[0.03] px-3 py-2">
+                <span className="text-slate-300">Sin publicar</span>
+                <span className="data-mono text-white">{pendingToday.unpublished}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-white/5 bg-white/[0.03] px-3 py-2">
+                <span className="text-slate-300">Pendientes de reconciliar</span>
+                <span className="data-mono text-amber-200">{pendingToday.provisional}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-white/5 bg-white/[0.03] px-3 py-2">
+                <span className="text-slate-300">Bloqueadas por conflicto</span>
+                <span className="data-mono text-rose-200">{pendingToday.blocked}</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="control-card rounded-[14px] p-3.5 border border-[#304a62]">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Borradores</p>
-          <p className="text-[24px] font-semibold data-mono text-amber-300 mt-1">{metrics.drafts}</p>
-        </div>
-        <div className="control-card rounded-[14px] p-3.5 border border-[#304a62]">
-          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Flota Activa</p>
-          <p className="text-[24px] font-semibold data-mono text-cyan-300 mt-1">{fleetSummary?.active ?? 0}</p>
+
+        <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setFilter(item.id)}
+                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
+                  filter === item.id
+                    ? 'border-cyan-400/55 bg-cyan-500/12 text-cyan-100'
+                    : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.05]'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 rounded-xl border border-[#304a62] bg-[#09111b] px-3 py-2 text-[12px] text-slate-300 min-w-[280px]">
+            <Search className="w-4 h-4 text-slate-500" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar por nombre, ciudad o ambito"
+              className="w-full bg-transparent outline-none placeholder:text-slate-500"
+            />
+          </label>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        {workspaces.length === 0 && (
-          <div className="control-card rounded-[14px] p-6 border border-[#304a62] text-center text-slate-400">
-            No hay optimizaciones creadas todavia
+        {filteredWorkspaces.length === 0 && (
+          <div className="rounded-[16px] border border-[#304a62] bg-[#0d1623]/95 p-8 text-center text-slate-400">
+            No hay optimizaciones que coincidan con el filtro actual.
           </div>
         )}
-        {workspaces.map((workspace) => {
-          const statusCfg = STATUS_LABEL[workspace.status] || STATUS_LABEL.draft;
+
+        {filteredWorkspaces.map((workspace) => {
+          const readiness = getWorkspaceReadinessConfig(workspace.readiness_state);
           const selected = String(workspace.id) === String(activeWorkspaceId);
-          const buses = workspace?.summary_metrics?.best_buses ?? workspace?.summary_metrics?.total_buses ?? 0;
-          const infeasible = workspace?.summary_metrics?.infeasible_buses ?? 0;
-          const loadMin = workspace?.summary_metrics?.min_routes_per_bus;
-          const loadMax = workspace?.summary_metrics?.max_routes_per_bus;
-          const loadMedian = workspace?.summary_metrics?.median_routes_per_bus;
-          const loadSpread = workspace?.summary_metrics?.load_spread_routes;
+          const nextActionLabel = getNextActionLabel(workspace.next_recommended_action);
+          const scopeLabel = getScopeLabel(workspace.scope_summary);
           const fleetReal = workspace?.summary_metrics?.fleet_real_assigned ?? workspace?.summary_metrics?.fleet_assigned ?? 0;
-          const fleetVirtual = workspace?.summary_metrics?.fleet_virtual_created ?? workspace?.summary_metrics?.fleet_virtual_buses ?? 0;
+          const fleetVirtual = workspace?.pending_virtual_count ?? workspace?.summary_metrics?.fleet_virtual_created ?? 0;
+          const conflictCount = workspace?.conflict_count ?? 0;
+          const helperText = getBlockingReasonText(workspace.blocking_reason) || getWorkspacePendingLabel(workspace);
+
           return (
             <div
               key={workspace.id}
-              className={`control-card rounded-[14px] p-4 border transition-colors ${selected ? 'border-cyan-400/55' : 'border-[#304a62]'}`}
+              className={`rounded-[16px] border bg-[#0d1623]/95 p-4 transition ${
+                selected ? 'border-cyan-400/60 shadow-[0_0_0_1px_rgba(34,211,238,0.14)]' : 'border-[#304a62]'
+              }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[15px] font-semibold text-slate-100">{workspace.name}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    {workspace.city_label || 'Sin ciudad'} | v{workspace.working_version_number || 0}
-                  </p>
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[18px] font-semibold text-slate-100">{workspace.name}</p>
+                    <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${readiness.chipClass}`}>
+                      {readiness.label}
+                    </span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
+                      {getWorkspaceStatusLabel(workspace)}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                    <span>{scopeLabel}</span>
+                    <span className="text-slate-600">|</span>
+                    <span>{workspace.city_label || 'Sin ciudad'}</span>
+                    <span className="text-slate-600">|</span>
+                    <span>v{workspace.working_version_number || 0}</span>
+                    <span className="text-slate-600">|</span>
+                    <span>{new Date(workspace.updated_at).toLocaleString()}</span>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Flota real</p>
+                      <p className="mt-1 text-[16px] data-mono text-cyan-200">{fleetReal}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Provisionales</p>
+                      <p className="mt-1 text-[16px] data-mono text-amber-200">{fleetVirtual}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conflictos</p>
+                      <p className="mt-1 text-[16px] data-mono text-rose-200">{conflictCount}</p>
+                    </div>
+                    <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Siguiente paso</p>
+                      <p className="mt-1 text-[13px] font-semibold text-white">{nextActionLabel}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 inline-flex items-start gap-2 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
+                    {workspace.readiness_state === 'blocked' ? (
+                      <AlertTriangle className="mt-0.5 h-4 w-4 text-rose-300" />
+                    ) : (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" />
+                    )}
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">Estado operativo</p>
+                      <p className="mt-0.5 text-[12px] text-slate-200">{helperText}</p>
+                    </div>
+                  </div>
                 </div>
-                <span className={`px-2 py-0.5 rounded-sm border text-[10px] data-mono uppercase tracking-[0.1em] ${statusCfg.cls}`}>
-                  {statusCfg.text}
-                </span>
-              </div>
-              <div className="mt-3 flex items-center gap-4 text-[11px] text-slate-300">
-                <span className="flex items-center gap-1">
-                  <Bus className="w-3.5 h-3.5" />
-                  {buses} buses
-                </span>
-                <span className="flex items-center gap-1">
-                  <Activity className="w-3.5 h-3.5" />
-                  {infeasible} inviables
-                </span>
-                {(Number.isFinite(loadMin) && Number.isFinite(loadMax)) ? (
-                  <span className="data-mono">
-                    carga {loadMin}-{loadMax}
-                  </span>
-                ) : null}
-                {(Number.isFinite(loadMedian) || Number.isFinite(loadSpread)) ? (
-                  <span className={`data-mono ${Number(loadSpread || 0) > 2 ? 'text-rose-300' : 'text-emerald-300'}`}>
-                    mediana {loadMedian ?? 0} | diferencia {loadSpread ?? 0}
-                  </span>
-                ) : null}
-                <span className="data-mono text-cyan-300">real {fleetReal}</span>
-                <span className={`data-mono ${Number(fleetVirtual || 0) > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
-                  virtual {fleetVirtual}
-                </span>
-                <span>{new Date(workspace.updated_at).toLocaleString()}</span>
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  onClick={() => onOpenWorkspace?.(workspace.id)}
-                  className="px-2.5 py-1.5 control-btn rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
-                >
-                  <FolderOpen className="w-3.5 h-3.5" />
-                  Abrir Studio
-                </button>
-                <button
-                  onClick={() => onConfigureWorkspaceOptions?.(workspace.id, workspace.name)}
-                  className="px-2.5 py-1.5 rounded-md text-[11px] border border-cyan-500/35 text-cyan-300 hover:bg-cyan-500/10"
-                >
-                  Restricciones
-                </button>
-                {workspace.status !== 'inactive' ? (
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   <button
-                    onClick={() => onArchiveWorkspace?.(workspace.id)}
-                    className="px-2.5 py-1.5 rounded-md text-[11px] border border-slate-500/35 text-slate-300 hover:bg-slate-500/10"
+                    onClick={() => onOpenWorkspace?.(workspace.id)}
+                    className="px-3 py-1.5 control-btn-primary rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
                   >
-                    Archivar
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    {workspace.next_recommended_action === 'publish' ? 'Abrir para publicar' : nextActionLabel}
                   </button>
-                ) : (
                   <button
-                    onClick={() => onRestoreWorkspace?.(workspace.id)}
-                    className="px-2.5 py-1.5 rounded-md text-[11px] border border-cyan-500/35 text-cyan-300 hover:bg-cyan-500/10 flex items-center gap-1"
+                    onClick={() => onConfigureWorkspaceOptions?.(workspace.id, workspace.name)}
+                    className="px-2.5 py-1.5 rounded-md text-[11px] border border-cyan-500/35 text-cyan-300 hover:bg-cyan-500/10"
                   >
-                    <ArchiveRestore className="w-3.5 h-3.5" />
-                    Restaurar
+                    Reglas
                   </button>
-                )}
-                <button
-                  onClick={() => openDeleteDialog(workspace)}
-                  className="px-2.5 py-1.5 rounded-md text-[11px] border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 flex items-center gap-1"
-                  title="Borrar optimizacion de forma permanente"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Borrar
-                </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setMenuWorkspaceId((prev) => (prev === workspace.id ? null : workspace.id))}
+                      className="rounded-md border border-white/10 px-2.5 py-1.5 text-slate-300 hover:bg-white/[0.05]"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                    {menuWorkspaceId === workspace.id && (
+                      <div className="absolute right-0 top-[calc(100%+8px)] z-20 min-w-[180px] rounded-xl border border-[#304a62] bg-[#09111b] p-1.5 shadow-2xl">
+                        {workspace.status !== 'inactive' ? (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setMenuWorkspaceId(null);
+                              await onArchiveWorkspace?.(workspace.id);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-slate-200 hover:bg-white/[0.05]"
+                          >
+                            <Activity className="h-4 w-4 text-slate-400" />
+                            Archivar
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setMenuWorkspaceId(null);
+                              await onRestoreWorkspace?.(workspace.id);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-cyan-200 hover:bg-white/[0.05]"
+                          >
+                            <ArchiveRestore className="h-4 w-4 text-cyan-300" />
+                            Restaurar
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openDeleteDialog(workspace)}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[12px] text-rose-200 hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-4 w-4 text-rose-300" />
+                          Borrar definitivamente
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           );

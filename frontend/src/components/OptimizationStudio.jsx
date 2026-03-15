@@ -4,9 +4,9 @@ import BusListPanel from './BusListPanel';
 import { UnifiedWorkspace } from './workspace';
 
 const STUDIO_TABS = [
-  { id: 'mixed', label: 'Mixto' },
+  { id: 'mixed', label: 'Mapa + horario' },
   { id: 'map', label: 'Mapa' },
-  { id: 'workspace', label: 'Workspace' },
+  { id: 'workspace', label: 'Horario' },
 ];
 
 export default function OptimizationStudio({
@@ -25,6 +25,7 @@ export default function OptimizationStudio({
   onExport,
   pinnedBusIds = [],
   onTogglePinBus = null,
+  onOpenReconciliation = null,
 }) {
   const [studioTab, setStudioTab] = useState('mixed');
   const [splitPercent, setSplitPercent] = useState(40);
@@ -192,6 +193,7 @@ export default function OptimizationStudio({
                 onRouteSelect={onRouteSelect}
                 onExport={() => handleExportCurrentDay({ schedule: mapSchedule, source: 'map' })}
                 activeDay={activeDay}
+                onOpenReconciliation={onOpenReconciliation}
               />
             </div>
           </div>

@@ -418,14 +418,14 @@ function EmptyWorkspace({ onAddBus }) {
       <div className="w-12 h-12 rounded-xl gt-glass flex items-center justify-center mb-3">
         <LayoutList className="w-6 h-6 text-gt-text-muted" />
       </div>
-      <h3 className="text-sm font-medium text-gt-text mb-1 uppercase tracking-[0.08em]">Sin buses asignados</h3>
-      <p className="text-xs text-gt-text-muted mb-3">Crea una unidad para iniciar el plan operativo</p>
+      <h3 className="text-sm font-medium text-gt-text mb-1 uppercase tracking-[0.08em]">Sin unidades en este dia</h3>
+      <p className="text-xs text-gt-text-muted mb-3">Anade una unidad o fija buses desde Mapa + horario para empezar la revision.</p>
       <button
         onClick={onAddBus}
         className="gt-btn-secondary px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
       >
         <Plus className="w-3.5 h-3.5" />
-        Anadir bus
+        Anadir unidad
       </button>
     </div>
   );
@@ -2261,8 +2261,8 @@ export function UnifiedWorkspace({
         : '';
 
       notifications.success(
-        'Validacion global completada',
-        `${summary.incidents_total || 0} incidencias en ${summary.total_buses || 0} buses | Pos. OSRM actualizada en ${refreshResult?.updated || 0} buses${autoText}`
+        'Revision completa',
+        `${summary.incidents_total || 0} incidencias en ${summary.total_buses || 0} buses | tiempos OSRM actualizados en ${refreshResult?.updated || 0} buses${autoText}`
       );
     } catch (error) {
       notifications.error('Error de validacion global', error.message || 'No se pudo validar todo');
@@ -2318,7 +2318,7 @@ export function UnifiedWorkspace({
     }
     downloadIncidentsAsCsv(globalValidationReport);
     downloadIncidentsAsJson(globalValidationReport);
-    notifications.success('Incidencias descargadas', 'Se descargaron CSV y JSON');
+    notifications.success('Reporte descargado', 'Se descargaron los archivos CSV y JSON');
   }, [globalValidationReport]);
 
   const handleManualReassign = useCallback(async () => {
@@ -2424,33 +2424,33 @@ export function UnifiedWorkspace({
               onClick={handleValidateAllBuses}
               disabled={globalValidationRunning || reassignRunning || buses.length === 0}
               className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
-              title="Validar toda la planificacion por dia"
+              title="Revisar toda la planificacion del dia"
             >
               {globalValidationRunning ? (
                 <div className="w-3 h-3 border-2 border-slate-500 border-t-cyan-300 rounded-full animate-spin" />
               ) : (
                 <CheckCircle className="w-3 h-3" />
               )}
-              Comprobar todo
+              Revisar todo
             </button>
 
             <button
               onClick={handleManualReassign}
               disabled={globalValidationRunning || reassignRunning || buses.length === 0}
               className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
-              title="Reasignar automaticamente incidencias criticas detectadas"
+              title="Intentar resolver automaticamente las incidencias criticas detectadas"
             >
               {reassignRunning ? (
                 <div className="w-3 h-3 border-2 border-slate-500 border-t-cyan-300 rounded-full animate-spin" />
               ) : (
                 <GitBranch className="w-3 h-3" />
               )}
-              Reasignar
+              Resolver criticos
             </button>
 
             <label
               className="px-2 py-1 rounded-sm border border-[#2b4056] bg-[#101a26] text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-300 flex items-center gap-1.5 cursor-pointer select-none"
-              title="Si esta activo, al comprobar todo el sistema reasigna automaticamente errores criticos"
+              title="Si esta activo, la revision intenta resolver automaticamente los errores criticos"
             >
               <input
                 type="checkbox"
@@ -2458,7 +2458,7 @@ export function UnifiedWorkspace({
                 onChange={(event) => setAutoReassignCritical(Boolean(event.target.checked))}
                 className="accent-cyan-400"
               />
-              Auto critico
+              Auto resolver
             </label>
 
             {positioningRefreshRunning && (
@@ -2475,20 +2475,20 @@ export function UnifiedWorkspace({
               onClick={handleExportIncidents}
               disabled={!globalValidationReport}
               className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
-              title="Descargar incidencias en CSV y JSON"
+              title="Descargar el reporte de incidencias en CSV y JSON"
             >
               <Download className="w-3 h-3" />
-              Incidencias
+              Descargar reporte
             </button>
 
             <button
               onClick={handleExportPdf}
               disabled={!hasRoutesAssigned}
               className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
-              title="Exportar PDF del horario actual (estado vivo)"
+              title="Descargar el PDF del horario actual"
             >
               <Download className="w-3 h-3" />
-              Exportar PDF
+              Descargar PDF
             </button>
 
             <div className="w-px h-5 bg-slate-700 mx-0.5" />
@@ -2499,7 +2499,7 @@ export function UnifiedWorkspace({
               title="Crear ruta manual"
             >
               <Plus className="w-3 h-3" />
-              Ruta
+              Nueva ruta
             </button>
 
             <button
@@ -2527,7 +2527,7 @@ export function UnifiedWorkspace({
               onClick={handleClearAll}
               disabled={buses.every(b => b.routes.length === 0)}
               className="px-2 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold transition-colors"
-              title="Limpiar"
+              title="Vaciar horario"
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -2537,7 +2537,7 @@ export function UnifiedWorkspace({
               className="px-2 py-1.5 control-btn rounded-md text-[10px] font-semibold transition-colors flex items-center gap-1"
             >
               <Plus className="w-3 h-3" />
-              Bus
+              Nueva unidad
             </button>
             
             <button
@@ -2595,10 +2595,10 @@ export function UnifiedWorkspace({
                   <div className="h-full flex items-center justify-center rounded-md border border-[#2a3f54] bg-[#0d1622]">
                     <div className="text-center px-6">
                       <div className="text-[12px] uppercase tracking-[0.12em] text-cyan-300 data-mono font-semibold">
-                        Mixto filtrado por pines
+                        Mapa + horario filtrado
                       </div>
                       <p className="mt-2 text-[12px] text-slate-400">
-                        No hay buses pineados en este dia. Pinea buses en Mapa o Workspace para mostrarlos aqui.
+                        No hay unidades fijadas en este dia. Fijalas desde Mapa + horario para ver solo esa seleccion aqui.
                       </p>
                     </div>
                   </div>
@@ -2845,7 +2845,7 @@ export function UnifiedWorkspace({
                 <div className="mt-3 control-card rounded-md border border-[#2b4056]">
                   <div className="px-3 py-2 border-b border-slate-700/40 flex items-center justify-between">
                     <div className="text-[11px] uppercase tracking-wider text-slate-300 font-semibold">
-                      Panel Global de Incidencias OSRM
+                      Incidencias detectadas por OSRM
                     </div>
                     <div className="text-[10px] font-mono text-slate-400 text-right">
                       <div>{globalValidationReport?.summary?.incidents_total || 0} incidencias | {globalValidationReport?.summary?.total_buses || 0} buses</div>
@@ -2863,7 +2863,7 @@ export function UnifiedWorkspace({
                       onChange={(e) => setGlobalFilter((prev) => ({ ...prev, severity: e.target.value }))}
                       className="bg-[#101a26] border border-[#2b4056] rounded px-2 py-1 text-[11px] text-slate-200 data-mono"
                     >
-                      <option value="all">Todas severidades</option>
+                      <option value="all">Todos los niveles</option>
                       <option value="error">Error</option>
                       <option value="warning">Warning</option>
                       <option value="info">Info</option>
@@ -2885,7 +2885,7 @@ export function UnifiedWorkspace({
                       onChange={(e) => setGlobalFilter((prev) => ({ ...prev, bus: e.target.value }))}
                       className="bg-[#101a26] border border-[#2b4056] rounded px-2 py-1 text-[11px] text-slate-200 data-mono"
                     >
-                      <option value="all">Todos buses</option>
+                      <option value="all">Todas las unidades</option>
                       {availableIncidentBuses.map((busId) => (
                         <option key={busId} value={busId}>{busId}</option>
                       ))}
@@ -2896,7 +2896,7 @@ export function UnifiedWorkspace({
                       <input
                         value={globalFilter.query}
                         onChange={(e) => setGlobalFilter((prev) => ({ ...prev, query: e.target.value }))}
-                        placeholder="Buscar ruta, motivo o accion"
+                        placeholder="Buscar ruta, motivo o sugerencia"
                         className="w-full bg-transparent outline-none py-1 text-[11px] text-slate-200 placeholder:text-slate-500"
                       />
                     </div>
@@ -2907,16 +2907,16 @@ export function UnifiedWorkspace({
                       <thead className="sticky top-0 bg-[#111725] text-slate-400 uppercase tracking-wider text-[10px]">
                         <tr>
                           <th className="px-2 py-1 text-left">Dia</th>
-                          <th className="px-2 py-1 text-left">Bus</th>
+                          <th className="px-2 py-1 text-left">Unidad</th>
                           <th className="px-2 py-1 text-left">Ruta A</th>
                           <th className="px-2 py-1 text-left">Ruta B</th>
                           <th className="px-2 py-1 text-left">Tipo</th>
-                          <th className="px-2 py-1 text-left">Sev</th>
+                          <th className="px-2 py-1 text-left">Nivel</th>
                           <th className="px-2 py-1 text-left">Disp</th>
-                          <th className="px-2 py-1 text-left">Viaje</th>
-                          <th className="px-2 py-1 text-left">Buffer</th>
+                          <th className="px-2 py-1 text-left">Trayecto</th>
+                          <th className="px-2 py-1 text-left">Margen</th>
                           <th className="px-2 py-1 text-left">Motivo</th>
-                          <th className="px-2 py-1 text-left">Accion</th>
+                          <th className="px-2 py-1 text-left">Sugerencia</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2945,7 +2945,7 @@ export function UnifiedWorkspace({
                         {filteredIncidents.length === 0 && (
                           <tr>
                             <td colSpan={11} className="px-2 py-3 text-center text-slate-500">
-                              No hay incidencias para los filtros activos
+                              No hay incidencias con los filtros actuales
                             </td>
                           </tr>
                         )}

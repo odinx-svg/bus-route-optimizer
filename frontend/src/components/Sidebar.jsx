@@ -34,8 +34,8 @@ const Sidebar = ({
       <div className="px-5 pt-5 pb-4 gt-border-b">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold text-gt-text uppercase tracking-[0.14em]">Ingesta</p>
-            <p className="text-[11px] text-gt-text-muted mt-0.5">Carga de datasets operativos</p>
+            <p className="text-[11px] font-semibold text-gt-text uppercase tracking-[0.14em]">Datos</p>
+            <p className="text-[11px] text-gt-text-muted mt-0.5">Carga y revision de rutas operativas</p>
           </div>
           {showCloseButton && typeof onClose === 'function' && (
             <button
@@ -119,7 +119,7 @@ const Sidebar = ({
               {children}
               <div className="gt-glass rounded-xl p-3 border border-[#2a4057]">
                 <p className="text-[10px] font-medium text-cyan-300 uppercase tracking-[0.14em] mb-1">
-                  Restricciones de carga
+                  Reglas de optimizacion
                 </p>
                 <p className="text-[11px] text-gt-text-muted">
                   Diferencia max {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
@@ -131,7 +131,7 @@ const Sidebar = ({
                   onClick={() => onConfigureOptimizationOptions?.()}
                   className="mt-2 w-full py-2 rounded-lg border border-cyan-500/35 text-[10px] uppercase tracking-[0.1em] text-cyan-200 hover:bg-cyan-500/10 transition-colors"
                 >
-                  Configurar restricciones
+                  Abrir reglas
                 </button>
               </div>
 
@@ -147,7 +147,7 @@ const Sidebar = ({
                     ) : (
                       <>
                         <Play size={13} fill="currentColor" />
-                        Ejecutar Pipeline
+                        Generar planificacion
                       </>
                     )}
                   </button>
@@ -156,7 +156,7 @@ const Sidebar = ({
                       className="w-full py-2 text-[11px] text-gt-text-muted hover:text-gt-danger transition-colors flex items-center justify-center gap-1.5"
                     >
                     <RotateCcw size={11} />
-                    Reset datos
+                    Limpiar datos
                   </button>
                 </div>
               ) : (

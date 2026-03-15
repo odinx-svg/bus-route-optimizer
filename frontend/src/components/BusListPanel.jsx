@@ -229,7 +229,7 @@ const ConnectionCard = ({ connection, isSelected, onClick }) => {
   );
 };
 
-const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRouteSelect, onConnectionSelect, routeCapacityById }) => {
+const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRouteSelect, onConnectionSelect, routeCapacityById, onOpenReconciliation }) => {
   const busId = getBusId(bus);
   const color = getBusColor(busId);
   const assignedVehicleCode = bus.assigned_vehicle_code || '';
@@ -247,7 +247,7 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
   const hasAssignedVehicle = Boolean(!isVirtual && (assignedVehicleCode || assignedVehiclePlate));
   const displayBusId = hasAssignedVehicle
     ? (assignedVehicleCode || assignedVehiclePlate)
-    : (isVirtual ? (assignedVehicleCode || busId || 'VIRTUAL') : (busId || 'BUS'));
+    : (isVirtual ? (assignedVehicleCode || busId || 'PROVISIONAL') : (busId || 'BUS'));
   const orderedItems = useMemo(() => sortItemsByTimeAndNumber(getBusItems(bus)), [bus]);
   const entries = useMemo(() => orderedItems.filter(i => i.type === 'entry'), [orderedItems]);
   const exits = useMemo(() => orderedItems.filter(i => i.type === 'exit'), [orderedItems]);
@@ -257,13 +257,14 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
     [orderedItems, routeCapacityById]
   );
   const totalStops = orderedItems.reduce((sum, item) => sum + (item.stops?.length || 0), 0);
+  const conflictConnections = connections.filter((connection) => connection.marginMinutes < 0).length;
 
   return (
     <div className={`
       rounded-xl overflow-hidden transition-all duration-200 border gt-glass
       ${isSelected
         ? 'border-gt-accent/30 bg-gt-accent/5'
-        : 'border-gt-border hover:border-gt-accent/20'
+        : (isVirtual ? 'border-amber-500/25 bg-amber-500/[0.05] hover:border-amber-400/35' : 'border-gt-border hover:border-gt-accent/20')
       }
     `}>
       <div
@@ -298,12 +299,12 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
                 </span>
               )}
               {isVirtual && (
-                <span className="px-1.5 py-0.5 rounded-md bg-rose-500/15 text-rose-300 font-medium">
-                  VIRTUAL
+                <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-200 font-medium">
+                  PROVISIONAL
                 </span>
               )}
               <span className={`px-1.5 py-0.5 rounded-md font-medium ${bindingState === 'committed' ? 'bg-cyan-500/15 text-cyan-300' : 'bg-amber-500/15 text-amber-300'}`}>
-                {bindingState === 'committed' ? 'COMMITTED' : 'PREVIEW'}
+                {bindingState === 'committed' ? 'PUBLICADO' : 'SIMULACION'}
               </span>
               {minSeatsNeeded > 0 && (
                 <span className="px-1.5 py-0.5 rounded-md bg-gt-info/10 text-gt-info font-medium">
@@ -320,9 +321,31 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
                   {exits.length}X
                 </span>
               )}
+              {conflictConnections > 0 && (
+                <span className="px-1.5 py-0.5 rounded-md bg-rose-500/15 text-rose-300 font-medium">
+                  {conflictConnections} conflicto
+                </span>
+              )}
             </div>
           </div>
           <MiniTimeline items={orderedItems} />
+          {isVirtual && (
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-[10px] text-amber-100">Pendiente de asignar a flota real.</p>
+              {typeof onOpenReconciliation === 'function' && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenReconciliation(busId);
+                  }}
+                  className="rounded-md border border-amber-500/35 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
+                >
+                  Asignar bus real
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex-shrink-0 text-gt-text-muted">
@@ -371,9 +394,9 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
   );
 };
 
-const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miércoles', X: 'Xoves', V: 'Venres' };
+const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
 
-const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, selectedRouteId, onRouteSelect, onExport, activeDay, onScheduleChange }) => {
+const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, selectedRouteId, onRouteSelect, onExport, activeDay, onScheduleChange, onOpenReconciliation }) => {
   const [expandedBus, setExpandedBus] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'board'
@@ -459,7 +482,7 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
               className="text-[11px] text-gt-text-muted hover:text-gt-accent flex items-center gap-1.5 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/5 border border-transparent hover:border-gt-border"
             >
               <Download size={12} />
-              Exportar PDF
+              Descargar PDF
             </button>
           </div>
         </div>
@@ -499,6 +522,7 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
                 onRouteSelect={onRouteSelect}
                 onConnectionSelect={handleConnectionSelect}
                 routeCapacityById={routeCapacityById}
+                onOpenReconciliation={onOpenReconciliation}
               />
             );
           })}

@@ -232,7 +232,7 @@ export function useOptimizationProgress(jobId: string | null): ProgressState {
         }
 
         if (resultData.status === 'failed') {
-          markError(resultData.error || 'Pipeline fallido', 'PIPELINE_FAILED');
+          markError(resultData.error || 'La planificacion ha fallado', 'PIPELINE_FAILED');
           return;
         }
 
@@ -271,7 +271,7 @@ export function useOptimizationProgress(jobId: string | null): ProgressState {
       notFoundConsecutive.current = 0;
       const statusData = await statusResponse.json();
       if (statusData.status === 'failed') {
-        markError(statusData.error || 'Pipeline fallido', 'PIPELINE_FAILED');
+        markError(statusData.error || 'La planificacion ha fallado', 'PIPELINE_FAILED');
       } else if (statusData.status === 'cancelled') {
         markError('Pipeline cancelado por el usuario', 'PIPELINE_CANCELLED');
       } else if (statusData.status === 'running' || statusData.status === 'queued') {
@@ -378,7 +378,7 @@ export function useOptimizationProgress(jobId: string | null): ProgressState {
         setState((prev) => ({
           ...prev,
           status: prev.status === 'queued' ? 'queued' : 'running',
-          message: prev.message || 'Conectado al pipeline',
+          message: prev.message || 'Conectado al planificador',
         }));
       };
 
@@ -394,11 +394,11 @@ export function useOptimizationProgress(jobId: string | null): ProgressState {
                 return;
               }
               if (statusRaw === 'failed') {
-                markError(data.message || 'Pipeline fallido', 'PIPELINE_FAILED');
+                markError(data.message || 'La planificacion ha fallado', 'PIPELINE_FAILED');
                 return;
               }
               if (statusRaw === 'cancelled') {
-                markError('Pipeline cancelado por el usuario', 'PIPELINE_CANCELLED');
+                markError('La planificacion fue cancelada por el usuario', 'PIPELINE_CANCELLED');
                 return;
               }
               setState((prev) => ({
@@ -449,7 +449,7 @@ export function useOptimizationProgress(jobId: string | null): ProgressState {
               break;
 
             case 'error':
-              markError(data.message || 'Error de pipeline', data.error_code || 'PIPELINE_FAILED');
+              markError(data.message || 'Error de planificacion', data.error_code || 'PIPELINE_FAILED');
               break;
 
             case 'pong':

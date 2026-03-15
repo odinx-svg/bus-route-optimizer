@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Layout from './components/Layout';
 import Sidebar from './components/Sidebar';
 import { CompareView } from './components/CompareView';
@@ -17,6 +17,7 @@ import {
   deleteWorkspace,
   getWorkspace,
   getWorkspaceFleetPreview,
+  getWorkspaceFleetReconciliation,
   getWorkspaceOptimizationOptions,
   getWorkspacePreferences,
   listWorkspaces,
@@ -29,6 +30,15 @@ import {
   setLastOpenWorkspace,
 } from './services/workspaceService';
 import { useWorkspaceStudioStore } from './stores/workspaceStudioStore';
+import {
+  getBlockingReasonText,
+  getNextActionLabel,
+  getPlanningStageLabels,
+  getScopeLabel,
+  getWorkspacePendingLabel,
+  getWorkspaceReadinessConfig,
+  getWorkspaceStatusLabel,
+} from './utils/workspaceStatus';
 
 const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
 const ALL_DAYS = ['L', 'M', 'Mc', 'X', 'V'];
@@ -276,7 +286,7 @@ function TextInputModal({
 
 function LoadOptionsModal({
   open = false,
-  title = 'Restricciones de carga',
+  title = 'Reglas de optimizacion',
   initialValue = DEFAULT_OPTIMIZATION_OPTIONS,
   uteOptions = [],
   onCancel,
@@ -320,14 +330,54 @@ function LoadOptionsModal({
     });
   };
 
+  const applyPreset = (presetId) => {
+    if (presetId === 'balanced') {
+      setValue((prev) => normalizeOptimizationOptions({
+        ...prev,
+        balance_load: true,
+        load_balance_hard_spread_limit: 2,
+        load_balance_target_band: 1,
+      }));
+      return;
+    }
+    if (presetId === 'conservative') {
+      setValue((prev) => normalizeOptimizationOptions({
+        ...prev,
+        balance_load: true,
+        load_balance_hard_spread_limit: 1,
+        load_balance_target_band: 0,
+        virtual_bus_publish_policy: 'block',
+      }));
+      return;
+    }
+    setValue((prev) => normalizeOptimizationOptions({
+      ...prev,
+      balance_load: false,
+      load_balance_hard_spread_limit: 4,
+      load_balance_target_band: 2,
+    }));
+  };
+
   return (
     <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={onCancel} />
       <div className="relative w-full max-w-2xl rounded-xl border border-[#2a4057] bg-[#0b141f] p-4 shadow-2xl">
         <h3 className="text-[16px] font-semibold text-white">{title}</h3>
         <p className="mt-1 text-[12px] text-[#8ba3bd]">
-          Configura el reparto de rutas por bus. Se mantiene siempre el objetivo de minimo buses factibles.
+          Ajusta como se optimiza la operacion. Lo avanzado sigue disponible, pero aqui queda explicado por categorias.
         </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => applyPreset('balanced')} className="rounded-full border border-cyan-500/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10">
+            Equilibrado
+          </button>
+          <button type="button" onClick={() => applyPreset('conservative')} className="rounded-full border border-amber-500/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10">
+            Mas conservador
+          </button>
+          <button type="button" onClick={() => applyPreset('efficient')} className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-100 hover:bg-emerald-500/10">
+            Mas eficiencia
+          </button>
+        </div>
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 flex items-center gap-2 text-[12px] text-slate-200">
@@ -376,7 +426,7 @@ function LoadOptionsModal({
 
         <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
-            Alcance de flota
+            Ambito de flota
             <select
               value={value.fleet_scope_mode || 'company'}
               onChange={(event) => setValue((prev) => ({
@@ -417,7 +467,7 @@ function LoadOptionsModal({
             </p>
           </label>
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
-            Publicar con ficticios
+            Politica de publicacion
             <select
               value={value.virtual_bus_publish_policy || 'allow'}
               onChange={(event) => setValue((prev) => ({
@@ -437,7 +487,7 @@ function LoadOptionsModal({
 
         <div className="mt-4 rounded-lg border border-[#2a4057] bg-[#0a1324] p-3">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] uppercase tracking-[0.1em] text-cyan-300">Restricciones horarias</p>
+            <p className="text-[11px] uppercase tracking-[0.1em] text-cyan-300">Limites horarios</p>
             <button
               type="button"
               onClick={addConstraint}
@@ -449,7 +499,7 @@ function LoadOptionsModal({
           <div className="mt-2 max-h-[240px] overflow-auto space-y-2">
             {value.route_load_constraints.length === 0 && (
               <p className="text-[12px] text-slate-400">
-                Sin restricciones horarias. Puedes usar por ejemplo 07:30-09:30 max 3 rutas.
+                Sin limites horarios extra. Puedes usar por ejemplo 07:30-09:30 max 3 rutas.
               </p>
             )}
             {value.route_load_constraints.map((rule, index) => (
@@ -513,7 +563,7 @@ function LoadOptionsModal({
             onClick={() => onSave?.(normalizeOptimizationOptions(value))}
             className="rounded-md bg-[#2ab5e8] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110"
           >
-            Guardar restricciones
+            Guardar reglas
           </button>
         </div>
       </div>
@@ -538,10 +588,10 @@ function PreOptimizeRestrictionsModal({
       <div className="relative w-full max-w-md rounded-xl border border-[#2a4057] bg-[#0b141f] p-4 shadow-2xl">
         <h3 className="text-[16px] font-semibold text-white">Antes de optimizar</h3>
         <p className="mt-2 text-[12px] text-[#8ba3bd]">
-          Quieres anadir o ajustar restricciones para <span className="text-white font-semibold">{label}</span> antes de ejecutar el pipeline?
+          Quieres revisar las reglas de optimizacion para <span className="text-white font-semibold">{label}</span> antes de generar la planificacion?
         </p>
         <p className="mt-1 text-[11px] text-slate-400">
-          Si guardas restricciones ahora, esta corrida se ejecuta directamente con esas reglas.
+          Si guardas reglas ahora, esta corrida se ejecuta directamente con esa configuracion.
         </p>
 
         <div className="mt-4 flex items-center justify-end gap-2">
@@ -564,9 +614,155 @@ function PreOptimizeRestrictionsModal({
             onClick={onConfigureRestrictions}
             className="rounded-md bg-[#2ab5e8] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110"
           >
-            Anadir restricciones
+            Revisar reglas
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function PublicationStatusCard({ title, value, tone = 'neutral', helper = '' }) {
+  const toneClass = {
+    success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
+    warning: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
+    danger: 'border-rose-500/25 bg-rose-500/10 text-rose-100',
+    neutral: 'border-white/10 bg-white/[0.03] text-slate-100',
+  }[tone] || 'border-white/10 bg-white/[0.03] text-slate-100';
+
+  return (
+    <div className={`rounded-xl border px-3 py-3 ${toneClass}`}>
+      <p className="text-[10px] uppercase tracking-[0.1em] opacity-80">{title}</p>
+      <p className="mt-1 text-[18px] font-semibold data-mono">{value}</p>
+      {helper ? <p className="mt-1 text-[11px] opacity-80">{helper}</p> : null}
+    </div>
+  );
+}
+
+function PlanningOverviewBar({
+  workspace = null,
+  activeDay = 'L',
+  stats = null,
+  onOpenReconciliation,
+  onOpenRules,
+  optimizationOptions = null,
+}) {
+  if (!workspace) return null;
+
+  const readiness = getWorkspaceReadinessConfig(workspace.readiness_state);
+  const pendingLabel = getWorkspacePendingLabel(workspace);
+  const nextActionLabel = getNextActionLabel(workspace.next_recommended_action);
+  const blockingText = getBlockingReasonText(workspace.blocking_reason);
+  const stageItems = getPlanningStageLabels(workspace);
+  const fleetReal = workspace?.summary_metrics?.fleet_real_assigned ?? workspace?.summary_metrics?.fleet_assigned ?? 0;
+  const fleetVirtual = workspace?.pending_virtual_count ?? workspace?.summary_metrics?.fleet_virtual_created ?? 0;
+  const scopeLabel = getScopeLabel(workspace.scope_summary);
+  const hasConflict = Number(workspace?.conflict_count || 0) > 0;
+  const routeRulesCount = Array.isArray(optimizationOptions?.route_load_constraints)
+    ? optimizationOptions.route_load_constraints.filter((row) => row?.enabled !== false).length
+    : 0;
+
+  return (
+    <div className="mb-3 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4 space-y-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Planificacion</p>
+            <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${readiness.chipClass}`}>
+              {readiness.label}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
+              {getWorkspaceStatusLabel(workspace)}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
+              {scopeLabel}
+            </span>
+          </div>
+          <h2 className="mt-2 text-[22px] font-semibold text-white" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+            {workspace.name || 'Optimizacion activa'}
+          </h2>
+          <p className="mt-1 text-[12px] text-slate-400">
+            Dia activo {DAY_LABELS[activeDay] || activeDay}. Pendiente principal: {pendingLabel.toLowerCase()}.
+          </p>
+          {blockingText ? (
+            <p className="mt-2 text-[12px] text-amber-100">{blockingText}</p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenRules}
+            className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
+          >
+            Reglas de optimizacion
+          </button>
+          <button
+            type="button"
+            onClick={onOpenReconciliation}
+            className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
+          >
+            Reconciliar flota
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-6">
+        <PublicationStatusCard title="Buses usados" value={stats?.buses ?? 0} />
+        <PublicationStatusCard title="Rutas" value={stats?.routes ?? 0} />
+        <PublicationStatusCard title="Flota real" value={fleetReal} tone="success" />
+        <PublicationStatusCard title="Provisionales" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} />
+        <PublicationStatusCard title="Conflictos" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} />
+        <PublicationStatusCard title="Siguiente paso" value={nextActionLabel} helper="La accion recomendada segun el estado actual." />
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-[#09111b] p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {stageItems.map((item) => (
+            <div key={item.key} className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${item.done ? 'bg-emerald-400' : (item.active ? 'bg-cyan-300' : 'bg-slate-600')}`} />
+              <span className={`text-[11px] ${item.done ? 'text-slate-100' : (item.active ? 'text-cyan-100' : 'text-slate-500')}`}>
+                {item.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
+        <PublicationStatusCard title="Estado de publicacion" value={readiness.label} helper="Resumen del estado operativo actual." />
+        <PublicationStatusCard title="Buses provisionales pendientes" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={fleetVirtual > 0 ? 'Requieren asignacion real antes de publicar.' : 'No quedan pendientes.'} />
+        <PublicationStatusCard title="Conflictos reales" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} helper={hasConflict ? 'Hay una colision real con otra publicacion.' : 'No hay bloqueos detectados.'} />
+        <PublicationStatusCard title="Advertencias" value={workspace?.blocking_reason ? 1 : 0} tone={workspace?.blocking_reason ? 'warning' : 'success'} helper={blockingText || 'Sin advertencias relevantes.'} />
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-[#09111b] p-3">
+        <p className="text-[10px] uppercase tracking-[0.1em] text-slate-500">Reglas activas</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+            Ambito: {optimizationOptions?.fleet_scope_mode === 'ute' ? 'UTE' : 'Empresa'}
+          </span>
+          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+            Balanceo: {optimizationOptions?.balance_load === false ? 'Flexible' : 'Activo'}
+          </span>
+          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+            Diferencia max: {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
+          </span>
+          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+            Ventanas: {routeRulesCount}
+          </span>
+          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+            Publicacion: {optimizationOptions?.virtual_bus_publish_policy === 'block' ? 'Bloquear provisionales' : 'Permitir con aviso'}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+        <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Ruta</span>
+        <span className="rounded-md border border-slate-500/20 bg-slate-500/10 px-2 py-1 text-slate-200">Posicionamiento</span>
+        <span className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-rose-100">Conflicto</span>
+        <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-100">Bus provisional</span>
+        <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Bus publicado</span>
       </div>
     </div>
   );
@@ -593,7 +789,7 @@ function FleetConflictModal({
                 <th className="px-2 py-1.5 text-left">Dia</th>
                 <th className="px-2 py-1.5 text-left">Vehiculo</th>
                 <th className="px-2 py-1.5 text-left">Ruta candidata</th>
-                <th className="px-2 py-1.5 text-left">Workspace conflicto</th>
+                <th className="px-2 py-1.5 text-left">Planificacion en conflicto</th>
               </tr>
             </thead>
             <tbody>
@@ -639,7 +835,7 @@ function FleetReconciliationModal({
       <div className="relative w-full max-w-3xl rounded-xl border border-amber-500/35 bg-[#0b141f] p-4 shadow-2xl">
         <h3 className="text-[16px] font-semibold text-white">Reconciliacion requerida antes de publicar</h3>
         <p className="mt-2 text-[12px] text-[#8ba3bd]">
-          Hay buses ficticios pendientes. Asigna esas rutas a buses reales en Studio (post-optimizacion) y vuelve a publicar.
+          Hay buses provisionales pendientes. Reasignalos a flota real antes de publicar para cerrar la operacion.
         </p>
         <div className="mt-3 max-h-[360px] overflow-auto rounded-md border border-[#2a4057]">
           <table className="w-full text-[11px]">
@@ -658,21 +854,21 @@ function FleetReconciliationModal({
                   <td className="px-2 py-1.5 text-slate-200">{row?.day || '-'}</td>
                   <td className="px-2 py-1.5 text-amber-200 data-mono">{row?.bus_id || '-'}</td>
                   <td className="px-2 py-1.5 text-slate-300 data-mono">
-                    {Number.isFinite(Number(row?.start_minute)) && Number.isFinite(Number(row?.end_minute))
-                      ? `${String(Math.floor(Number(row.start_minute) / 60)).padStart(2, '0')}:${String(Number(row.start_minute) % 60).padStart(2, '0')} - ${String(Math.floor(Number(row.end_minute) / 60)).padStart(2, '0')}:${String(Number(row.end_minute) % 60).padStart(2, '0')}`
+                    {Number.isFinite(Number(row?.time_window?.start_minute ?? row?.start_minute)) && Number.isFinite(Number(row?.time_window?.end_minute ?? row?.end_minute))
+                      ? `${String(Math.floor(Number(row?.time_window?.start_minute ?? row?.start_minute) / 60)).padStart(2, '0')}:${String(Number(row?.time_window?.start_minute ?? row?.start_minute) % 60).padStart(2, '0')} - ${String(Math.floor(Number(row?.time_window?.end_minute ?? row?.end_minute) / 60)).padStart(2, '0')}:${String(Number(row?.time_window?.end_minute ?? row?.end_minute) % 60).padStart(2, '0')}`
                       : '-'}
                   </td>
-                  <td className="px-2 py-1.5 text-cyan-200 data-mono">{row?.required_seats ?? '-'}</td>
+                  <td className="px-2 py-1.5 text-cyan-200 data-mono">{row?.required_capacity ?? row?.required_seats ?? '-'}</td>
                   <td className="px-2 py-1.5 text-slate-300">
-                    {Array.isArray(row?.suggestions) && row.suggestions.length > 0
-                      ? row.suggestions.slice(0, 3).map((s) => `${s.vehicle_code || s.vehicle_id} (${s.seats_max}P)`).join(', ')
+                    {Array.isArray(row?.suggested_real_vehicles || row?.suggestions) && (row?.suggested_real_vehicles || row?.suggestions).length > 0
+                      ? (row?.suggested_real_vehicles || row?.suggestions).slice(0, 3).map((s) => `${s.vehicle_code || s.vehicle_id} (${s.seats_max}P)`).join(', ')
                       : 'Sin sugerencias libres'}
                   </td>
                 </tr>
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td className="px-2 py-3 text-center text-slate-500" colSpan={5}>Sin detalle de buses ficticios pendientes.</td>
+                  <td className="px-2 py-3 text-center text-slate-500" colSpan={5}>Sin detalle de buses provisionales pendientes.</td>
                 </tr>
               )}
             </tbody>
@@ -703,6 +899,7 @@ function App() {
   const [showComparison, setShowComparison] = useState(false);
   const [workspaces, setWorkspaces] = useState([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
+  const [activeWorkspaceDetail, setActiveWorkspaceDetail] = useState(null);
 
   const [activeTab, setActiveTab] = useState('upload');
   const [viewMode, setViewMode] = useState('dashboard'); // 'dashboard' | 'studio' | 'fleet'
@@ -720,7 +917,7 @@ function App() {
   const [loadOptionsModal, setLoadOptionsModal] = useState({
     open: false,
     workspaceId: null,
-    title: 'Restricciones de carga',
+    title: 'Reglas de optimizacion',
   });
   const [preOptimizeModal, setPreOptimizeModal] = useState({
     open: false,
@@ -830,8 +1027,8 @@ function App() {
   const openLoadOptionsModal = useCallback(async ({ workspaceId = null, workspaceName = '' } = {}) => {
     const normalizedName = String(workspaceName || '').trim();
     const title = workspaceId
-      ? `Restricciones - ${normalizedName || 'Optimizacion'}`
-      : 'Restricciones por defecto';
+      ? `Reglas - ${normalizedName || 'Optimizacion'}`
+      : 'Reglas por defecto';
     if (workspaceId) {
       const loaded = await fetchAndStoreWorkspaceOptions(workspaceId);
       setActiveOptimizationOptions(loaded);
@@ -845,7 +1042,7 @@ function App() {
   }, [fetchAndStoreWorkspaceOptions, refreshUTEOptions]);
 
   const closeLoadOptionsModal = useCallback(() => {
-    setLoadOptionsModal({ open: false, workspaceId: null, title: 'Restricciones de carga' });
+    setLoadOptionsModal({ open: false, workspaceId: null, title: 'Reglas de optimizacion' });
     setPendingOptimizationRequest(null);
   }, []);
 
@@ -862,10 +1059,10 @@ function App() {
       if (String(activeWorkspaceId || '') === String(workspaceId)) {
         setActiveOptimizationOptions(normalizedPersisted);
       }
-      notifications.success('Restricciones guardadas', 'Se aplicaran en la siguiente optimizacion');
+      notifications.success('Reglas guardadas', 'Se aplicaran en la siguiente optimizacion');
     } else {
       setActiveOptimizationOptions(nextOptions);
-      notifications.success('Restricciones por defecto', 'Configuracion lista para la siguiente corrida');
+      notifications.success('Reglas por defecto', 'Configuracion lista para la siguiente corrida');
     }
     closeLoadOptionsModal();
     if (pendingOptimizationRequest) {
@@ -900,6 +1097,7 @@ function App() {
     setValidationReport(workingVersion?.validation_report || null);
     setActiveDay(preferredDay);
     setWorkspaceMode(detail?.status === 'active' ? 'edit' : 'optimize');
+    setActiveWorkspaceDetail(detail || null);
   }, []);
 
   const openWorkspaceById = useCallback(async (workspaceId, { switchToStudio = true } = {}) => {
@@ -1074,7 +1272,7 @@ function App() {
     setViewMode('studio');
     setWorkspaceMode('optimize');
 
-    const loadingToast = notifications.loading('Iniciando pipeline automatico...');
+    const loadingToast = notifications.loading('Iniciando planificacion automatica...');
     const resolvedOptions = normalizeOptimizationOptions(
       (workspaceIdInput && optimizationOptionsByWorkspace?.[workspaceIdInput])
         || activeOptimizationOptions
@@ -1135,20 +1333,20 @@ function App() {
         applyPipelineResult(data.result);
         setPipelineStatus('completed');
         setOptimizing(false);
-        notifications.success('Pipeline completado', 'Resultado final disponible en Workspace');
+        notifications.success('Planificacion completada', 'Resultado final disponible en Horario');
         refreshWorkspaces().catch(() => {});
         return { status: 'completed', jobId: null };
       } else {
         setPipelineJobId(data.job_id || null);
         setPipelineStatus(data.status || 'queued');
-        notifications.info('Pipeline en ejecucion', 'Mostrando progreso en tiempo real');
+        notifications.info('Planificacion en curso', 'Mostrando progreso en tiempo real');
         return { status: data.status || 'queued', jobId: data.job_id || null };
       }
     } catch (error) {
       console.error('Error optimizing:', error);
       notifications.dismiss(loadingToast);
       notifications.error(
-        'Error al ejecutar pipeline',
+        'Error al generar la planificacion',
         error.message || 'Asegurate de que el backend este funcionando.'
       );
       setOptimizing(false);
@@ -1254,7 +1452,7 @@ function App() {
     setIngestionPanelOpen(true);
     notifications.info(
       'Datos listos para optimizar',
-      'Pulsa "Ejecutar Pipeline". Antes te preguntaremos si quieres añadir restricciones.'
+      'Pulsa "Generar planificacion". Antes te preguntaremos si quieres revisar las reglas.'
     );
   };
 
@@ -1282,6 +1480,7 @@ function App() {
       setPipelineStatus('idle');
       setPipelineEvents([]);
       setPipelineMetrics(null);
+      setActiveWorkspaceDetail(null);
       setViewMode('dashboard');
       setWorkspaceMode('create');
       setIngestionPanelOpen(false);
@@ -1561,12 +1760,18 @@ function App() {
             }
             throw error;
           }
-          notifications.success('Version publicada', 'Optimizacion activa en Control Hub');
+          notifications.success('Version publicada', 'La planificacion ya esta activa en Panel');
         } else {
           await saveWorkspaceVersion(activeWorkspaceId, snapshotPayload);
           notifications.success('Version guardada', 'Checkpoint guardado');
         }
         await refreshWorkspaces();
+        if (activeWorkspaceId) {
+          const freshDetail = await getWorkspace(activeWorkspaceId).catch(() => null);
+          if (freshDetail) {
+            setActiveWorkspaceDetail(freshDetail);
+          }
+        }
         studioMarkSaved();
       }
       return data;
@@ -1637,7 +1842,7 @@ function App() {
       studioMarkSaved();
       setIngestionPanelOpen(false);
       setCreateFlowMode(false);
-      notifications.success('Pipeline completado', 'Resultado final cargado');
+      notifications.success('Planificacion completada', 'Resultado final cargado');
     } catch (error) {
       notifications.error('Resultado invalido', error.message);
     }
@@ -1654,7 +1859,7 @@ function App() {
       );
       return;
     }
-    notifications.error('Pipeline fallido', errorCode || 'Revisa logs del backend');
+    notifications.error('Planificacion fallida', errorCode || 'Revisa logs del backend');
   }, []);
 
   const latestPipelineEvent = pipelineEvents.length > 0
@@ -1684,8 +1889,47 @@ function App() {
       ? 'Inicializando optimizacion...'
       : (pipelineStatus === 'queued'
         ? 'Trabajo en cola...'
-        : 'Optimizando rutas...'))
+      : 'Optimizando rutas...'))
   );
+  const activeWorkspaceSummary = useMemo(() => {
+    if (!activeWorkspaceId) return activeWorkspaceDetail || null;
+    const listed = workspaces.find((workspace) => String(workspace.id) === String(activeWorkspaceId)) || null;
+    if (!listed && !activeWorkspaceDetail) return null;
+    return {
+      ...(listed || {}),
+      ...(activeWorkspaceDetail || {}),
+      scope_summary: activeWorkspaceDetail?.scope_summary || listed?.scope_summary || null,
+      summary_metrics: activeWorkspaceDetail?.summary_metrics || listed?.summary_metrics || null,
+    };
+  }, [activeWorkspaceDetail, activeWorkspaceId, workspaces]);
+
+  const layoutWorkspaceContext = useMemo(() => (
+    activeWorkspaceSummary
+      ? {
+          ...activeWorkspaceSummary,
+          activeDayLabel: DAY_LABELS[activeDay] || activeDay,
+        }
+      : null
+  ), [activeDay, activeWorkspaceSummary]);
+
+  const openFleetReconciliationCenter = useCallback(async (busId = null) => {
+    if (!activeWorkspaceId) return;
+    try {
+      const data = await getWorkspaceFleetReconciliation(activeWorkspaceId, activeDay).catch(() => null);
+      const dayItems = Array.isArray(data?.reconciliation_day?.items)
+        ? data.reconciliation_day.items
+        : (Array.isArray(data?.pending_assignments) ? data.pending_assignments : []);
+      const filteredItems = busId
+        ? dayItems.filter((item) => String(item?.bus_id || '') === String(busId))
+        : dayItems;
+      setFleetReconciliationModal({
+        open: true,
+        items: filteredItems,
+      });
+    } catch (error) {
+      notifications.error('No se pudo abrir la reconciliacion', error?.message || 'Error cargando sugerencias');
+    }
+  }, [activeDay, activeWorkspaceId]);
 
   return (
     <Layout
@@ -1696,6 +1940,7 @@ function App() {
       viewMode={viewMode}
       setViewMode={setViewMode}
       hasStudioAccess={Boolean(activeWorkspaceId)}
+      workspaceContext={layoutWorkspaceContext}
     >
       {pipelineJobId && !ingestionPanelOpen && (
         <div className="hidden" aria-hidden="true">
@@ -1713,7 +1958,7 @@ function App() {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#58d5ff]">
-                Optimizacion en curso
+                Planificacion en curso
               </p>
               <p className="mt-0.5 truncate text-[12px] text-slate-200">
                 {pipelineMessageText}
@@ -1811,6 +2056,7 @@ function App() {
                   await deleteWorkspace(workspaceId, workspaceName);
                   if (String(activeWorkspaceId || '') === String(workspaceId || '')) {
                     setActiveWorkspaceId(null);
+                    setActiveWorkspaceDetail(null);
                     setViewMode('dashboard');
                     setWorkspaceMode('create');
                     setSelectedBusId(null);
@@ -1827,54 +2073,70 @@ function App() {
               <FleetPage />
             )}
             {viewMode === 'studio' && (
-              <StudioErrorBoundary
-                resetKey={`${activeWorkspaceId || ''}:${activeDay}:${routes.length}:${schedule.length}`}
-                onBackToControl={() => setViewMode('dashboard')}
-              >
-                <OptimizationStudio
-                  workspaceMode={workspaceMode}
-                  routes={routes}
-                  scheduleByDay={scheduleByDay}
+              <div className="h-full min-h-0 flex flex-col">
+                <PlanningOverviewBar
+                  workspace={activeWorkspaceSummary}
                   activeDay={activeDay}
-                  validationReport={validationReport}
-                  onValidationReportChange={setValidationReport}
-                  onSave={async (data) => {
-                    const promptResult = await openTextInputModal({
-                      title: 'Guardar version',
-                      description: 'Opcional: nombre de este guardado',
-                      placeholder: 'Ej: Ajuste buses lunes',
-                      confirmLabel: 'Guardar',
-                      cancelLabel: 'Cancelar',
-                      allowEmpty: true,
-                      defaultValue: '',
-                    });
-                    if (!promptResult?.confirmed) return;
-                    const checkpointName = String(promptResult?.value || '').trim();
-                    await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'save');
-                  }}
-                  onPublish={async (data) => {
-                    const promptResult = await openTextInputModal({
-                      title: 'Publicar version',
-                      description: 'Opcional: nombre para esta publicacion',
-                      placeholder: 'Ej: Operativo final semana',
-                      confirmLabel: 'Publicar',
-                      cancelLabel: 'Cancelar',
-                      allowEmpty: true,
-                      defaultValue: '',
-                    });
-                    if (!promptResult?.confirmed) return;
-                    const checkpointName = String(promptResult?.value || '').trim();
-                    await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'publish');
-                  }}
-                  selectedBusId={selectedBusId}
-                  selectedRouteId={selectedRouteId}
-                  onBusSelect={handleBusSelect}
-                  onRouteSelect={handleRouteSelect}
-                  onExport={handleExport}
-                  pinnedBusIds={pinnedBusesByDay?.[activeDay] || []}
-                  onTogglePinBus={handleTogglePinBus}
+                  stats={calculateStats()}
+                  onOpenReconciliation={() => openFleetReconciliationCenter()}
+                  onOpenRules={() => openLoadOptionsModal({
+                    workspaceId: activeWorkspaceId,
+                    workspaceName: activeWorkspaceSummary?.name || '',
+                  })}
+                  optimizationOptions={activeOptimizationOptions}
                 />
-              </StudioErrorBoundary>
+                <div className="flex-1 min-h-0">
+                  <StudioErrorBoundary
+                    resetKey={`${activeWorkspaceId || ''}:${activeDay}:${routes.length}:${schedule.length}`}
+                    onBackToControl={() => setViewMode('dashboard')}
+                  >
+                    <OptimizationStudio
+                      workspaceMode={workspaceMode}
+                      routes={routes}
+                      scheduleByDay={scheduleByDay}
+                      activeDay={activeDay}
+                      validationReport={validationReport}
+                      onValidationReportChange={setValidationReport}
+                      onSave={async (data) => {
+                        const promptResult = await openTextInputModal({
+                          title: 'Guardar version',
+                          description: 'Opcional: nombre de este guardado',
+                          placeholder: 'Ej: Ajuste buses lunes',
+                          confirmLabel: 'Guardar',
+                          cancelLabel: 'Cancelar',
+                          allowEmpty: true,
+                          defaultValue: '',
+                        });
+                        if (!promptResult?.confirmed) return;
+                        const checkpointName = String(promptResult?.value || '').trim();
+                        await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'save');
+                      }}
+                      onPublish={async (data) => {
+                        const promptResult = await openTextInputModal({
+                          title: 'Publicar version',
+                          description: 'Opcional: nombre para esta publicacion',
+                          placeholder: 'Ej: Operativo final semana',
+                          confirmLabel: 'Publicar',
+                          cancelLabel: 'Cancelar',
+                          allowEmpty: true,
+                          defaultValue: '',
+                        });
+                        if (!promptResult?.confirmed) return;
+                        const checkpointName = String(promptResult?.value || '').trim();
+                        await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'publish');
+                      }}
+                      selectedBusId={selectedBusId}
+                      selectedRouteId={selectedRouteId}
+                      onBusSelect={handleBusSelect}
+                      onRouteSelect={handleRouteSelect}
+                      onExport={handleExport}
+                      pinnedBusIds={pinnedBusesByDay?.[activeDay] || []}
+                      onTogglePinBus={handleTogglePinBus}
+                      onOpenReconciliation={openFleetReconciliationCenter}
+                    />
+                  </StudioErrorBoundary>
+                </div>
+              </div>
             )}
           </div>
 

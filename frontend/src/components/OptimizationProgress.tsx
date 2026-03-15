@@ -43,7 +43,7 @@ interface OptimizationProgressProps {
 
 const STAGE_LABELS: Record<string, string> = {
   queued: 'En cola de ejecución...',
-  starting: 'Inicializando pipeline...',
+  starting: 'Inicializando planificacion...',
   ingest: 'Ingesta y normalización de rutas...',
   baseline_optimize: 'Optimización base por día...',
   qubo_encode: 'Codificando subproblemas QUBO...',
@@ -53,8 +53,8 @@ const STAGE_LABELS: Record<string, string> = {
   improved: 'Se encontró una mejora...',
   no_improvement: 'Sin mejoras adicionales, cerrando iteración...',
   budget_reached: 'Se alcanzó el límite de tiempo...',
-  completed: 'Pipeline completado',
-  error: 'Error en el pipeline',
+  completed: 'Planificacion completada',
+  error: 'Error en la planificacion',
   idle: 'Esperando...',
   connecting: 'Conectando al backend...',
 };
@@ -146,7 +146,7 @@ export const OptimizationProgress: React.FC<OptimizationProgressProps> = ({
   useEffect(() => {
     if (status === 'completed' && result && !hasCompletedRef.current) {
       hasCompletedRef.current = true;
-      notifications.success('¡Optimización completada!', 'Los resultados están listos');
+      notifications.success('Planificacion completada', 'Los resultados estan listos');
       onCompleteRef.current?.(result);
     }
   }, [status, result]);

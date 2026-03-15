@@ -46,7 +46,7 @@ export default class StudioErrorBoundary extends React.Component {
           <div className="mx-auto w-12 h-12 rounded-xl bg-rose-500/15 border border-rose-400/30 flex items-center justify-center">
             <AlertTriangle className="w-6 h-6 text-rose-300" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-100">Studio no pudo renderizarse</h3>
+          <h3 className="text-lg font-semibold text-slate-100">Planificacion no pudo cargarse</h3>
           <p className="text-sm text-slate-300">
             Se detecto un estado de datos no valido. Puedes volver a Control o reintentar.
           </p>

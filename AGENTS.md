@@ -361,6 +361,20 @@ for /f "tokens=5" %a in ('netstat -aon ^| findstr ":8000"') do taskkill /F /PID 
 
 ## 📌 Notas de Versión
 
+### v2.2 (2026-03-15)
+
+**Cambios mayores:**
+- ✅ UX operativa más clara en navegación (`Panel`, `Flota`, `Planificacion`)
+- ✅ Estados derivados de workspace en API (`workflow_stage`, `readiness_state`, `next_recommended_action`)
+- ✅ `ControlHubPage` pasa a ser panel operativo con filtros, siguiente paso y bloque "que falta hoy"
+- ✅ `FleetPage` reorganizada con importación guiada, filtros rápidos, grupos por empresa colapsables y detalle por pestañas
+- ✅ `Studio` gana resumen operativo, estado de publicación y acceso directo a reconciliación de flota
+
+**Compatibilidad:**
+- No se rompen endpoints existentes
+- Nombres técnicos internos (`preview`, `committed`, `virtual`) se mantienen en backend por compatibilidad
+- La capa UI muestra etiquetas más claras (`Simulacion`, `Publicado`, `Provisional`)
+
 ### v2.1 (2026-03-07)
 
 **Cambios mayores:**

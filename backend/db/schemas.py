@@ -287,6 +287,8 @@ class ValidationResult(BaseModel):
 
 WorkspaceSaveKind = Literal["autosave", "save", "publish", "migration"]
 WorkspaceStatus = Literal["active", "draft", "inactive"]
+ReadinessState = Literal["ready", "warning", "blocked", "published"]
+NextRecommendedAction = Literal["optimize", "review", "reconcile", "save", "publish", "resolve_conflict"]
 
 
 class RouteLoadConstraint(BaseModel):
@@ -332,6 +334,25 @@ class FleetPublicationSummary(BaseModel):
     conflicts: List[Dict[str, Any]] = Field(default_factory=list)
     blocked: bool = False
     days: Dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkspaceScopeSummary(BaseModel):
+    mode: str = "company"
+    label: str = "Empresa"
+    company_id: Optional[str] = None
+    company_count: int = 1
+    ute_id: Optional[str] = None
+    ute_name: Optional[str] = None
+
+
+class WorkspaceReadinessSummary(BaseModel):
+    workflow_stage: str = "draft"
+    readiness_state: ReadinessState = "warning"
+    blocking_reason: Optional[str] = None
+    next_recommended_action: NextRecommendedAction = "review"
+    pending_virtual_count: int = 0
+    conflict_count: int = 0
+    scope_summary: WorkspaceScopeSummary = Field(default_factory=WorkspaceScopeSummary)
 
 
 class WorkspaceCreateRequest(BaseModel):
@@ -393,6 +414,13 @@ class WorkspaceResponse(BaseModel):
     working_version_number: Optional[int] = None
     version_count: int = 0
     summary_metrics: Optional[Dict[str, Any]] = None
+    workflow_stage: str = "draft"
+    readiness_state: ReadinessState = "warning"
+    blocking_reason: Optional[str] = None
+    next_recommended_action: NextRecommendedAction = "review"
+    pending_virtual_count: int = 0
+    conflict_count: int = 0
+    scope_summary: WorkspaceScopeSummary = Field(default_factory=WorkspaceScopeSummary)
     created_at: datetime
     updated_at: datetime
 
@@ -401,6 +429,7 @@ class WorkspaceDetailResponse(WorkspaceResponse):
     """Workspace with current snapshots references."""
     working_version: Optional[WorkspaceVersionDetailResponse] = None
     published_version: Optional[WorkspaceVersionDetailResponse] = None
+    readiness_summary: WorkspaceReadinessSummary = Field(default_factory=WorkspaceReadinessSummary)
 
 
 class WorkspaceListResponse(BaseModel):

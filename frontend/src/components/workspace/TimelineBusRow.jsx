@@ -1050,7 +1050,7 @@ export function TimelineBusRow({
                   ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-200'
                   : 'bg-[#151b25] border-slate-600/60 hover:border-cyan-400/50 text-slate-300 hover:text-cyan-200'
               }`}
-              title={isPinned ? 'Quitar pin del bus' : 'Pinear bus para vista Mixto'}
+              title={isPinned ? 'Quitar fijado de la unidad' : 'Fijar unidad en Mapa + horario'}
             >
               <Pin className="w-3 h-3" />
             </button>

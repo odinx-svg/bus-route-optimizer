@@ -735,9 +735,9 @@ const MapView = ({
                   ? 'border-cyan-400/45 bg-cyan-500/15 text-cyan-200'
                   : 'border-slate-500/45 bg-[#101926] text-slate-300 hover:text-slate-100 hover:border-slate-300/45'
               }`}
-              title={isSelectedBusPinned ? 'Quitar pin' : 'Pinear bus en Mixto'}
+              title={isSelectedBusPinned ? 'Quitar fijado' : 'Fijar unidad en Mapa + horario'}
             >
-              {isSelectedBusPinned ? 'Bus pineado' : 'Pinear bus'}
+              {isSelectedBusPinned ? 'Unidad fijada' : 'Fijar unidad'}
             </button>
           )}
         </div>

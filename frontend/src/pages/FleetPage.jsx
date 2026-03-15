@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Save, X, FileText, Bus, Building2 } from 'lucide-react';
+import { Building2, Bus, FileText, MapPin, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import { notifications } from '../services/notifications';
 import {
-  fetchFleetVehicles,
-  createFleetVehicle,
-  updateFleetVehicle,
-  deleteFleetVehicle,
-  previewFleetImport,
   commitFleetImport,
+  createFleetVehicle,
+  deleteFleetVehicle,
+  fetchFleetVehicles,
+  previewFleetImport,
+  updateFleetVehicle,
 } from '../services/fleetService';
 
 const EMPTY_FORM = {
@@ -28,11 +28,12 @@ const EMPTY_FORM = {
   documents: [],
 };
 
-const STATUS_LABEL = {
-  active: 'Activo',
-  maintenance: 'Taller',
-  inactive: 'Inactivo',
-};
+const STATUS_LABEL = { active: 'Activo', maintenance: 'Taller', inactive: 'Inactivo' };
+const DETAIL_TABS = [
+  { id: 'data', label: 'Datos' },
+  { id: 'documents', label: 'Documentos' },
+  { id: 'gps', label: 'GPS' },
+];
 
 const toPayload = (form) => ({
   vehicle_code: String(form.vehicle_code || '').trim(),
@@ -79,6 +80,22 @@ const fromVehicle = (vehicle) => ({
   documents: Array.isArray(vehicle?.documents) ? vehicle.documents : [],
 });
 
+const hasGpsLink = (vehicle) => Boolean(String(vehicle?.gps_provider || '').trim() || String(vehicle?.gps_external_id || '').trim());
+const hasPendingDocuments = (vehicle) => !Array.isArray(vehicle?.documents) || vehicle.documents.length === 0;
+const filterChipClass = (active) => (active ? 'border-cyan-400/55 bg-cyan-500/12 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.05]');
+
+function SectionTitle({ eyebrow, title, description }) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">{eyebrow}</p>
+      <h2 className="mt-1 text-[22px] font-semibold text-[#ecf4fb]" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+        {title}
+      </h2>
+      <p className="mt-1 text-[12px] text-slate-400">{description}</p>
+    </div>
+  );
+}
+
 export default function FleetPage() {
   const [vehicles, setVehicles] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -86,8 +103,12 @@ export default function FleetPage() {
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [companyFilter, setCompanyFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [assetFilter, setAssetFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [detailTab, setDetailTab] = useState('data');
+  const [collapsedCompanies, setCollapsedCompanies] = useState({});
   const [form, setForm] = useState(EMPTY_FORM);
   const [importFile, setImportFile] = useState(null);
   const [importPreviewData, setImportPreviewData] = useState(null);
@@ -101,11 +122,13 @@ export default function FleetPage() {
     setLoading(true);
     try {
       const data = await fetchFleetVehicles();
-      setVehicles(data?.vehicles || []);
+      const nextVehicles = data?.vehicles || [];
+      setVehicles(nextVehicles);
       setSummary(data?.summary || null);
-      if (!selectedId && data?.vehicles?.length) {
-        setSelectedId(data.vehicles[0].id);
-      }
+      setSelectedId((prev) => {
+        if (prev && nextVehicles.some((vehicle) => String(vehicle.id) === String(prev))) return prev;
+        return nextVehicles[0]?.id || null;
+      });
     } catch (error) {
       notifications.error('No se pudo cargar la flota', error.message);
     } finally {
@@ -115,7 +138,6 @@ export default function FleetPage() {
 
   useEffect(() => {
     loadFleet();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetImportWorkflow = () => {
@@ -133,20 +155,13 @@ export default function FleetPage() {
     setPreviewingImport(true);
     try {
       const preview = await previewFleetImport(importFile);
+      const sheets = Array.isArray(preview?.sheets) ? preview.sheets : [];
+      const firstValidSheet = sheets.find((sheet) => sheet?.header_detected)?.sheet_name || preview?.sheet_names?.[0] || '';
       setImportPreviewData(preview || null);
       setImportSummary(null);
-      const sheets = Array.isArray(preview?.sheets) ? preview.sheets : [];
-      const firstValidSheet = (
-        sheets.find((sheet) => sheet?.header_detected)?.sheet_name
-        || preview?.sheet_names?.[0]
-        || ''
-      );
       setPrimarySheetName(String(firstValidSheet || ''));
-      const defaultUteName = String(firstValidSheet || '').trim()
-        ? `UTE ${String(firstValidSheet).trim()}`
-        : '';
-      setUteName(defaultUteName);
-      notifications.success('Preview generado', `${sheets.length || 0} hojas analizadas`);
+      setUteName(String(firstValidSheet || '').trim() ? `UTE ${String(firstValidSheet).trim()}` : '');
+      notifications.success('Archivo analizado', `${sheets.length || 0} empresas detectadas`);
     } catch (error) {
       notifications.error('No se pudo analizar el Excel', error.message);
     } finally {
@@ -165,16 +180,9 @@ export default function FleetPage() {
     }
     setCommittingImport(true);
     try {
-      const result = await commitFleetImport({
-        file: importFile,
-        primarySheetName,
-        uteName,
-      });
+      const result = await commitFleetImport({ file: importFile, primarySheetName, uteName });
       setImportSummary(result || null);
-      notifications.success(
-        'Importacion completada',
-        `${result?.total_created || 0} creados, ${result?.total_updated || 0} actualizados`
-      );
+      notifications.success('Importacion completada', `${result?.total_created || 0} creados, ${result?.total_updated || 0} actualizados`);
       await loadFleet();
     } catch (error) {
       notifications.error('No se pudo confirmar la importacion', error.message);
@@ -184,114 +192,96 @@ export default function FleetPage() {
   };
 
   const filteredVehicles = useMemo(() => {
-    const sorted = [...vehicles].filter((vehicle) => {
-      if (companyFilter === 'all') return true;
-      return String(vehicle?.company_id || '').trim() === companyFilter;
+    const normalizedQuery = String(query || '').trim().toLowerCase();
+    return vehicles.filter((vehicle) => {
+      if (companyFilter !== 'all' && String(vehicle?.company_id || '').trim() !== companyFilter) return false;
+      if (statusFilter !== 'all' && String(vehicle?.status || '').trim() !== statusFilter) return false;
+      if (assetFilter === 'with_gps' && !hasGpsLink(vehicle)) return false;
+      if (assetFilter === 'without_gps' && hasGpsLink(vehicle)) return false;
+      if (assetFilter === 'pending_documents' && !hasPendingDocuments(vehicle)) return false;
+      if (!normalizedQuery) return true;
+      const haystack = [vehicle?.vehicle_code, vehicle?.plate, vehicle?.brand, vehicle?.model, vehicle?.company_name].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(normalizedQuery);
     });
-    if (!query.trim()) return sorted;
-    const q = query.toLowerCase();
-    return sorted.filter((v) => (
-      String(v.vehicle_code || '').toLowerCase().includes(q) ||
-      String(v.plate || '').toLowerCase().includes(q) ||
-      String(v.brand || '').toLowerCase().includes(q) ||
-      String(v.model || '').toLowerCase().includes(q)
-    ));
-  }, [vehicles, query, companyFilter]);
+  }, [assetFilter, companyFilter, query, statusFilter, vehicles]);
 
   const groupedVehicles = useMemo(() => {
     const groups = new Map();
     for (const vehicle of filteredVehicles) {
-      const rawCompanyId = String(vehicle?.company_id || '').trim();
-      const rawCompanyName = String(vehicle?.company_name || '').trim();
-      const companyId = rawCompanyId || 'company_unassigned';
-      const companyName = rawCompanyName || rawCompanyId || 'Sin empresa';
-
+      const companyId = String(vehicle?.company_id || '').trim() || 'company_unassigned';
+      const companyName = String(vehicle?.company_name || '').trim() || 'Sin empresa';
       if (!groups.has(companyId)) {
-        groups.set(companyId, {
-          companyId,
-          companyName,
-          vehicles: [],
-          totalSeatsMax: 0,
-          activeCount: 0,
-          maintenanceCount: 0,
-          inactiveCount: 0,
-        });
+        groups.set(companyId, { companyId, companyName, vehicles: [], totalSeatsMax: 0, activeCount: 0, maintenanceCount: 0, inactiveCount: 0 });
       }
       const group = groups.get(companyId);
       group.vehicles.push(vehicle);
       group.totalSeatsMax += Number(vehicle?.seats_max || 0);
-      if (String(vehicle?.status || '').toLowerCase() === 'active') group.activeCount += 1;
-      if (String(vehicle?.status || '').toLowerCase() === 'maintenance') group.maintenanceCount += 1;
-      if (String(vehicle?.status || '').toLowerCase() === 'inactive') group.inactiveCount += 1;
+      if (vehicle?.status === 'active') group.activeCount += 1;
+      if (vehicle?.status === 'maintenance') group.maintenanceCount += 1;
+      if (vehicle?.status === 'inactive') group.inactiveCount += 1;
     }
-
-    const grouped = Array.from(groups.values());
-    grouped.sort((a, b) => a.companyName.localeCompare(b.companyName, 'es', { sensitivity: 'base' }));
-
-    for (const group of grouped) {
+    const result = Array.from(groups.values());
+    result.sort((a, b) => a.companyName.localeCompare(b.companyName, 'es', { sensitivity: 'base' }));
+    result.forEach((group) => {
       group.vehicles.sort((a, b) => {
-        const codeA = String(a?.vehicle_code || '').trim();
-        const codeB = String(b?.vehicle_code || '').trim();
-        if (codeA !== codeB) {
-          return codeA.localeCompare(codeB, 'es', { sensitivity: 'base' });
-        }
-        return String(a?.plate || '').localeCompare(String(b?.plate || ''), 'es', { sensitivity: 'base' });
+        const codeDiff = String(a?.vehicle_code || '').localeCompare(String(b?.vehicle_code || ''), 'es', { sensitivity: 'base', numeric: true });
+        if (codeDiff !== 0) return codeDiff;
+        return String(a?.plate || '').localeCompare(String(b?.plate || ''), 'es', { sensitivity: 'base', numeric: true });
       });
-    }
-
-    return grouped;
+    });
+    return result;
   }, [filteredVehicles]);
 
   const companyFilterOptions = useMemo(() => {
     const map = new Map();
-    for (const vehicle of vehicles) {
-      const rawCompanyId = String(vehicle?.company_id || '').trim();
-      const rawCompanyName = String(vehicle?.company_name || '').trim();
-      const companyId = rawCompanyId || 'company_unassigned';
-      const companyName = rawCompanyName || rawCompanyId || 'Sin empresa';
-      if (!map.has(companyId)) {
-        map.set(companyId, { id: companyId, name: companyName });
-      }
-    }
-    const options = Array.from(map.values());
-    options.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-    return options;
+    vehicles.forEach((vehicle) => {
+      const companyId = String(vehicle?.company_id || '').trim() || 'company_unassigned';
+      const companyName = String(vehicle?.company_name || '').trim() || 'Sin empresa';
+      if (!map.has(companyId)) map.set(companyId, { id: companyId, name: companyName });
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
   }, [vehicles]);
 
-  const selectedVehicle = useMemo(
-    () => vehicles.find((v) => String(v.id) === String(selectedId)) || null,
-    [vehicles, selectedId]
-  );
-  const selectedVehicleCompany = useMemo(() => {
-    if (!selectedVehicle) return '';
-    return String(selectedVehicle.company_name || selectedVehicle.company_id || '').trim();
-  }, [selectedVehicle]);
+  useEffect(() => {
+    setCollapsedCompanies((prev) => {
+      const next = { ...prev };
+      const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(selectedId));
+      const selectedCompanyId = String(selectedVehicle?.company_id || '').trim() || 'company_unassigned';
+      groupedVehicles.forEach((group) => {
+        if (next[group.companyId] === undefined) next[group.companyId] = true;
+      });
+      if (selectedVehicle && next[selectedCompanyId]) next[selectedCompanyId] = false;
+      return next;
+    });
+  }, [groupedVehicles, selectedId, vehicles]);
+
+  const selectedVehicle = useMemo(() => vehicles.find((vehicle) => String(vehicle.id) === String(selectedId)) || null, [selectedId, vehicles]);
+  const isEditing = Boolean(editingId);
+  const activeForm = isEditing ? form : (selectedVehicle ? fromVehicle(selectedVehicle) : EMPTY_FORM);
 
   const startCreate = () => {
     setEditingId('new');
     setSelectedId(null);
+    setDetailTab('data');
     setForm({ ...EMPTY_FORM });
   };
 
   const startEdit = (vehicle) => {
     setEditingId(vehicle.id);
     setSelectedId(vehicle.id);
+    setDetailTab('data');
     setForm(fromVehicle(vehicle));
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    if (selectedVehicle) {
-      setForm(fromVehicle(selectedVehicle));
-    } else {
-      setForm({ ...EMPTY_FORM });
-    }
+    setForm(selectedVehicle ? fromVehicle(selectedVehicle) : { ...EMPTY_FORM });
   };
 
   const handleSave = async () => {
     const payload = toPayload(form);
     if (!payload.vehicle_code || !payload.plate) {
-      notifications.warning('Datos incompletos', 'Código y matrícula son obligatorios');
+      notifications.warning('Datos incompletos', 'Codigo y matricula son obligatorios');
       return;
     }
     if (!payload.seats_min || !payload.seats_max) {
@@ -299,28 +289,23 @@ export default function FleetPage() {
       return;
     }
     if (payload.seats_min > payload.seats_max) {
-      notifications.warning('Rango inválido', 'Plazas mínimas no puede ser mayor que máximas');
+      notifications.warning('Rango invalido', 'Plazas minimas no puede ser mayor que maximas');
       return;
     }
-
     setSaving(true);
     try {
       if (editingId === 'new') {
         const created = await createFleetVehicle(payload);
-        setVehicles((prev) => [...prev, created]);
+        notifications.success('Vehiculo creado', `${created.vehicle_code} registrado`);
         setSelectedId(created.id);
         setEditingId(null);
-        notifications.success('Vehículo creado', `${created.vehicle_code} registrado`);
       } else if (editingId) {
         const updated = await updateFleetVehicle(editingId, payload);
-        setVehicles((prev) => prev.map((v) => (v.id === editingId ? updated : v)));
+        notifications.success('Vehiculo actualizado', `${updated.vehicle_code} guardado`);
         setSelectedId(updated.id);
         setEditingId(null);
-        notifications.success('Vehículo actualizado', `${updated.vehicle_code} guardado`);
       }
-      const refreshed = await fetchFleetVehicles();
-      setVehicles(refreshed?.vehicles || []);
-      setSummary(refreshed?.summary || null);
+      await loadFleet();
     } catch (error) {
       notifications.error('No se pudo guardar', error.message);
     } finally {
@@ -334,19 +319,7 @@ export default function FleetPage() {
     if (!ok) return;
     try {
       await deleteFleetVehicle(vehicle.id);
-      notifications.success('Vehículo eliminado', vehicle.vehicle_code);
-      const next = vehicles.filter((v) => v.id !== vehicle.id);
-      setVehicles(next);
-      setSummary((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          total: Math.max(0, Number(prev.total || 1) - 1),
-        };
-      });
-      if (selectedId === vehicle.id) {
-        setSelectedId(next[0]?.id || null);
-      }
+      notifications.success('Vehiculo eliminado', vehicle.vehicle_code);
       setEditingId(null);
       await loadFleet();
     } catch (error) {
@@ -355,122 +328,147 @@ export default function FleetPage() {
   };
 
   const addDocument = () => {
-    setForm((prev) => ({
-      ...prev,
-      documents: [...(prev.documents || []), { doc_type: '', reference: '', issue_date: '', expiry_date: '', notes: '' }],
-    }));
+    setForm((prev) => ({ ...prev, documents: [...(prev.documents || []), { doc_type: '', reference: '', issue_date: '', expiry_date: '', notes: '' }] }));
   };
 
-  const updateDocument = (idx, key, value) => {
+  const updateDocument = (index, key, value) => {
     setForm((prev) => {
-      const docs = [...(prev.documents || [])];
-      docs[idx] = { ...(docs[idx] || {}), [key]: value };
-      return { ...prev, documents: docs };
+      const documents = [...(prev.documents || [])];
+      documents[index] = { ...(documents[index] || {}), [key]: value };
+      return { ...prev, documents };
     });
   };
 
-  const removeDocument = (idx) => {
+  const removeDocument = (index) => {
     setForm((prev) => {
-      const docs = [...(prev.documents || [])];
-      docs.splice(idx, 1);
-      return { ...prev, documents: docs };
+      const documents = [...(prev.documents || [])];
+      documents.splice(index, 1);
+      return { ...prev, documents };
     });
   };
-
-  const isEditing = !!editingId;
-  const activeForm = isEditing ? form : (selectedVehicle ? fromVehicle(selectedVehicle) : EMPTY_FORM);
 
   return (
-    <div className="h-full min-h-0 grid grid-cols-[360px_1fr] gap-3">
-      <aside className="control-panel rounded-[16px] flex flex-col min-h-0 overflow-y-auto">
-        <div className="p-4 border-b border-[#2b4056] space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[13px] font-semibold uppercase tracking-[0.08em] data-mono">Flota Empresa</p>
-              <p className="text-[10px] text-slate-500">{summary?.total || 0} vehículos</p>
-            </div>
-            <button onClick={startCreate} className="control-btn px-2.5 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
-              <Plus size={12} />
-              Nuevo
-            </button>
+    <div className="h-full min-h-0 overflow-auto rounded-[18px] control-panel p-4 md:p-5 space-y-4">
+      <div className="rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <SectionTitle
+            eyebrow="Flota"
+            title="Catalogo operativo de vehiculos"
+            description="Organiza la flota por empresa, importa desde Excel y revisa cada vehiculo sin mezclar tareas."
+          />
+          <button
+            type="button"
+            onClick={startCreate}
+            className="px-3 py-1.5 control-btn-primary rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Nuevo bus
+          </button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Vehiculos</p>
+            <p className="mt-1 text-[24px] font-semibold data-mono text-white">{summary?.total ?? 0}</p>
           </div>
-          <div className="rounded-[12px] border border-white/[0.1] bg-white/[0.02] p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-[0.08em] text-cyan-300">Importar Excel Flota</p>
-              {(importPreviewData || importSummary || importFile) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImportFile(null);
-                    resetImportWorkflow();
-                  }}
-                  className="text-[10px] text-slate-400 hover:text-slate-200"
-                >
-                  Limpiar
-                </button>
-              )}
+          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Empresas</p>
+            <p className="mt-1 text-[24px] font-semibold data-mono text-cyan-300">{companyFilterOptions.length}</p>
+          </div>
+          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Activos</p>
+            <p className="mt-1 text-[24px] font-semibold data-mono text-emerald-300">{summary?.active ?? 0}</p>
+          </div>
+          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Plazas maximas</p>
+            <p className="mt-1 text-[24px] font-semibold data-mono text-amber-200">{summary?.total_seats_max ?? 0}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid min-h-0 grid-cols-[420px_1fr] gap-4">
+        <aside className="min-h-0 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4 space-y-4 overflow-y-auto">
+          <div className="rounded-[16px] border border-[#304a62] bg-[#0b141f] p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <Upload className="h-4 w-4 text-cyan-300" />
+              <div>
+                <p className="text-[12px] font-semibold text-white">Importar Excel de flota</p>
+                <p className="text-[11px] text-slate-400">Asistente claro para empresa unica o UTE.</p>
+              </div>
             </div>
-            <input
-              type="file"
-              accept=".xlsx,.xlsm,.xls"
-              onChange={(event) => {
-                const file = event.target.files?.[0] || null;
-                setImportFile(file);
-                resetImportWorkflow();
-              }}
-              className="w-full text-[10px] text-slate-300 file:mr-2 file:rounded-md file:border-0 file:bg-cyan-500/20 file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-cyan-200"
-            />
+
+            <label className="block rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">1. Elegir archivo</span>
+              <input
+                type="file"
+                accept=".xlsx,.xlsm,.xls"
+                onChange={(event) => {
+                  setImportFile(event.target.files?.[0] || null);
+                  resetImportWorkflow();
+                }}
+                className="mt-2 w-full text-[11px] text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-500/20 file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-cyan-200"
+              />
+            </label>
+
             <button
               type="button"
               disabled={!importFile || previewingImport}
               onClick={handlePreviewImport}
-              className="w-full px-2 py-1.5 rounded-md text-[10px] border border-cyan-500/35 text-cyan-200 hover:bg-cyan-500/[0.12] disabled:opacity-50"
+              className="w-full rounded-md border border-cyan-500/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-200 hover:bg-cyan-500/10 disabled:opacity-50"
             >
-              {previewingImport ? 'Analizando...' : '1) Preview Excel'}
+              {previewingImport ? 'Analizando...' : '2. Analizar archivo'}
             </button>
 
             {importPreviewData && (
-              <div className="space-y-2 rounded-[10px] border border-white/[0.08] bg-[#0f1723] p-2">
+              <div className="rounded-xl border border-white/10 bg-[#09111b] p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2">
+                    <p className="text-slate-400">Empresas detectadas</p>
+                    <p className="mt-1 font-semibold text-white">{importPreviewData.sheet_names?.length || 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2">
+                    <p className="text-slate-400">Advertencias</p>
+                    <p className="mt-1 font-semibold text-amber-200">{importPreviewData.warnings?.length || 0}</p>
+                  </div>
+                </div>
+
                 <label className="block">
-                  <span className="text-[10px] text-slate-400">Empresa principal (hoja)</span>
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">3. Empresa principal</span>
                   <select
                     value={primarySheetName}
                     onChange={(event) => setPrimarySheetName(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-white/[0.14] bg-[#0b1320] px-2 py-1 text-[11px]"
+                    className="mt-1 w-full rounded-md border border-white/10 bg-[#0b141f] px-3 py-2 text-[12px] text-white"
                   >
                     {(importPreviewData.sheet_names || []).map((name) => (
                       <option key={name} value={name}>{name}</option>
                     ))}
                   </select>
                 </label>
+
                 <label className="block">
-                  <span className="text-[10px] text-slate-400">Nombre UTE (opcional)</span>
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Nombre de UTE</span>
                   <input
                     value={uteName}
                     onChange={(event) => setUteName(event.target.value)}
                     placeholder="UTE Operativa"
-                    className="mt-1 w-full rounded-md border border-white/[0.14] bg-[#0b1320] px-2 py-1 text-[11px]"
+                    className="mt-1 w-full rounded-md border border-white/10 bg-[#0b141f] px-3 py-2 text-[12px] text-white"
                   />
                 </label>
+
                 <button
                   type="button"
                   disabled={!primarySheetName || committingImport}
                   onClick={handleCommitImport}
-                  className="w-full px-2 py-1.5 rounded-md text-[10px] border border-emerald-500/35 text-emerald-200 hover:bg-emerald-500/[0.12] disabled:opacity-50"
+                  className="w-full rounded-md border border-emerald-500/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
                 >
-                  {committingImport ? 'Importando...' : '2) Confirmar Importacion'}
+                  {committingImport ? 'Importando...' : '4. Confirmar carga'}
                 </button>
-                <div className="text-[10px] text-slate-400 space-y-1">
-                  <p>Hojas: {importPreviewData.sheet_names?.length || 0}</p>
-                  <p>Advertencias: {importPreviewData.warnings?.length || 0}</p>
-                </div>
-                <div className="max-h-[120px] overflow-y-auto space-y-1">
+
+                <div className="space-y-1 max-h-[160px] overflow-auto">
                   {(importPreviewData.sheets || []).map((sheet) => (
-                    <div key={sheet.sheet_name} className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-slate-300">
-                      <p className="font-semibold">{sheet.sheet_name}</p>
-                      <p>
-                        Validas {sheet.valid_rows || 0} | Invalidas {sheet.invalid_rows || 0}
-                      </p>
+                    <div key={sheet.sheet_name} className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px]">
+                      <p className="font-semibold text-slate-100">{sheet.sheet_name}</p>
+                      <p className="mt-0.5 text-slate-400">Validas {sheet.valid_rows || 0} | Invalidas {sheet.invalid_rows || 0}</p>
                     </div>
                   ))}
                 </div>
@@ -478,296 +476,386 @@ export default function FleetPage() {
             )}
 
             {importSummary && (
-              <div className="rounded-[10px] border border-emerald-500/30 bg-emerald-500/[0.08] p-2 text-[10px] text-emerald-100 space-y-1">
-                <p>Principal: {importSummary.primary_company_id}</p>
+              <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] p-3 text-[11px] text-emerald-100">
+                <p className="font-semibold">Importacion completada</p>
+                <p className="mt-1">Principal: {importSummary.primary_company_id}</p>
                 <p>UTE: {importSummary.ute_name} ({importSummary.ute_id})</p>
-                <p>
-                  Creados {importSummary.total_created || 0} | Actualizados {importSummary.total_updated || 0} | Invalidos {importSummary.total_invalid || 0}
-                </p>
-                <div className="max-h-[120px] overflow-y-auto space-y-1">
-                  {(importSummary.summary_by_company || []).map((row) => (
-                    <div key={row.company_id} className="rounded-md border border-emerald-500/30 bg-black/20 px-2 py-1">
-                      <p className="font-semibold">{row.company_name || row.company_id}</p>
-                      <p>
-                        Creados {row.created || 0} | Actualizados {row.updated || 0} | Invalidos {row.invalid || 0}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                <p className="mt-1">Creados {importSummary.total_created || 0} | Actualizados {importSummary.total_updated || 0} | Invalidos {importSummary.total_invalid || 0}</p>
               </div>
             )}
           </div>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por código, matrícula..."
-            className="w-full px-3 py-2 text-[12px] bg-white/[0.03] border border-white/[0.08] rounded-[10px] focus:outline-none focus:border-cyan-500/40"
-          />
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Empresas</p>
-              <select
-                value={companyFilter}
-                onChange={(e) => setCompanyFilter(e.target.value)}
-                className="min-w-[140px] rounded-md border border-white/[0.14] bg-[#0b1320] px-2 py-1 text-[10px] text-slate-200"
-              >
-                <option value="all">Todas</option>
-                {companyFilterOptions.map((company) => (
-                  <option key={company.id} value={company.id}>{company.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              <button
-                type="button"
-                onClick={() => setCompanyFilter('all')}
-                className={`px-2 py-1 rounded-md text-[10px] border transition-colors ${
-                  companyFilter === 'all'
-                    ? 'border-cyan-400/60 bg-cyan-500/[0.14] text-cyan-200'
-                    : 'border-white/[0.1] bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
-                }`}
-              >
-                Todas
-              </button>
-              {companyFilterOptions.slice(0, 4).map((company) => (
-                <button
-                  key={`chip-${company.id}`}
-                  type="button"
-                  onClick={() => setCompanyFilter(company.id)}
-                  className={`px-2 py-1 rounded-md text-[10px] border transition-colors ${
-                    companyFilter === company.id
-                      ? 'border-cyan-400/60 bg-cyan-500/[0.14] text-cyan-200'
-                      : 'border-white/[0.1] bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
-                  }`}
-                >
-                  {company.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-4 gap-1 text-[10px] data-mono">
-            <div className="rounded-md bg-emerald-500/[0.12] text-emerald-300 px-2 py-1 text-center">{summary?.active ?? 0} A</div>
-            <div className="rounded-md bg-amber-500/[0.12] text-amber-300 px-2 py-1 text-center">{summary?.maintenance ?? 0} T</div>
-            <div className="rounded-md bg-slate-500/[0.15] text-slate-300 px-2 py-1 text-center">{summary?.inactive ?? 0} I</div>
-            <div className="rounded-md bg-cyan-500/[0.12] text-cyan-300 px-2 py-1 text-center">{summary?.total_seats_max ?? 0}P</div>
-          </div>
-        </div>
 
-        <div className="p-3 space-y-2">
-          {loading && <p className="text-[11px] text-slate-500">Cargando flota...</p>}
-          {!loading && groupedVehicles.length === 0 && (
-            <p className="text-[11px] text-slate-500">No hay vehículos registrados</p>
-          )}
-          {groupedVehicles.map((group) => (
-            <div
-              key={group.companyId}
-              className="rounded-[12px] border border-[#2a3f54] bg-[#0a1320]/80 p-2 space-y-2 shadow-[inset_0_1px_0_rgba(120,160,255,0.08)]"
-            >
-              <div className="flex items-center justify-between rounded-[10px] border border-white/[0.06] bg-[#101d2d] px-2 py-1.5">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <Building2 size={12} className="text-cyan-300 shrink-0" />
-                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-300 truncate">{group.companyName}</p>
+          <div className="rounded-[16px] border border-[#304a62] bg-[#0b141f] p-3 space-y-3">
+            <div>
+              <p className="text-[12px] font-semibold text-white">Catalogo de flota</p>
+              <p className="text-[11px] text-slate-400">Filtra por empresa, estado o integraciones.</p>
+            </div>
+
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar por codigo, matricula o empresa"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] outline-none focus:border-cyan-500/40"
+            />
+
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Empresa</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setCompanyFilter('all')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(companyFilter === 'all')}`}>Todas</button>
+                {companyFilterOptions.map((company) => (
+                  <button key={company.id} type="button" onClick={() => setCompanyFilter(company.id)} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(companyFilter === company.id)}`}>
+                    {company.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Estado</p>
+              <div className="flex flex-wrap gap-2">
+                {['all', 'active', 'maintenance', 'inactive'].map((status) => (
+                  <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(statusFilter === status)}`}>
+                    {status === 'all' ? 'Todos' : STATUS_LABEL[status]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Atajos</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setAssetFilter('all')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'all')}`}>Todos</button>
+                <button type="button" onClick={() => setAssetFilter('with_gps')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'with_gps')}`}>Con GPS</button>
+                <button type="button" onClick={() => setAssetFilter('without_gps')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'without_gps')}`}>Sin GPS</button>
+                <button type="button" onClick={() => setAssetFilter('pending_documents')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'pending_documents')}`}>Documentos pendientes</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {loading && <p className="text-[12px] text-slate-500">Cargando flota...</p>}
+            {!loading && groupedVehicles.length === 0 && (
+              <div className="rounded-[16px] border border-[#304a62] bg-[#0b141f] p-6 text-center">
+                <Bus className="mx-auto h-6 w-6 text-slate-500" />
+                <p className="mt-2 text-[12px] text-slate-300">No hay vehiculos para el filtro actual.</p>
+              </div>
+            )}
+
+            {groupedVehicles.map((group) => {
+              const isCollapsed = collapsedCompanies[group.companyId] !== false;
+              return (
+                <div key={group.companyId} className="rounded-[16px] border border-[#304a62] bg-[#0b141f] overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setCollapsedCompanies((prev) => ({ ...prev, [group.companyId]: !isCollapsed }))}
+                    className="w-full px-3 py-3 text-left bg-white/[0.03] hover:bg-white/[0.05] transition"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-cyan-300 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-semibold text-white truncate">{group.companyName}</p>
+                          <p className="text-[10px] text-slate-400">{group.vehicles.length} buses | {group.totalSeatsMax} plazas maximas</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] data-mono">
+                        <span className="rounded bg-emerald-500/[0.16] px-1.5 py-0.5 text-emerald-200">{group.activeCount} A</span>
+                        <span className="rounded bg-amber-500/[0.16] px-1.5 py-0.5 text-amber-200">{group.maintenanceCount} T</span>
+                        <span className="rounded bg-slate-500/[0.16] px-1.5 py-0.5 text-slate-200">{group.inactiveCount} I</span>
+                      </div>
+                    </div>
+                  </button>
+
+                  {!isCollapsed && (
+                    <div className="p-3 space-y-2">
+                      {group.vehicles.map((vehicle) => {
+                        const selected = String(vehicle.id) === String(selectedId);
+                        return (
+                          <button
+                            key={vehicle.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedId(vehicle.id);
+                              setDetailTab('data');
+                              if (!isEditing) setForm(fromVehicle(vehicle));
+                            }}
+                            className={`w-full rounded-[14px] border p-3 text-left transition ${
+                              selected ? 'border-cyan-400/60 bg-cyan-500/[0.12]' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.05]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[13px] font-semibold text-white data-mono">{vehicle.vehicle_code}</p>
+                                <p className="mt-1 text-[11px] text-slate-300 data-mono">{vehicle.plate}</p>
+                              </div>
+                              <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${
+                                vehicle.status === 'active'
+                                  ? 'bg-emerald-500/[0.16] text-emerald-200'
+                                  : vehicle.status === 'maintenance'
+                                    ? 'bg-amber-500/[0.16] text-amber-200'
+                                    : 'bg-slate-500/[0.18] text-slate-200'
+                              }`}>
+                                {STATUS_LABEL[vehicle.status] || vehicle.status}
+                              </span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
+                              <span className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-1">{vehicle.seats_min}-{vehicle.seats_max} plazas</span>
+                              {hasGpsLink(vehicle) && <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">GPS</span>}
+                              {hasPendingDocuments(vehicle) && <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-100">Doc pendiente</span>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 text-[9px] data-mono">
-                  <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-slate-200">{group.vehicles.length} B</span>
-                  <span className="rounded bg-cyan-500/[0.16] px-1.5 py-0.5 text-cyan-200">{group.totalSeatsMax} P</span>
-                  <span className="rounded bg-emerald-500/[0.14] px-1.5 py-0.5 text-emerald-200">{group.activeCount} A</span>
+              );
+            })}
+          </div>
+        </aside>
+
+        <section className="min-h-0 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4 overflow-y-auto">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">Detalle</p>
+              <h3 className="mt-1 text-[20px] font-semibold text-white">
+                {isEditing ? (editingId === 'new' ? 'Nuevo vehiculo' : 'Edicion de vehiculo') : (selectedVehicle?.vehicle_code || 'Selecciona un vehiculo')}
+              </h3>
+              <p className="mt-1 text-[12px] text-slate-400">
+                {isEditing
+                  ? 'Completa datos, documentos y vinculacion GPS sin salir de la ficha.'
+                  : 'Consulta informacion operativa, documentacion y telematica de cada unidad.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {selectedVehicle && !isEditing && (
+                <>
+                  <button onClick={() => startEdit(selectedVehicle)} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
+                    <Pencil size={12} />
+                    Editar
+                  </button>
+                  <button onClick={() => handleDelete(selectedVehicle)} className="px-3 py-1.5 rounded-md text-[11px] border border-red-500/35 text-red-300 hover:bg-red-500/[0.08] flex items-center gap-1.5">
+                    <Trash2 size={12} />
+                    Eliminar
+                  </button>
+                </>
+              )}
+              {isEditing && (
+                <>
+                  <button onClick={cancelEdit} className="px-3 py-1.5 rounded-md text-[11px] border border-white/[0.2] text-slate-300 hover:bg-white/[0.06] flex items-center gap-1.5">
+                    <X size={12} />
+                    Cancelar
+                  </button>
+                  <button onClick={handleSave} disabled={saving} className="control-btn-primary px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5 disabled:opacity-50">
+                    <Save size={12} />
+                    {saving ? 'Guardando...' : 'Guardar'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {!selectedVehicle && !isEditing ? (
+            <div className="mt-6 flex h-[60vh] items-center justify-center rounded-[16px] border border-dashed border-white/[0.12]">
+              <div className="max-w-sm text-center">
+                <Bus className="mx-auto h-7 w-7 text-slate-500" />
+                <p className="mt-3 text-[14px] font-medium text-slate-200">Todavia no hay un vehiculo seleccionado</p>
+                <p className="mt-1 text-[12px] text-slate-400">Elige un bus del catalogo o crea uno nuevo para revisar datos, documentos y GPS.</p>
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <button type="button" onClick={startCreate} className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]">
+                    Nuevo bus
+                  </button>
                 </div>
               </div>
-              {group.vehicles.map((v) => {
-                const selected = String(v.id) === String(selectedId);
-                return (
+            </div>
+          ) : (
+            <div className="mt-5 space-y-4">
+              {!isEditing && selectedVehicle && (
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Empresa</p>
+                    <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicle.company_name || selectedVehicle.company_id || 'Sin empresa'}</p>
+                  </div>
+                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Estado</p>
+                    <p className="mt-1 text-[13px] font-semibold text-white">{STATUS_LABEL[selectedVehicle.status] || selectedVehicle.status}</p>
+                  </div>
+                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Plazas</p>
+                    <p className="mt-1 text-[13px] font-semibold text-white data-mono">{selectedVehicle.seats_min}-{selectedVehicle.seats_max}</p>
+                  </div>
+                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">GPS</p>
+                    <p className="mt-1 text-[13px] font-semibold text-white">{hasGpsLink(selectedVehicle) ? 'Vinculado' : 'Pendiente'}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                {DETAIL_TABS.map((tab) => (
                   <button
-                    key={v.id}
-                    onClick={() => {
-                      setSelectedId(v.id);
-                      if (!isEditing) setForm(fromVehicle(v));
-                    }}
-                    className={`w-full text-left p-3 rounded-[12px] border transition-all ${
-                      selected
-                        ? 'border-cyan-400/60 bg-cyan-500/[0.12] shadow-[0_0_0_1px_rgba(56,189,248,0.2)]'
-                        : 'border-white/[0.08] hover:border-white/[0.2] bg-white/[0.02] hover:bg-white/[0.04]'
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setDetailTab(tab.id)}
+                    className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
+                      detailTab === tab.id ? 'border-cyan-400/55 bg-cyan-500/12 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.05]'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[12px] font-semibold data-mono">{v.vehicle_code}</p>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.06] text-slate-300">{v.seats_min}-{v.seats_max}P</span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between gap-2">
-                      <p className="text-[11px] text-slate-300 data-mono">{v.plate}</p>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${
-                        String(v.status) === 'active'
-                          ? 'bg-emerald-500/[0.16] text-emerald-200'
-                          : String(v.status) === 'maintenance'
-                            ? 'bg-amber-500/[0.16] text-amber-200'
-                            : 'bg-slate-500/[0.2] text-slate-300'
-                      }`}>
-                        {String(v.status || 'inactive').toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1">{v.brand || 'Marca'} {v.model || ''}</p>
+                    {tab.label}
                   </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      <section className="control-panel rounded-[16px] p-4 overflow-y-auto min-h-0">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-[14px] font-semibold uppercase tracking-[0.08em] data-mono">Perfil de Vehículo</p>
-            <p className="text-[11px] text-slate-500">Datos operativos y documentación base</p>
-            {selectedVehicleCompany && (
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-cyan-400/30 bg-cyan-500/[0.10] px-2 py-1 text-[10px] text-cyan-100">
-                <Bus size={11} className="text-cyan-200" />
-                <span className="data-mono">{selectedVehicleCompany}</span>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {selectedVehicle && !isEditing && (
-              <>
-                <button onClick={() => startEdit(selectedVehicle)} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
-                  <Pencil size={12} />
-                  Editar
-                </button>
-                <button onClick={() => handleDelete(selectedVehicle)} className="px-3 py-1.5 rounded-md text-[11px] border border-red-500/35 text-red-300 hover:bg-red-500/[0.08] flex items-center gap-1.5">
-                  <Trash2 size={12} />
-                  Eliminar
-                </button>
-              </>
-            )}
-            {isEditing && (
-              <>
-                <button onClick={cancelEdit} className="px-3 py-1.5 rounded-md text-[11px] border border-white/[0.2] text-slate-300 hover:bg-white/[0.06] flex items-center gap-1.5">
-                  <X size={12} />
-                  Cancelar
-                </button>
-                <button onClick={handleSave} disabled={saving} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5 disabled:opacity-50">
-                  <Save size={12} />
-                  {saving ? 'Guardando...' : 'Guardar'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {!selectedVehicle && !isEditing && (
-          <div className="h-[65vh] border border-dashed border-white/[0.15] rounded-[14px] flex items-center justify-center">
-            <div className="text-center">
-              <Bus className="mx-auto mb-2 text-slate-500" size={24} />
-              <p className="text-[12px] text-slate-400">Selecciona un vehículo o crea uno nuevo</p>
-            </div>
-          </div>
-        )}
-
-        {(selectedVehicle || isEditing) && (
-          <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Código</span>
-                <input value={activeForm.vehicle_code} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, vehicle_code: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Matrícula</span>
-                <input value={activeForm.plate} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, plate: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70 data-mono" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Marca</span>
-                <input value={activeForm.brand} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, brand: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Modelo</span>
-                <input value={activeForm.model} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Año</span>
-                <input type="number" value={activeForm.year} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, year: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Estado</span>
-                <select value={activeForm.status} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70">
-                  <option value="active">Activo</option>
-                  <option value="maintenance">Taller</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Plazas mín.</span>
-                <input type="number" value={activeForm.seats_min} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, seats_min: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Plazas máx.</span>
-                <input type="number" value={activeForm.seats_max} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, seats_max: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Combustible</span>
-                <input value={activeForm.fuel_type} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, fuel_type: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Kilometraje</span>
-                <input type="number" value={activeForm.mileage_km} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, mileage_km: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">GPS Provider</span>
-                <input value={activeForm.gps_provider || ''} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, gps_provider: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">GPS Vehicle ID</span>
-                <input value={activeForm.gps_external_id || ''} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, gps_external_id: e.target.value }))} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70 data-mono" />
-              </label>
-            </div>
-
-            <label className="flex items-center gap-2 text-[12px] text-slate-300">
-              <input type="checkbox" checked={!!activeForm.accessibility} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, accessibility: e.target.checked }))} />
-              Accesible PMR
-            </label>
-
-            <label className="space-y-1 block">
-              <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Notas</span>
-              <textarea value={activeForm.notes || ''} disabled={!isEditing} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} rows={3} className="w-full px-3 py-2 text-[12px] rounded-md bg-[#0f1723] border border-white/[0.1] disabled:opacity-70" />
-            </label>
-
-            <div className="border border-white/[0.08] rounded-[12px] p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <FileText size={14} className="text-cyan-300" />
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.08em]">Documentación</p>
-                </div>
-                {isEditing && (
-                  <button onClick={addDocument} className="control-btn px-2 py-1 rounded-md text-[10px]">Añadir documento</button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {(activeForm.documents || []).length === 0 && (
-                  <p className="text-[11px] text-slate-500">Sin documentos registrados</p>
-                )}
-                {(activeForm.documents || []).map((doc, idx) => (
-                  <div key={`${doc.id || 'doc'}-${idx}`} className="grid grid-cols-[1fr_1fr_130px_130px_36px] gap-2">
-                    <input value={doc.doc_type || ''} disabled={!isEditing} onChange={(e) => updateDocument(idx, 'doc_type', e.target.value)} placeholder="Tipo" className="px-2 py-1.5 text-[11px] rounded-md bg-[#0f1723] border border-white/[0.1]" />
-                    <input value={doc.reference || ''} disabled={!isEditing} onChange={(e) => updateDocument(idx, 'reference', e.target.value)} placeholder="Referencia" className="px-2 py-1.5 text-[11px] rounded-md bg-[#0f1723] border border-white/[0.1]" />
-                    <input type="date" value={doc.issue_date || ''} disabled={!isEditing} onChange={(e) => updateDocument(idx, 'issue_date', e.target.value)} className="px-2 py-1.5 text-[11px] rounded-md bg-[#0f1723] border border-white/[0.1]" />
-                    <input type="date" value={doc.expiry_date || ''} disabled={!isEditing} onChange={(e) => updateDocument(idx, 'expiry_date', e.target.value)} className="px-2 py-1.5 text-[11px] rounded-md bg-[#0f1723] border border-white/[0.1]" />
-                    <button disabled={!isEditing} onClick={() => removeDocument(idx)} className="border border-red-500/30 text-red-300 rounded-md hover:bg-red-500/[0.08] disabled:opacity-40">
-                      <Trash2 size={12} className="mx-auto" />
-                    </button>
-                  </div>
                 ))}
               </div>
-            </div>
 
-            {!isEditing && selectedVehicle && (
-              <div className="text-[11px] text-slate-500 data-mono">
-                <span className="mr-3">Estado: {STATUS_LABEL[selectedVehicle.status] || selectedVehicle.status}</span>
-                <span className="mr-3">Edad: {selectedVehicle.age_years ?? '-'} años</span>
-                <span>Actualizado: {selectedVehicle.updated_at?.slice(0, 19).replace('T', ' ') || '-'}</span>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+              {detailTab === 'data' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Codigo</span>
+                      <input value={activeForm.vehicle_code} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, vehicle_code: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Matricula</span>
+                      <input value={activeForm.plate} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, plate: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70 data-mono" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Marca</span>
+                      <input value={activeForm.brand} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, brand: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Modelo</span>
+                      <input value={activeForm.model} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, model: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Ano</span>
+                      <input type="number" value={activeForm.year} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, year: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Estado</span>
+                      <select value={activeForm.status} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70">
+                        <option value="active">Activo</option>
+                        <option value="maintenance">Taller</option>
+                        <option value="inactive">Inactivo</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Plazas minimas</span>
+                      <input type="number" value={activeForm.seats_min} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, seats_min: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Plazas maximas</span>
+                      <input type="number" value={activeForm.seats_max} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, seats_max: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Combustible</span>
+                      <input value={activeForm.fuel_type} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, fuel_type: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Kilometraje</span>
+                      <input type="number" value={activeForm.mileage_km} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, mileage_km: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-[12px] text-slate-300">
+                    <input type="checkbox" checked={!!activeForm.accessibility} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, accessibility: event.target.checked }))} />
+                    Accesible PMR
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Notas operativas</span>
+                    <textarea value={activeForm.notes || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} rows={4} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                  </label>
+
+                  {!isEditing && selectedVehicle && (
+                    <div className="text-[11px] text-slate-500 data-mono">
+                      <span className="mr-3">Edad: {selectedVehicle.age_years ?? '-'} anos</span>
+                      <span>Actualizado: {selectedVehicle.updated_at?.slice(0, 19).replace('T', ' ') || '-'}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {detailTab === 'documents' && (
+                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-cyan-300" />
+                      <div>
+                        <p className="text-[12px] font-semibold text-white">Documentacion</p>
+                        <p className="text-[11px] text-slate-400">ITV, seguros y referencias basicas del vehiculo.</p>
+                      </div>
+                    </div>
+                    {isEditing && (
+                      <button onClick={addDocument} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                        Anadir documento
+                      </button>
+                    )}
+                  </div>
+
+                  {(activeForm.documents || []).length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
+                      <p className="text-[12px] text-slate-300">Todavia no hay documentos cargados.</p>
+                      <p className="mt-1 text-[11px] text-slate-500">Puedes completarlos manualmente cuando lo necesites.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(activeForm.documents || []).map((doc, index) => (
+                        <div key={`${doc.id || 'doc'}-${index}`} className="grid grid-cols-[1fr_1fr_140px_140px_40px] gap-2 rounded-xl border border-white/10 bg-[#0f1723] p-2">
+                          <input value={doc.doc_type || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'doc_type', event.target.value)} placeholder="Tipo" className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
+                          <input value={doc.reference || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'reference', event.target.value)} placeholder="Referencia" className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
+                          <input type="date" value={doc.issue_date || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'issue_date', event.target.value)} className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
+                          <input type="date" value={doc.expiry_date || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'expiry_date', event.target.value)} className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
+                          <button disabled={!isEditing} onClick={() => removeDocument(index)} className="rounded-md border border-red-500/35 text-red-300 hover:bg-red-500/10 disabled:opacity-40">
+                            <Trash2 size={12} className="mx-auto" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {detailTab === 'gps' && (
+                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-cyan-300" />
+                    <div>
+                      <p className="text-[12px] font-semibold text-white">Vinculacion GPS</p>
+                      <p className="text-[11px] text-slate-400">Base preparada para integrar el proveedor externo de telematica.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Proveedor</span>
+                      <input value={activeForm.gps_provider || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, gps_provider: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                    </label>
+                    <label className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">ID externo</span>
+                      <input value={activeForm.gps_external_id || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, gps_external_id: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70 data-mono" />
+                    </label>
+                  </div>
+
+                  {!isEditing && selectedVehicle && (
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="rounded-xl border border-white/5 bg-[#0f1723] p-3">
+                        <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Ultima lectura</p>
+                        <p className="mt-1 text-[12px] text-slate-200">{selectedVehicle.gps_last_seen_at || 'Sin datos'}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/5 bg-[#0f1723] p-3">
+                        <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Ultima posicion</p>
+                        <p className="mt-1 text-[12px] text-slate-200">
+                          {selectedVehicle.gps_last_position ? `${selectedVehicle.gps_last_position.lat}, ${selectedVehicle.gps_last_position.lon}` : 'Sin posicion registrada'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
