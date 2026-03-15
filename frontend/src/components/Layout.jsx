@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { LayoutGrid, Gauge, Bus } from 'lucide-react';
 import tuttiSymbol from '../assets/tutti-symbol.svg';
 import { getWorkspaceStatusLabel } from '../utils/workspaceStatus';
@@ -187,19 +187,58 @@ const Layout = ({
   hasStudioAccess = false,
   workspaceContext = null,
 }) => {
+  const [isHeaderVisible, setIsHeaderVisible] = useState(false);
+  const [isHeaderHovered, setIsHeaderHovered] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (event) => {
+      const y = Number(event?.clientY || 0);
+      if (y <= 56) {
+        setIsHeaderVisible(true);
+        return;
+      }
+      if (y >= 120 && !isHeaderHovered) {
+        setIsHeaderVisible(false);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [isHeaderHovered]);
+
   return (
-    <div className="flex flex-col h-screen w-screen gt-bg text-gt-text font-sans overflow-hidden">
-      <Header
-        stats={stats}
-        scheduleByDay={scheduleByDay}
-        activeDay={activeDay}
-        onDayChange={onDayChange}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        hasStudioAccess={hasStudioAccess}
-        workspaceContext={workspaceContext}
+    <div className="relative flex flex-col h-screen w-screen gt-bg text-gt-text font-sans overflow-hidden">
+      <div
+        className="absolute top-0 left-0 right-0 h-5 z-40"
+        onMouseEnter={() => setIsHeaderVisible(true)}
       />
-      <main className="flex-1 flex overflow-hidden px-4 pb-4 pt-2 gap-4">
+
+      <div
+        className={`absolute top-0 left-0 right-0 z-50 transition-transform duration-200 ease-out ${
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-[110%]'
+        }`}
+        onMouseEnter={() => {
+          setIsHeaderHovered(true);
+          setIsHeaderVisible(true);
+        }}
+        onMouseLeave={() => {
+          setIsHeaderHovered(false);
+          setIsHeaderVisible(false);
+        }}
+      >
+        <Header
+          stats={stats}
+          scheduleByDay={scheduleByDay}
+          activeDay={activeDay}
+          onDayChange={onDayChange}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          hasStudioAccess={hasStudioAccess}
+          workspaceContext={workspaceContext}
+        />
+      </div>
+
+      <main className="flex-1 flex overflow-hidden px-4 pb-4 pt-4 gap-4">
         {children}
       </main>
     </div>

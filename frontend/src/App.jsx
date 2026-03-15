@@ -666,33 +666,49 @@ function PlanningOverviewBar({
   const primaryActionHandler = fleetVirtual > 0 ? onOpenReconciliation : onOpenRules;
 
   return (
-    <div className="mb-2 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-3 space-y-3">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0">
+    <div className="mb-2 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 px-3 py-2.5">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Planificacion</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Planificacion</p>
             <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${readiness.chipClass}`}>
               {readiness.label}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
-              {getWorkspaceStatusLabel(workspace)}
             </span>
             <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
               {scopeLabel}
             </span>
           </div>
-          <h2 className="mt-2 text-[22px] font-semibold text-white" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
-            {workspace.name || 'Optimizacion activa'}
-          </h2>
-          <p className="mt-1 text-[12px] text-slate-400">
-            Dia activo {DAY_LABELS[activeDay] || activeDay}. Pendiente principal: {pendingLabel.toLowerCase()}.
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="text-[22px] font-semibold text-white leading-none" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+              {workspace.name || 'Optimizacion activa'}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
+              {DAY_LABELS[activeDay] || activeDay}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
+              {stats?.buses ?? 0} buses
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
+              {stats?.routes ?? 0} rutas
+            </span>
+            <span className={`rounded-full border px-2.5 py-1 ${fleetVirtual > 0 ? 'border-amber-500/25 bg-amber-500/10 text-amber-100' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'}`}>
+              {fleetVirtual} provisionales
+            </span>
+            {hasConflict ? (
+              <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-100">
+                {workspace?.conflict_count ?? 0} conflictos
+              </span>
+            ) : null}
+            <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-100">
+              Siguiente: {nextActionLabel}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-400 truncate">
+            Pendiente principal: {pendingLabel.toLowerCase()}.
           </p>
-          {blockingText ? (
-            <p className="mt-2 text-[12px] text-amber-100">{blockingText}</p>
-          ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
           <button
             type="button"
             onClick={primaryActionHandler}
@@ -709,46 +725,28 @@ function PlanningOverviewBar({
             onClick={() => setIsExpanded((prev) => !prev)}
             className="rounded-md border border-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-100 hover:bg-white/5"
           >
-            {isExpanded ? 'Menos' : 'Mas'}
+            {isExpanded ? 'Ocultar' : 'Detalle'}
           </button>
         </div>
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-[#09111b] px-3 py-2.5">
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
-            {stats?.buses ?? 0} buses
-          </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
-            {stats?.routes ?? 0} rutas
-          </span>
-          <span className={`rounded-full border px-2.5 py-1 ${fleetVirtual > 0 ? 'border-amber-500/25 bg-amber-500/10 text-amber-100' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'}`}>
-            {fleetVirtual} provisionales
-          </span>
-          <span className={`rounded-full border px-2.5 py-1 ${hasConflict ? 'border-rose-500/25 bg-rose-500/10 text-rose-100' : 'border-white/10 bg-white/[0.03] text-slate-300'}`}>
-            {workspace?.conflict_count ?? 0} conflictos
-          </span>
-          <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-100">
-            Siguiente: {nextActionLabel}
-          </span>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-white/10 bg-[#09111b] p-2.5">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          {stageItems.map((item) => (
-            <div key={item.key} className="flex items-center gap-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${item.done ? 'bg-emerald-400' : (item.active ? 'bg-cyan-300' : 'bg-slate-600')}`} />
-              <span className={`text-[11px] ${item.done ? 'text-slate-100' : (item.active ? 'text-cyan-100' : 'text-slate-500')}`}>
-                {item.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {isExpanded && (
-        <>
+        <div className="mt-3 rounded-xl border border-white/10 bg-[#09111b] p-3 space-y-3">
+          {blockingText ? (
+            <p className="text-[12px] text-amber-100">{blockingText}</p>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {stageItems.map((item) => (
+              <div key={item.key} className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${item.done ? 'bg-emerald-400' : (item.active ? 'bg-cyan-300' : 'bg-slate-600')}`} />
+                <span className={`text-[11px] ${item.done ? 'text-slate-100' : (item.active ? 'text-cyan-100' : 'text-slate-500')}`}>
+                  {item.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -769,17 +767,13 @@ function PlanningOverviewBar({
           </div>
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
-            <PublicationStatusCard title="Flota real" value={fleetReal} tone="success" helper="Buses reales ya vinculados." />
-            <PublicationStatusCard title="Estado de publicacion" value={readiness.label} helper="Resumen del estado operativo actual." />
-            <PublicationStatusCard title="Buses provisionales pendientes" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={fleetVirtual > 0 ? 'Requieren asignacion real antes de publicar.' : 'No quedan pendientes.'} />
-            <PublicationStatusCard title="Conflictos reales" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} helper={hasConflict ? 'Hay una colision real con otra publicacion.' : 'No hay bloqueos detectados.'} />
+            <PublicationStatusCard title="Flota real" value={fleetReal} tone="success" helper="Buses reales ya vinculados." compact />
+            <PublicationStatusCard title="Estado de publicacion" value={readiness.label} helper="Resumen del estado operativo actual." compact />
+            <PublicationStatusCard title="Buses provisionales pendientes" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={fleetVirtual > 0 ? 'Requieren asignacion real antes de publicar.' : 'No quedan pendientes.'} compact />
+            <PublicationStatusCard title="Conflictos reales" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} helper={hasConflict ? 'Hay una colision real con otra publicacion.' : 'No hay bloqueos detectados.'} compact />
           </div>
 
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-1">
-            <PublicationStatusCard title="Advertencias" value={workspace?.blocking_reason ? 1 : 0} tone={workspace?.blocking_reason ? 'warning' : 'success'} helper={blockingText || 'Sin advertencias relevantes.'} />
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-[#09111b] p-3">
+          <div className="rounded-xl border border-white/10 bg-[#0d1623]/70 p-3">
             <p className="text-[10px] uppercase tracking-[0.1em] text-slate-500">Reglas activas</p>
             <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
               <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
@@ -807,7 +801,7 @@ function PlanningOverviewBar({
             <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-100">Bus provisional</span>
             <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Bus publicado</span>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
