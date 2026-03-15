@@ -4,7 +4,7 @@ Desktop app version/update metadata.
 Update APP_VERSION on each desktop release.
 """
 
-APP_VERSION = "0.2.47"
+APP_VERSION = "0.2.48"
 GITHUB_REPO = "odinx-svg/bus-route-optimizer"
 RELEASE_ASSET_ZIP = "TuttiDesktopApp.zip"
 RELEASE_ASSET_EXE = "Tutti Desktop.exe"

@@ -593,6 +593,7 @@ export function UnifiedWorkspace({
   const [validationResults, setValidationResults] = useState({});
   const [activeDragItem, setActiveDragItem] = useState(null);
   const [isOverWorkspace, setIsOverWorkspace] = useState(false);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [isDraggingRoute, setIsDraggingRoute] = useState(false);
   const [activeDay, setActiveDay] = useState(externalActiveDay || 'L');
   const [isSaving, setIsSaving] = useState(false);
@@ -683,6 +684,7 @@ export function UnifiedWorkspace({
   const refreshTimerRef = useRef(null);
   const refreshPendingAllRef = useRef(false);
   const refreshPendingBusIdsRef = useRef(new Set());
+  const toolsMenuRef = useRef(null);
 
   const updateSelectedBus = useCallback((nextBusId) => {
     const value = nextBusId || null;
@@ -691,6 +693,19 @@ export function UnifiedWorkspace({
       onBusSelect(value);
     }
   }, [onBusSelect]);
+
+  useEffect(() => {
+    if (!showToolsMenu) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(event.target)) {
+        setShowToolsMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [showToolsMenu]);
 
   const updateSelectedRoute = useCallback((nextRouteId) => {
     const value = nextRouteId || null;
@@ -2394,7 +2409,7 @@ export function UnifiedWorkspace({
           </div>
 
           {/* Derecha: Acciones */}
-          <div className="flex items-center gap-1.5 data-mono ml-auto flex-wrap justify-end">
+          <div className="flex items-center gap-1.5 data-mono ml-auto flex-wrap justify-end relative" ref={toolsMenuRef}>
             {/* OSRM */}
             <div 
               className={`flex items-center gap-1 px-1.5 py-1 rounded-sm border text-[9px] font-semibold tracking-wider ${
@@ -2434,33 +2449,6 @@ export function UnifiedWorkspace({
               Revisar todo
             </button>
 
-            <button
-              onClick={handleManualReassign}
-              disabled={globalValidationRunning || reassignRunning || buses.length === 0}
-              className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
-              title="Intentar resolver automaticamente las incidencias criticas detectadas"
-            >
-              {reassignRunning ? (
-                <div className="w-3 h-3 border-2 border-slate-500 border-t-cyan-300 rounded-full animate-spin" />
-              ) : (
-                <GitBranch className="w-3 h-3" />
-              )}
-              Resolver criticos
-            </button>
-
-            <label
-              className="px-2 py-1 rounded-sm border border-[#2b4056] bg-[#101a26] text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-300 flex items-center gap-1.5 cursor-pointer select-none"
-              title="Si esta activo, la revision intenta resolver automaticamente los errores criticos"
-            >
-              <input
-                type="checkbox"
-                checked={autoReassignCritical}
-                onChange={(event) => setAutoReassignCritical(Boolean(event.target.checked))}
-                className="accent-cyan-400"
-              />
-              Auto resolver
-            </label>
-
             {positioningRefreshRunning && (
               <div
                 className="px-2 py-1 rounded-sm border border-cyan-400/30 bg-cyan-500/10 text-cyan-200 text-[9px] font-semibold tracking-[0.08em] uppercase flex items-center gap-1"
@@ -2471,75 +2459,6 @@ export function UnifiedWorkspace({
               </div>
             )}
 
-            <button
-              onClick={handleExportIncidents}
-              disabled={!globalValidationReport}
-              className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
-              title="Descargar el reporte de incidencias en CSV y JSON"
-            >
-              <Download className="w-3 h-3" />
-              Descargar reporte
-            </button>
-
-            <button
-              onClick={handleExportPdf}
-              disabled={!hasRoutesAssigned}
-              className="px-2.5 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors flex items-center gap-1"
-              title="Descargar el PDF del horario actual"
-            >
-              <Download className="w-3 h-3" />
-              Descargar PDF
-            </button>
-
-            <div className="w-px h-5 bg-slate-700 mx-0.5" />
-
-            <button
-              onClick={handleOpenCreateRoute}
-              className="px-2 py-1.5 control-btn rounded-md text-[10px] font-semibold transition-colors flex items-center gap-1"
-              title="Crear ruta manual"
-            >
-              <Plus className="w-3 h-3" />
-              Nueva ruta
-            </button>
-
-            <button
-              onClick={() => selectedRoute && handleOpenEditRoute(selectedRoute)}
-              disabled={!selectedRoute}
-              className="px-2 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold transition-colors flex items-center gap-1"
-              title={selectedRoute ? `Editar ${selectedRoute.code}` : 'Selecciona una ruta para editarla'}
-            >
-              <Edit3 className="w-3 h-3" />
-              Editar
-            </button>
-
-            <button
-              onClick={() => selectedRoute && handleOpenDuplicateRoute(selectedRoute)}
-              disabled={!selectedRoute}
-              className="px-2 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold transition-colors flex items-center gap-1"
-              title={selectedRoute ? `Duplicar ${selectedRoute.code}` : 'Selecciona una ruta para duplicarla'}
-            >
-              <Copy className="w-3 h-3" />
-              Duplicar
-            </button>
-
-            {/* Acciones compactas */}
-            <button
-              onClick={handleClearAll}
-              disabled={buses.every(b => b.routes.length === 0)}
-              className="px-2 py-1.5 control-btn disabled:opacity-50 rounded-md text-[10px] font-semibold transition-colors"
-              title="Vaciar horario"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-            
-            <button
-              onClick={handleAddBus}
-              className="px-2 py-1.5 control-btn rounded-md text-[10px] font-semibold transition-colors flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3" />
-              Nueva unidad
-            </button>
-            
             <button
               onClick={handleSaveDraft}
               disabled={isSaving || !hasUnsavedChanges}
@@ -2565,6 +2484,111 @@ export function UnifiedWorkspace({
               )}
               Publicar
             </button>
+
+            <button
+              type="button"
+              onClick={() => setShowToolsMenu((prev) => !prev)}
+              className="px-2 py-1.5 control-btn rounded-md text-[10px] font-semibold transition-colors flex items-center gap-1"
+              title="Abrir herramientas secundarias"
+            >
+              <MoreHorizontal className="w-3 h-3" />
+              Mas
+            </button>
+
+            {showToolsMenu && (
+              <div className="absolute right-0 top-[calc(100%+0.5rem)] z-30 w-[260px] rounded-xl border border-[#2b4056] bg-[#0b141f] p-2 shadow-2xl">
+                <div className="space-y-1">
+                  <button
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      handleManualReassign();
+                    }}
+                    disabled={globalValidationRunning || reassignRunning || buses.length === 0}
+                    className="w-full rounded-md border border-transparent px-3 py-2 text-left text-[11px] text-slate-200 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Resolver criticos
+                  </button>
+                  <label className="flex items-center justify-between rounded-md px-3 py-2 text-[11px] text-slate-300 hover:bg-white/5">
+                    <span>Auto resolver</span>
+                    <input
+                      type="checkbox"
+                      checked={autoReassignCritical}
+                      onChange={(event) => setAutoReassignCritical(Boolean(event.target.checked))}
+                      className="accent-cyan-400"
+                    />
+                  </label>
+                  <button
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      handleExportIncidents();
+                    }}
+                    disabled={!globalValidationReport}
+                    className="w-full rounded-md border border-transparent px-3 py-2 text-left text-[11px] text-slate-200 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Descargar reporte
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      handleExportPdf();
+                    }}
+                    disabled={!hasRoutesAssigned}
+                    className="w-full rounded-md border border-transparent px-3 py-2 text-left text-[11px] text-slate-200 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Descargar PDF
+                  </button>
+                  <div className="my-1 h-px bg-white/10" />
+                  <button
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      handleOpenCreateRoute();
+                    }}
+                    className="w-full rounded-md border border-transparent px-3 py-2 text-left text-[11px] text-slate-200 hover:bg-white/5"
+                  >
+                    Nueva ruta
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      if (selectedRoute) handleOpenEditRoute(selectedRoute);
+                    }}
+                    disabled={!selectedRoute}
+                    className="w-full rounded-md border border-transparent px-3 py-2 text-left text-[11px] text-slate-200 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Editar ruta seleccionada
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      if (selectedRoute) handleOpenDuplicateRoute(selectedRoute);
+                    }}
+                    disabled={!selectedRoute}
+                    className="w-full rounded-md border border-transparent px-3 py-2 text-left text-[11px] text-slate-200 hover:bg-white/5 disabled:opacity-50"
+                  >
+                    Duplicar ruta seleccionada
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      handleAddBus();
+                    }}
+                    className="w-full rounded-md border border-transparent px-3 py-2 text-left text-[11px] text-slate-200 hover:bg-white/5"
+                  >
+                    Nueva unidad
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      handleClearAll();
+                    }}
+                    disabled={buses.every((b) => b.routes.length === 0)}
+                    className="w-full rounded-md border border-transparent px-3 py-2 text-left text-[11px] text-rose-200 hover:bg-rose-500/10 disabled:opacity-50"
+                  >
+                    Vaciar horario
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
