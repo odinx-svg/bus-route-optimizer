@@ -1012,6 +1012,13 @@ function FleetReconciliationModal({
   open = false,
   items = [],
   companyMix = null,
+  requiredBusCount = 0,
+  realBoundCount = 0,
+  pendingRealReconciliationCount = 0,
+  availableRealVehicleCount = 0,
+  companiesAvailable = 0,
+  estimatedVirtualRemaining = 0,
+  reconciliationSnapshot = null,
   dayLabel = '',
   scopeLabel = '',
   scopeVehicleCount = 0,
@@ -1031,8 +1038,17 @@ function FleetReconciliationModal({
       ? effectiveCompanyMix.recommended_companies
       : []
   ), [effectiveCompanyMix]);
-  const totalPendingBuses = Number(effectiveCompanyMix?.total_pending_buses || items.length || 0);
-  const uncoveredBuses = Number(effectiveCompanyMix?.uncovered_buses || 0);
+  const totalPendingBuses = Number(
+    pendingRealReconciliationCount
+    || effectiveCompanyMix?.total_pending_buses
+    || items.length
+    || 0
+  );
+  const uncoveredBuses = Number(
+    estimatedVirtualRemaining
+    || effectiveCompanyMix?.uncovered_buses
+    || 0
+  );
   const modalTitle = busId
     ? `Asignacion recomendada para ${busId}`
     : 'Asignacion recomendada de buses reales';
@@ -1045,16 +1061,25 @@ function FleetReconciliationModal({
   useEffect(() => {
     if (!open) return;
     const nextState = {};
+    const snapshotAllocations = Array.isArray(reconciliationSnapshot?.company_allocations)
+      ? reconciliationSnapshot.company_allocations
+      : [];
+    snapshotAllocations.forEach((company) => {
+      const key = String(company?.company_id || 'unassigned');
+      nextState[key] = Number(company?.count || 0);
+    });
     recommendedCompanies.forEach((company) => {
       const key = String(company?.company_id || 'unassigned');
-      nextState[key] = Number(company?.recommended_count || 0);
+      if (typeof nextState[key] === 'undefined') {
+        nextState[key] = Number(company?.recommended_count || 0);
+      }
     });
     setAllocationByCompany(nextState);
     setPreferredCompanyByBus({});
     setSelectedVehicleByBus({});
     setExcludedVehicleIdsByBus({});
     setDetailsOpen(Boolean(busId));
-  }, [busId, open, recommendedCompanies]);
+  }, [busId, open, recommendedCompanies, reconciliationSnapshot]);
 
   if (!open) return null;
 
@@ -1149,7 +1174,7 @@ function FleetReconciliationModal({
         <p className="mt-2 text-[12px] text-[#8ba3bd]">
           {busId
             ? 'Este bus provisional necesita una propuesta de empresa y un candidato real para cerrar la operacion.'
-            : `La optimizacion necesita ${totalPendingBuses} buses reales${dayLabel ? ` para ${dayLabel.toLowerCase()}` : ''}. Aqui tienes una propuesta inicial por empresa${scopeLabel ? ` dentro de ${scopeLabel}` : ''}.`}
+            : `La operacion del ${dayLabel ? dayLabel.toLowerCase() : 'dia'} usa ${Number(requiredBusCount || 0)} buses. Aqui decides cuantos cubres con flota real y de que empresa salen${scopeLabel ? ` dentro de ${scopeLabel}` : ''}.`}
         </p>
         {scopeMode === 'company' && Number(scopeVehicleCount || 0) === 0 && (
           <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
@@ -1162,25 +1187,41 @@ function FleetReconciliationModal({
               <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-200">Lectura rapida</p>
                 <p className="mt-3 text-[22px] font-semibold text-white">
-                  {totalPendingBuses} buses pendientes de cubrir
+                  La operacion usa {Number(requiredBusCount || 0)} buses
                 </p>
                 <p className="mt-2 text-[13px] leading-6 text-slate-300">
-                  {primaryRecommendation
-                    ? `La recomendacion inicial es apoyarse primero en ${primaryRecommendation.company_name || 'la empresa principal'} con ${primaryRecommendation.recommended_count || 0} bus${Number(primaryRecommendation.recommended_count || 0) === 1 ? '' : 'es'}, y completar despues con el resto de empresas disponibles.`
-                    : 'No hay una empresa claramente dominante. Conviene revisar el detalle de candidatos antes de aplicar la propuesta.'}
+                  {totalPendingBuses > 0
+                    ? (
+                      primaryRecommendation
+                        ? `Ya hay ${Number(realBoundCount || 0)} cubiertos con real. Te falta decidir ${totalPendingBuses} buses y la propuesta inicial empieza por ${primaryRecommendation.company_name || 'la empresa principal'}.`
+                        : `Ya hay ${Number(realBoundCount || 0)} cubiertos con real. Te falta decidir ${totalPendingBuses} buses y no hay una empresa claramente dominante.`
+                    )
+                    : `No quedan pendientes de asignacion real. Puedes revisar el reparto o cerrar la reconciliacion.`}
                 </p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-2">
                 <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Buses a cubrir</p>
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Operacion del dia</p>
+                  <p className="mt-1 text-[26px] font-semibold text-white">{Number(requiredBusCount || 0)}</p>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Ya cubiertos con real</p>
+                  <p className="mt-1 text-[26px] font-semibold text-emerald-200">{Number(realBoundCount || 0)}</p>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Pendientes de asignar</p>
                   <p className="mt-1 text-[26px] font-semibold text-white">{totalPendingBuses}</p>
                 </div>
                 <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Empresas con opcion</p>
-                  <p className="mt-1 text-[26px] font-semibold text-cyan-200">{Number(effectiveCompanyMix?.companies_with_options || 0)}</p>
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Flota disponible en alcance</p>
+                  <p className="mt-1 text-[26px] font-semibold text-cyan-200">{Number(availableRealVehicleCount || scopeVehicleCount || 0)}</p>
                 </div>
                 <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Sin sugerencia libre</p>
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Empresas disponibles</p>
+                  <p className="mt-1 text-[26px] font-semibold text-cyan-200">{Number(companiesAvailable || effectiveCompanyMix?.companies_with_options || 0)}</p>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Provisionales si no completas</p>
                   <p className="mt-1 text-[26px] font-semibold text-amber-200">{uncoveredBuses}</p>
                 </div>
               </div>
@@ -1192,16 +1233,23 @@ function FleetReconciliationModal({
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8ba3bd]">Reparto por empresa</p>
                 <p className="mt-1 text-[12px] text-slate-400">
-                  Ajusta aqui de que empresa quieres sacar los buses reales. El sistema intentara respetar este reparto.
+                  Indica cuantos buses reales quieres sacar de cada empresa. El sistema intentara respetar este reparto en los pendientes.
                 </p>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Si fijas una matricula concreta en el detalle por bus, esa decision manda sobre este reparto.
+                  Operacion total: {Number(requiredBusCount || 0)}. Ya cubiertos: {Number(realBoundCount || 0)}. Te falta repartir: {totalPendingBuses}.
                 </p>
               </div>
               <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
                 Total configurado: {totalAssigned}
               </div>
             </div>
+            {totalPendingBuses > 0 && totalAssigned !== totalPendingBuses && (
+              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
+                {totalAssigned < totalPendingBuses
+                  ? `Todavia faltan ${totalPendingBuses - totalAssigned} buses por repartir entre empresas.`
+                  : `Hay ${totalAssigned - totalPendingBuses} buses de mas en el reparto. Ajusta los conteos si quieres un reparto exacto.`}
+              </div>
+            )}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {recommendedCompanies.length > 0 ? recommendedCompanies.map((company) => (
                 <div key={`${company.company_id || company.company_name}`} className="rounded-xl border border-[#2a4057] bg-[#0a1320] p-4">
@@ -1262,7 +1310,7 @@ function FleetReconciliationModal({
                 <p className="mt-1 text-[12px] text-slate-400">
                   {detailsOpen
                     ? 'Oculta el detalle tecnico si ya tienes clara la decision.'
-                    : `Ver detalle de los ${items.length} buses provisionales pendientes.`}
+                    : `Ver detalle de los ${items.length} buses pendientes de asignacion real.`}
                 </p>
               </div>
               <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
@@ -1382,7 +1430,7 @@ function FleetReconciliationModal({
                 })}
                 {items.length === 0 && (
                   <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3 text-[12px] text-slate-500">
-                    Sin detalle de buses provisionales pendientes.
+                    No hay buses pendientes de asignacion real en este dia.
                   </div>
                 )}
               </div>
@@ -1391,26 +1439,30 @@ function FleetReconciliationModal({
         </div>
         <div className="mt-4 flex items-center justify-between gap-3">
           <div className="text-[11px] text-slate-400">
-            {remainingToDistribute > 0
-              ? `Quedan ${remainingToDistribute} buses sin repartir. Si no los asignas manualmente por empresa, el sistema completara con la mejor opcion disponible.`
-              : 'La propuesta queda lista para aplicarse en el workspace.'}
+            {totalPendingBuses > 0
+              ? (
+                remainingToDistribute > 0
+                  ? `Quedan ${remainingToDistribute} buses sin repartir. Si aplicas ahora, el sistema intentara completar el resto con la mejor opcion disponible.`
+                  : 'La propuesta queda lista para aplicarse en el workspace.'
+              )
+              : 'No quedan pendientes. Puedes cerrar o revisar el detalle de lo ya asignado.'}
           </div>
           <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
-            disabled={applying}
-          >
-            Cerrar
-          </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
+              disabled={applying}
+            >
+              Cerrar
+            </button>
             <button
               type="button"
               onClick={handleApply}
-              disabled={applying || items.length === 0}
+              disabled={applying || (items.length === 0 && totalPendingBuses > 0)}
               className="rounded-md border border-cyan-500/35 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {applying ? 'Aplicando...' : 'Aplicar propuesta'}
+              {applying ? 'Aplicando...' : (totalPendingBuses > 0 ? 'Aplicar propuesta' : 'Revisar reparto')}
             </button>
           </div>
         </div>
@@ -1545,6 +1597,13 @@ function App() {
     open: false,
     items: [],
     companyMix: null,
+    requiredBusCount: 0,
+    realBoundCount: 0,
+    pendingRealReconciliationCount: 0,
+    availableRealVehicleCount: 0,
+    companiesAvailable: 0,
+    estimatedVirtualRemaining: 0,
+    reconciliationSnapshot: null,
     dayLabel: '',
     scopeLabel: '',
     scopeVehicleCount: 0,
@@ -2421,6 +2480,13 @@ function App() {
               open: true,
               items: pendingItems,
               companyMix: fleetPreview?.reconciliation?.company_mix || null,
+              requiredBusCount: Number(fleetPreview?.reconciliation?.required_bus_count || pendingItems.length || 0),
+              realBoundCount: Number(fleetPreview?.reconciliation?.real_bound_count || 0),
+              pendingRealReconciliationCount: Number(fleetPreview?.reconciliation?.pending_real_reconciliation_count || pendingItems.length || 0),
+              availableRealVehicleCount: Number(fleetPreview?.scope_vehicle_count || 0),
+              companiesAvailable: Number(fleetPreview?.reconciliation?.company_mix?.companies_with_options || 0),
+              estimatedVirtualRemaining: Number(fleetPreview?.reconciliation?.company_mix?.uncovered_buses || 0),
+              reconciliationSnapshot: fleetPreview?.reconciliation_snapshot || null,
               dayLabel: DAY_LABELS[payload.day || activeDay] || payload.day || activeDay,
               scopeLabel: fleetPreview?.scope_label || '',
               scopeVehicleCount: Number(fleetPreview?.scope_vehicle_count || 0),
@@ -2447,6 +2513,13 @@ function App() {
                   ? publication.reconciliation.items
                   : [],
                 companyMix: publication?.reconciliation?.company_mix || null,
+                requiredBusCount: Number(publication?.reconciliation?.required_bus_count || 0),
+                realBoundCount: Number(publication?.reconciliation?.real_bound_count || 0),
+                pendingRealReconciliationCount: Number(publication?.reconciliation?.pending_real_reconciliation_count || 0),
+                availableRealVehicleCount: Number(publication?.scope_vehicle_count || 0),
+                companiesAvailable: Number(publication?.reconciliation?.company_mix?.companies_with_options || 0),
+                estimatedVirtualRemaining: Number(publication?.reconciliation?.company_mix?.uncovered_buses || 0),
+                reconciliationSnapshot: publication?.reconciliation_snapshot || null,
                 dayLabel: DAY_LABELS[payload.day || activeDay] || payload.day || activeDay,
                 scopeLabel: publication?.scope_label || '',
                 scopeVehicleCount: Number(publication?.scope_vehicle_count || 0),
@@ -2682,10 +2755,18 @@ function App() {
         : dayItems;
       const sourceCompanyMix = data?.reconciliation_day?.company_mix || data?.reconciliation?.company_mix || null;
       const modalCompanyMix = busId ? buildCompanyMixFallback(filteredItems) : sourceCompanyMix;
+      const daySummary = data?.reconciliation_day || {};
       setFleetReconciliationModal({
         open: true,
         items: filteredItems,
         companyMix: modalCompanyMix,
+        requiredBusCount: Number(daySummary?.required_bus_count || data?.required_bus_count || 0),
+        realBoundCount: Number(daySummary?.real_bound_count || data?.real_bound_count || 0),
+        pendingRealReconciliationCount: Number(daySummary?.pending_real_reconciliation_count || data?.pending_real_reconciliation_count || filteredItems.length || 0),
+        availableRealVehicleCount: Number(daySummary?.available_real_vehicle_count || data?.available_real_vehicle_count || data?.scope_vehicle_count || 0),
+        companiesAvailable: Number(daySummary?.companies_available || sourceCompanyMix?.companies_with_options || 0),
+        estimatedVirtualRemaining: Number(daySummary?.estimated_virtual_remaining || sourceCompanyMix?.uncovered_buses || 0),
+        reconciliationSnapshot: data?.reconciliation_snapshot?.days?.[activeDay] || null,
         dayLabel: DAY_LABELS[activeDay] || activeDay,
         scopeLabel: data?.scope_label || '',
         scopeVehicleCount: Number(data?.scope_vehicle_count || 0),
@@ -2706,6 +2787,8 @@ function App() {
       setFleetReconciliationModal((prev) => ({ ...prev, applying: true }));
       const result = await applyWorkspaceFleetReconciliation(activeWorkspaceId, {
         day: activeDay,
+        allocation_mode: 'pending_only',
+        autofill_remaining: true,
         bus_ids: fleetReconciliationModal.busId ? [fleetReconciliationModal.busId] : [],
         company_allocations: Array.isArray(companyAllocations) ? companyAllocations : [],
         bus_selections: Array.isArray(busSelections) ? busSelections : [],
@@ -2723,6 +2806,13 @@ function App() {
         open: false,
         items: [],
         companyMix: null,
+        requiredBusCount: 0,
+        realBoundCount: 0,
+        pendingRealReconciliationCount: 0,
+        availableRealVehicleCount: 0,
+        companiesAvailable: 0,
+        estimatedVirtualRemaining: 0,
+        reconciliationSnapshot: null,
         dayLabel: '',
         scopeLabel: '',
         scopeVehicleCount: 0,
@@ -3057,6 +3147,13 @@ function App() {
         open={fleetReconciliationModal.open}
         items={fleetReconciliationModal.items}
         companyMix={fleetReconciliationModal.companyMix}
+        requiredBusCount={fleetReconciliationModal.requiredBusCount}
+        realBoundCount={fleetReconciliationModal.realBoundCount}
+        pendingRealReconciliationCount={fleetReconciliationModal.pendingRealReconciliationCount}
+        availableRealVehicleCount={fleetReconciliationModal.availableRealVehicleCount}
+        companiesAvailable={fleetReconciliationModal.companiesAvailable}
+        estimatedVirtualRemaining={fleetReconciliationModal.estimatedVirtualRemaining}
+        reconciliationSnapshot={fleetReconciliationModal.reconciliationSnapshot}
         dayLabel={fleetReconciliationModal.dayLabel}
         scopeLabel={fleetReconciliationModal.scopeLabel}
         scopeVehicleCount={fleetReconciliationModal.scopeVehicleCount}
@@ -3064,7 +3161,7 @@ function App() {
         busId={fleetReconciliationModal.busId}
         applying={fleetReconciliationModal.applying}
         onApply={applyFleetReconciliationProposal}
-        onClose={() => setFleetReconciliationModal({ open: false, items: [], companyMix: null, dayLabel: '', scopeLabel: '', scopeVehicleCount: 0, scopeMode: 'company', busId: null, applying: false })}
+        onClose={() => setFleetReconciliationModal({ open: false, items: [], companyMix: null, requiredBusCount: 0, realBoundCount: 0, pendingRealReconciliationCount: 0, availableRealVehicleCount: 0, companiesAvailable: 0, estimatedVirtualRemaining: 0, reconciliationSnapshot: null, dayLabel: '', scopeLabel: '', scopeVehicleCount: 0, scopeMode: 'company', busId: null, applying: false })}
       />
       <FleetScopeChoiceModal
         open={fleetScopeChoiceModal.open}

@@ -338,10 +338,82 @@ class FleetReconciliationBusSelection(BaseModel):
 
 class FleetReconciliationApplyRequest(BaseModel):
     day: Optional[str] = None
+    allocation_mode: str = Field(default="pending_only")
+    autofill_remaining: bool = True
     bus_ids: List[str] = Field(default_factory=list)
     company_allocations: List[FleetReconciliationCompanyAllocation] = Field(default_factory=list)
     bus_selections: List[FleetReconciliationBusSelection] = Field(default_factory=list)
     checkpoint_name: Optional[str] = None
+
+
+class FleetReconciliationCompanyRecommendation(BaseModel):
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+    recommended_count: int = 0
+    available_vehicle_count: int = 0
+    coverable_assignments: int = 0
+    candidate_vehicle_count: int = 0
+    vehicle_codes: List[str] = Field(default_factory=list)
+
+
+class FleetReconciliationItem(BaseModel):
+    day: str
+    bus_id: str
+    required_seats: int = 0
+    required_capacity: int = 0
+    start_minute: int = 0
+    end_minute: int = 0
+    time_window: Dict[str, int] = Field(default_factory=dict)
+    already_real_bound: bool = False
+    preferred_company_id: Optional[str] = None
+    selected_vehicle_id: Optional[str] = None
+    suggestions: List[Dict[str, Any]] = Field(default_factory=list)
+    suggested_real_vehicles: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class FleetReconciliationSnapshot(BaseModel):
+    scope_mode: Optional[str] = None
+    scope_company_ids: List[str] = Field(default_factory=list)
+    scope_label: Optional[str] = None
+    updated_at: Optional[str] = None
+    days: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FleetReconciliationDaySummary(BaseModel):
+    day: str
+    required_bus_count: int = 0
+    real_bound_count: int = 0
+    virtual_bound_count: int = 0
+    pending_real_reconciliation_count: int = 0
+    available_real_vehicle_count: int = 0
+    companies_available: int = 0
+    estimated_virtual_remaining: int = 0
+    company_capacity_summary: List[Dict[str, Any]] = Field(default_factory=list)
+    company_mix: Dict[str, Any] = Field(default_factory=dict)
+    items: List[FleetReconciliationItem] = Field(default_factory=list)
+    pending_assignments: List[FleetReconciliationItem] = Field(default_factory=list)
+    selected_assignments: List[Dict[str, Any]] = Field(default_factory=list)
+    bus_selections: List[Dict[str, Any]] = Field(default_factory=list)
+    company_allocations: List[Dict[str, Any]] = Field(default_factory=list)
+    stale_assignments: List[Dict[str, Any]] = Field(default_factory=list)
+    unresolved: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class FleetReconciliationResponse(BaseModel):
+    workspace_id: str
+    scope_mode: str = "company"
+    scope_label: str = "Empresa"
+    scope_company_ids: List[str] = Field(default_factory=list)
+    scope_company_names: Dict[str, str] = Field(default_factory=dict)
+    scope_vehicle_count: int = 0
+    available_real_vehicle_count: int = 0
+    required_bus_count: int = 0
+    real_bound_count: int = 0
+    virtual_bound_count: int = 0
+    pending_real_reconciliation_count: int = 0
+    company_capacity_summary: List[Dict[str, Any]] = Field(default_factory=list)
+    days: Dict[str, FleetReconciliationDaySummary] = Field(default_factory=dict)
+    reconciliation_snapshot: FleetReconciliationSnapshot = Field(default_factory=FleetReconciliationSnapshot)
 
 
 class FleetPublicationSummary(BaseModel):

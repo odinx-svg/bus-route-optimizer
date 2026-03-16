@@ -213,6 +213,7 @@ bus-route-optimizer/
 │   ├── 📁 services/            # Servicios auxiliares
 │   │   ├── 📄 fleet_repository.py   # Repositorio DB-first de flota
 │   │   ├── 📄 fleet_publication.py  # Commit de flota al publicar
+│   │   ├── 📄 fleet_reconciliation.py # Reconciliacion operativa por dia (Empresa/UTE)
 │   │   └── 📄 telematics_provider.py # Contrato GPS (contract-first)
 │   ├── 📁 validation/          # Validación Monte Carlo
 │   ├── 📁 websocket/           # WebSockets
@@ -383,6 +384,19 @@ for /f "tokens=5" %a in ('netstat -aon ^| findstr ":8000"') do taskkill /F /PID 
 - ✅ Bloqueo por conflictos reales entre optimizaciones publicadas (`published_fleet_assignments`)
 - ✅ Endpoint de preview de flota por workspace (`/api/workspaces/{id}/fleet-preview`)
 - ✅ Base contract-first para GPS (`telematics_provider.py`)
+
+### v2.2 (2026-03-16)
+
+**Cambios mayores:**
+- ✅ Reconciliacion operativa E2E por dia (`services/fleet_reconciliation.py`)
+- ✅ La reconciliacion ya no depende solo de buses `virtual`, ahora distingue:
+  - buses requeridos del dia
+  - ya cubiertos con real
+  - pendientes de asignacion real
+  - flota disponible en el alcance Empresa/UTE
+- ✅ Snapshot persistente `reconciliation_snapshot` dentro de `fleet_snapshot`
+- ✅ `publish` valida drift de reconciliacion (`reconciliation_stale`) antes de comprometer reservas
+- ✅ UI de reconciliacion centrada en reparto por empresa + detalle por matricula
 
 **start-tutti.bat actualizado:**
 - Ejecución de `backend/scripts/init_db.py` antes de iniciar backend/frontend

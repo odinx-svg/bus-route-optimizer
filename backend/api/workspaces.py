@@ -23,6 +23,12 @@ from services.fleet_publication import (
     preview_workspace_publication,
     persist_publication_assignments,
 )
+from services.fleet_reconciliation import (
+    build_operational_reconciliation_snapshot,
+    materialize_schedule_from_reconciliation_snapshot,
+    merge_reconciliation_snapshot,
+    validate_reconciliation_snapshot,
+)
 from services.fleet_repository import FleetRepository
 from services.fleet_scope import resolve_workspace_fleet_scope
 from services.workspace_options import (
@@ -350,6 +356,131 @@ def _normalize_reconciliation_payload(reconciliation: Dict[str, Any]) -> Dict[st
             "uncovered_buses": int(company_mix.get("uncovered_buses", 0) or 0),
         },
     }
+
+
+def _build_operational_reconciliation_response(
+    db,
+    *,
+    workspace: OptimizationWorkspaceModel,
+    schedule_by_day: Dict[str, Any],
+    scope: Dict[str, Any],
+    fleet_snapshot: Optional[Dict[str, Any]] = None,
+    day: Optional[str] = None,
+) -> Dict[str, Any]:
+    company_id = str(scope.get("primary_company_id") or _workspace_company_id(db, workspace))
+    scope_company_ids = [
+        str(cid) for cid in (scope.get("scope_company_ids") or [])
+        if str(cid).strip()
+    ]
+    scope_company_names = scope.get("scope_company_names") if isinstance(scope.get("scope_company_names"), dict) else {}
+    scope_vehicle_count = len(
+        fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids)
+    )
+    snapshot = build_operational_reconciliation_snapshot(
+        db,
+        workspace_id=str(workspace.id),
+        primary_company_id=company_id,
+        schedule_by_day=schedule_by_day,
+        scope_mode=str(scope.get("scope_mode") or "company"),
+        scope_label=_build_scope_label(scope.get("scope_mode"), scope.get("ute_name")),
+        scope_company_ids=scope_company_ids,
+        scope_company_names=scope_company_names,
+        scope_vehicle_count=scope_vehicle_count,
+        exclude_workspace_id=str(workspace.id),
+        fleet_snapshot=fleet_snapshot,
+    )
+    selected_day = str(day or "").strip() or None
+    days = snapshot.get("days", {}) if isinstance(snapshot.get("days"), dict) else {}
+    if selected_day and selected_day not in days:
+        days[selected_day] = {
+            "day": selected_day,
+            "required_bus_count": 0,
+            "real_bound_count": 0,
+            "virtual_bound_count": 0,
+            "pending_real_reconciliation_count": 0,
+            "available_real_vehicle_count": int(snapshot.get("available_real_vehicle_count", 0) or 0),
+            "companies_available": len(snapshot.get("company_capacity_summary", []) or []),
+            "estimated_virtual_remaining": 0,
+            "company_capacity_summary": snapshot.get("company_capacity_summary", []),
+            "company_mix": {
+                "total_pending_buses": 0,
+                "recommended_companies": [],
+                "companies_with_options": len(snapshot.get("company_capacity_summary", []) or []),
+                "uncovered_buses": 0,
+            },
+            "items": [],
+            "pending_assignments": [],
+            "selected_assignments": [],
+            "bus_selections": [],
+            "company_allocations": [],
+            "stale_assignments": [],
+            "unresolved": [],
+        }
+    reconciliation_day = days.get(selected_day) if selected_day else None
+    aggregate_company_mix = (
+        reconciliation_day.get("company_mix", {})
+        if isinstance(reconciliation_day, dict)
+        else {
+            "total_pending_buses": int(snapshot.get("pending_real_reconciliation_count", 0) or 0),
+            "recommended_companies": [],
+            "companies_with_options": len(snapshot.get("company_capacity_summary", []) or []),
+            "uncovered_buses": 0,
+        }
+    )
+    response = {
+        "workspace_id": str(workspace.id),
+        "company_id": company_id,
+        "scope_mode": snapshot.get("scope_mode"),
+        "scope_label": snapshot.get("scope_label"),
+        "scope_company_ids": snapshot.get("scope_company_ids", []),
+        "scope_company_names": snapshot.get("scope_company_names", {}),
+        "scope_vehicle_count": int(snapshot.get("scope_vehicle_count", 0) or 0),
+        "available_real_vehicle_count": int(snapshot.get("available_real_vehicle_count", 0) or 0),
+        "required_bus_count": int(snapshot.get("required_bus_count", 0) or 0),
+        "real_bound_count": int(snapshot.get("real_bound_count", 0) or 0),
+        "virtual_bound_count": int(snapshot.get("virtual_bound_count", 0) or 0),
+        "pending_real_reconciliation_count": int(snapshot.get("pending_real_reconciliation_count", 0) or 0),
+        "company_capacity_summary": snapshot.get("company_capacity_summary", []),
+        "reconciliation_snapshot": snapshot.get("reconciliation_snapshot", {}),
+        "company_mix": aggregate_company_mix,
+        "reconciliation": {
+            **snapshot,
+            "company_mix": aggregate_company_mix,
+        },
+        "days": days,
+        "pending_assignments": (
+            reconciliation_day.get("pending_assignments", [])
+            if isinstance(reconciliation_day, dict)
+            else []
+        ),
+    }
+    if selected_day:
+        response["day"] = selected_day
+        response["reconciliation_day"] = reconciliation_day or {
+            "day": selected_day,
+            "required_bus_count": 0,
+            "real_bound_count": 0,
+            "virtual_bound_count": 0,
+            "pending_real_reconciliation_count": 0,
+            "available_real_vehicle_count": int(snapshot.get("available_real_vehicle_count", 0) or 0),
+            "companies_available": len(snapshot.get("company_capacity_summary", []) or []),
+            "estimated_virtual_remaining": 0,
+            "company_capacity_summary": snapshot.get("company_capacity_summary", []),
+            "company_mix": {
+                "total_pending_buses": 0,
+                "recommended_companies": [],
+                "companies_with_options": len(snapshot.get("company_capacity_summary", []) or []),
+                "uncovered_buses": 0,
+            },
+            "items": [],
+            "pending_assignments": [],
+            "selected_assignments": [],
+            "bus_selections": [],
+            "company_allocations": [],
+            "stale_assignments": [],
+            "unresolved": [],
+        }
+    return response
 
 
 def _reconciliation_key(day: Any, bus_id: Any) -> str:
@@ -911,7 +1042,7 @@ async def get_workspace_fleet_reconciliation(
     workspace_id: str,
     day: Optional[str] = Query(default=None),
 ) -> Dict[str, Any]:
-    """Get pending virtual buses and candidate real replacements (post-optimization reconciliation)."""
+    """Get operational fleet reconciliation snapshot for the selected day."""
     if not is_database_available() or SessionLocal is None:
         raise HTTPException(status_code=503, detail="Database not available")
     _ensure_tables_ready()
@@ -932,49 +1063,18 @@ async def get_workspace_fleet_reconciliation(
         virtual_policy = str(options.get("virtual_bus_publish_policy", "allow") or "allow").strip().lower()
         if virtual_policy not in {"allow", "block"}:
             virtual_policy = "allow"
-        company_id = str(scope.get("primary_company_id") or _workspace_company_id(db, workspace))
-        scope_company_ids = [
-            str(cid) for cid in (scope.get("scope_company_ids") or [])
-            if str(cid).strip()
-        ]
-        scope_vehicle_count = len(fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids))
-        scope_company_names = scope.get("scope_company_names") if isinstance(scope.get("scope_company_names"), dict) else {}
-        preview = preview_workspace_publication(
+        response = _build_operational_reconciliation_response(
             db,
-            company_id=company_id,
-            scope_company_ids=scope_company_ids,
+            workspace=workspace,
             schedule_by_day=schedule_by_day,
-            exclude_workspace_id=str(workspace.id),
+            scope=scope,
+            fleet_snapshot=working_version.fleet_snapshot if isinstance(working_version.fleet_snapshot, dict) else None,
+            day=day,
         )
-        reconciliation = _normalize_reconciliation_payload(
-            preview.get("reconciliation", {}) if isinstance(preview.get("reconciliation"), dict) else {}
-        )
-        response: Dict[str, Any] = {
-            "workspace_id": workspace_id,
-            "company_id": company_id,
-            "scope_mode": scope.get("scope_mode"),
-            "scope_label": _build_scope_label(scope.get("scope_mode"), scope.get("ute_name")),
-            "scope_company_ids": scope_company_ids,
-            "scope_company_names": scope_company_names,
-            "scope_vehicle_count": scope_vehicle_count,
-            "ute_id": scope.get("ute_id"),
-            "ute_name": scope.get("ute_name"),
-            "virtual_publish_policy": virtual_policy,
-            "requires_reconciliation": bool(
-                virtual_policy == "block"
-                and int(preview.get("virtual_created", 0) or 0) > 0
-            ),
-            "real_assigned": int(preview.get("real_assigned", 0)),
-            "virtual_created": int(preview.get("virtual_created", 0)),
-            "reconciliation": reconciliation,
-            "days": reconciliation.get("days", {}),
-            "pending_assignments": reconciliation.get("pending_assignments", []),
-        }
-        if day:
-            day_key = str(day)
-            by_day = reconciliation.get("days", {}) if isinstance(reconciliation.get("days"), dict) else {}
-            response["day"] = day_key
-            response["reconciliation_day"] = by_day.get(day_key, {"pending_virtual": 0, "items": []})
+        response["ute_id"] = scope.get("ute_id")
+        response["ute_name"] = scope.get("ute_name")
+        response["virtual_publish_policy"] = virtual_policy
+        response["requires_reconciliation"] = bool(response.get("pending_real_reconciliation_count", 0) or 0)
         return response
     finally:
         db.close()
@@ -985,7 +1085,7 @@ async def apply_workspace_fleet_reconciliation(
     workspace_id: str,
     payload: schemas.FleetReconciliationApplyRequest = Body(default_factory=schemas.FleetReconciliationApplyRequest),
 ) -> Dict[str, Any]:
-    """Apply assisted real-bus reconciliation and persist it into the working workspace version."""
+    """Apply assisted operational fleet reconciliation and persist it into the workspace."""
     if not is_database_available() or SessionLocal is None:
         raise HTTPException(status_code=503, detail="Database not available")
     _ensure_tables_ready()
@@ -1011,24 +1111,19 @@ async def apply_workspace_fleet_reconciliation(
             str(cid) for cid in (scope.get("scope_company_ids") or [])
             if str(cid).strip()
         ]
-        scope_vehicle_count = len(fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids))
-        scope_company_names = scope.get("scope_company_names") if isinstance(scope.get("scope_company_names"), dict) else {}
-
-        preview = preview_workspace_publication(
-            db,
-            company_id=company_id,
-            scope_company_ids=scope_company_ids,
-            schedule_by_day=schedule_by_day,
-            exclude_workspace_id=str(workspace.id),
-        )
-        reconciliation = _normalize_reconciliation_payload(
-            preview.get("reconciliation", {}) if isinstance(preview.get("reconciliation"), dict) else {}
-        )
-
         requested_day = str(payload.day or "").strip() or None
-        target_rows = reconciliation.get("pending_assignments", []) if isinstance(reconciliation.get("pending_assignments"), list) else []
-        if requested_day:
-            target_rows = [row for row in target_rows if str(row.get("day") or "").strip() == requested_day]
+        if not requested_day:
+            raise HTTPException(status_code=400, detail="Day is required for fleet reconciliation")
+        current_reconciliation = _build_operational_reconciliation_response(
+            db,
+            workspace=workspace,
+            schedule_by_day=schedule_by_day,
+            scope=scope,
+            fleet_snapshot=working_version.fleet_snapshot if isinstance(working_version.fleet_snapshot, dict) else None,
+            day=requested_day,
+        )
+        day_payload = _safe_dict(current_reconciliation.get("reconciliation_day"))
+        target_rows = _safe_list(day_payload.get("pending_assignments"))
         requested_bus_ids = {
             str(bus_id).strip()
             for bus_id in (payload.bus_ids or [])
@@ -1041,10 +1136,10 @@ async def apply_workspace_fleet_reconciliation(
             return {
                 "workspace_id": workspace_id,
                 "applied_count": 0,
-                "remaining_pending": int(reconciliation.get("pending_count", 0) or 0),
-                "message": "No hay buses provisionales pendientes para el filtro seleccionado.",
+                "remaining_pending": int(day_payload.get("pending_real_reconciliation_count", 0) or 0),
+                "message": "No hay buses pendientes de asignacion real para el filtro seleccionado.",
                 "schedule_by_day": schedule_by_day,
-                "reconciliation": reconciliation,
+                "reconciliation": current_reconciliation,
             }
 
         company_targets = {
@@ -1052,7 +1147,28 @@ async def apply_workspace_fleet_reconciliation(
             for row in (payload.company_allocations or [])
             if int(row.count or 0) > 0
         }
+        existing_snapshot = _safe_dict(working_version.fleet_snapshot)
+        previous_reconciliation_snapshot = _safe_dict(existing_snapshot.get("reconciliation_snapshot"))
+        previous_day_snapshot = _safe_dict(_safe_dict(previous_reconciliation_snapshot.get("days")).get(requested_day))
+        existing_selected_assignments = {
+            _reconciliation_key(item.get("day") or requested_day, item.get("bus_id")): item
+            for item in _safe_list(previous_day_snapshot.get("selected_assignments"))
+            if isinstance(item, dict)
+        }
         bus_preferences: Dict[str, Dict[str, Any]] = {}
+        for selection in _safe_list(previous_day_snapshot.get("bus_selections")):
+            if not isinstance(selection, dict):
+                continue
+            key = _reconciliation_key(selection.get("day") or requested_day, selection.get("bus_id"))
+            bus_preferences[key] = {
+                "company_id": str(selection.get("company_id") or "").strip() or None,
+                "vehicle_id": str(selection.get("vehicle_id") or "").strip() or None,
+                "excluded_vehicle_ids": [
+                    str(vehicle_id).strip()
+                    for vehicle_id in _safe_list(selection.get("excluded_vehicle_ids"))
+                    if str(vehicle_id).strip()
+                ],
+            }
         for selection in (payload.bus_selections or []):
             key = _reconciliation_key(selection.day or requested_day, selection.bus_id)
             bus_preferences[key] = {
@@ -1066,7 +1182,7 @@ async def apply_workspace_fleet_reconciliation(
             }
         applied = _select_reconciliation_assignments(target_rows, company_targets, bus_preferences)
         selected_assignments = applied.get("selected_assignments", {}) if isinstance(applied.get("selected_assignments"), dict) else {}
-        if not selected_assignments:
+        if not selected_assignments and not existing_selected_assignments:
             raise HTTPException(
                 status_code=409,
                 detail={
@@ -1076,7 +1192,11 @@ async def apply_workspace_fleet_reconciliation(
                 },
             )
 
-        updated_schedule = _apply_reconciliation_assignments_to_schedule(schedule_by_day, selected_assignments)
+        merged_selected_assignments = {
+            **existing_selected_assignments,
+            **selected_assignments,
+        }
+        updated_schedule = _apply_reconciliation_assignments_to_schedule(schedule_by_day, merged_selected_assignments)
         updated_preview = preview_workspace_publication(
             db,
             company_id=company_id,
@@ -1084,13 +1204,72 @@ async def apply_workspace_fleet_reconciliation(
             schedule_by_day=updated_schedule,
             exclude_workspace_id=str(workspace.id),
         )
+        day_snapshot_payload = {
+            "day": requested_day,
+            "allocation_mode": (
+                "full_day"
+                if str(payload.allocation_mode or "").strip().lower() == "full_day"
+                else "pending_only"
+            ),
+            "autofill_remaining": bool(payload.autofill_remaining),
+            "required_bus_count": int(day_payload.get("required_bus_count", 0) or 0),
+            "real_bound_count": len(merged_selected_assignments),
+            "virtual_bound_count": max(
+                0,
+                int(day_payload.get("required_bus_count", 0) or 0) - len(merged_selected_assignments),
+            ),
+            "pending_real_reconciliation_count": max(
+                0,
+                int(day_payload.get("required_bus_count", 0) or 0) - len(merged_selected_assignments),
+            ),
+            "company_allocations": [
+                {
+                    "company_id": row.company_id,
+                    "count": int(row.count or 0),
+                }
+                for row in (payload.company_allocations or [])
+            ],
+            "bus_selections": [
+                {
+                    "day": requested_day,
+                    "bus_id": str(bus_id_key.split("::", 1)[1]),
+                    **selection,
+                }
+                for bus_id_key, selection in bus_preferences.items()
+                if str(bus_id_key).startswith(f"{requested_day}::")
+            ],
+            "selected_assignments": [
+                {
+                    "day": requested_day,
+                    "bus_id": str(bus_key.split("::", 1)[1]),
+                    **assignment,
+                }
+                for bus_key, assignment in merged_selected_assignments.items()
+                if str(bus_key).startswith(f"{requested_day}::")
+            ],
+            "unresolved": applied.get("unresolved", []),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        new_reconciliation_snapshot = merge_reconciliation_snapshot(
+            previous_snapshot=previous_reconciliation_snapshot,
+            day=requested_day,
+            day_payload=day_snapshot_payload,
+            scope_mode=str(scope.get("scope_mode") or "company"),
+            scope_company_ids=scope_company_ids,
+            scope_label=_build_scope_label(scope.get("scope_mode"), scope.get("ute_name")),
+        )
+        updated_scope_vehicle_count = len(
+            fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids)
+        )
+        scope_company_names = scope.get("scope_company_names") if isinstance(scope.get("scope_company_names"), dict) else {}
 
         fleet_snapshot = {
+            **existing_snapshot,
             "company_id": company_id,
             "scope_mode": scope.get("scope_mode"),
             "scope_company_ids": scope_company_ids,
             "scope_company_names": scope_company_names,
-            "scope_vehicle_count": scope_vehicle_count,
+            "scope_vehicle_count": updated_scope_vehicle_count,
             "ute_id": scope.get("ute_id"),
             "ute_name": scope.get("ute_name"),
             "real_assigned": int(updated_preview.get("real_assigned", 0)),
@@ -1100,6 +1279,7 @@ async def apply_workspace_fleet_reconciliation(
             "days": updated_preview.get("days", {}),
             "virtual_publish_policy": virtual_policy,
             "reconciliation": updated_preview.get("reconciliation", {}),
+            "reconciliation_snapshot": new_reconciliation_snapshot,
         }
         merged_summary = dict(working_version.summary_metrics or {})
         merged_summary["fleet_real_assigned"] = int(updated_preview.get("real_assigned", 0))
@@ -1124,19 +1304,24 @@ async def apply_workspace_fleet_reconciliation(
         if response_version is None:
             raise HTTPException(status_code=500, detail="Version serialization failed")
 
+        refreshed_reconciliation = _build_operational_reconciliation_response(
+            db,
+            workspace=workspace,
+            schedule_by_day=updated_preview.get("schedule_by_day", updated_schedule),
+            scope=scope,
+            fleet_snapshot=fleet_snapshot,
+            day=requested_day,
+        )
+
         return {
             "workspace_id": workspace_id,
             "applied_count": len(selected_assignments),
             "applied_by_company": applied.get("applied_by_company", []),
             "remaining_targets": applied.get("remaining_targets", {}),
             "unresolved": applied.get("unresolved", []),
-            "remaining_pending": int(
-                _safe_dict(updated_preview.get("reconciliation")).get("pending_count", 0) or 0
-            ),
+            "remaining_pending": int(refreshed_reconciliation.get("pending_real_reconciliation_count", 0) or 0),
             "schedule_by_day": updated_preview.get("schedule_by_day", updated_schedule),
-            "reconciliation": _normalize_reconciliation_payload(
-                updated_preview.get("reconciliation", {}) if isinstance(updated_preview.get("reconciliation"), dict) else {}
-            ),
+            "reconciliation": refreshed_reconciliation,
             "fleet_publication": {
                 "company_id": company_id,
                 "scope_mode": scope.get("scope_mode"),
@@ -1188,6 +1373,31 @@ async def publish_workspace(
         scope_vehicle_count = len(fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids))
         publish_payload = _build_publish_payload(workspace, payload)
         normalized_schedule = db_crud.normalize_schedule_by_day(publish_payload.schedule_by_day or {})
+        working_fleet_snapshot = _safe_dict(
+            (workspace.working_version.fleet_snapshot if workspace.working_version is not None else None)
+        )
+        reconciliation_snapshot = _safe_dict(working_fleet_snapshot.get("reconciliation_snapshot"))
+        snapshot_issues = validate_reconciliation_snapshot(
+            db,
+            scope_company_ids=scope_company_ids,
+            schedule_by_day=normalized_schedule,
+            reconciliation_snapshot=reconciliation_snapshot,
+            exclude_workspace_id=str(workspace.id),
+        )
+        if snapshot_issues:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "La reconciliacion guardada ya no es valida con la disponibilidad actual",
+                    "reason": "reconciliation_stale",
+                    "issues": snapshot_issues,
+                },
+            )
+        if _safe_dict(reconciliation_snapshot).get("days"):
+            normalized_schedule = materialize_schedule_from_reconciliation_snapshot(
+                normalized_schedule,
+                reconciliation_snapshot,
+            )
         preview = preview_workspace_publication(
             db,
             company_id=company_id,
@@ -1255,6 +1465,7 @@ async def publish_workspace(
             "days": preview.get("days", {}),
             "virtual_publish_policy": virtual_policy,
             "reconciliation": preview.get("reconciliation", {}),
+            "reconciliation_snapshot": reconciliation_snapshot,
         }
         merged_summary = dict(publish_payload.summary_metrics or {})
         merged_summary["fleet_real_assigned"] = int(preview.get("real_assigned", 0))
