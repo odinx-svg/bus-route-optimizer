@@ -12,6 +12,7 @@ from db import crud as db_crud
 from db.database import SessionLocal, is_database_available
 from db import models as db_models
 from services.fleet_registry import FleetRegistry
+from sqlalchemy.orm import joinedload
 
 
 class FleetRepository:
@@ -136,6 +137,26 @@ class FleetRepository:
             }
             for doc in (model.documents or [])
         ]
+        assignments = sorted(
+            list(model.driver_assignments or []),
+            key=lambda item: (0 if str(item.day_code or "").strip() == "default" else 1, str(item.day_code or "")),
+        )
+        driver_assignments = [
+            {
+                "id": str(assignment.id),
+                "day_code": str(assignment.day_code or "default"),
+                "driver_id": str(assignment.driver_id),
+                "driver_name": str(assignment.driver.full_name or "") if assignment.driver else None,
+                "driver_phone": assignment.driver.phone if assignment.driver else None,
+                "driver_status": str(assignment.driver.status or "active") if assignment.driver else None,
+                "preferred_channel": str(assignment.driver.preferred_channel or "manual") if assignment.driver else None,
+                "company_id": str(assignment.driver.company_id) if assignment.driver else None,
+                "company_name": str(assignment.driver.company.name or "") if assignment.driver and assignment.driver.company else None,
+                "notes": assignment.notes,
+            }
+            for assignment in assignments
+        ]
+        default_driver = next((item for item in driver_assignments if item["day_code"] == "default"), None)
         return {
             "id": str(model.id),
             "company_id": str(model.company_id),
@@ -158,6 +179,11 @@ class FleetRepository:
             "gps_external_id": model.gps_external_id,
             "gps_last_seen_at": model.gps_last_seen_at.isoformat() if model.gps_last_seen_at else None,
             "gps_last_position": model.gps_last_position if isinstance(model.gps_last_position, dict) else None,
+            "default_driver_id": default_driver["driver_id"] if default_driver else None,
+            "default_driver_name": default_driver["driver_name"] if default_driver else None,
+            "default_driver_phone": default_driver["driver_phone"] if default_driver else None,
+            "default_driver_channel": default_driver["preferred_channel"] if default_driver else None,
+            "driver_assignments": driver_assignments,
             "documents": docs,
             "created_at": model.created_at.isoformat() if model.created_at else "",
             "updated_at": model.updated_at.isoformat() if model.updated_at else "",
@@ -215,7 +241,11 @@ class FleetRepository:
 
         db = SessionLocal()
         try:
-            query = db.query(db_models.FleetVehicleModel)
+            query = db.query(db_models.FleetVehicleModel).options(
+                joinedload(db_models.FleetVehicleModel.company),
+                joinedload(db_models.FleetVehicleModel.documents),
+                joinedload(db_models.FleetVehicleModel.driver_assignments).joinedload(db_models.FleetVehicleDriverAssignmentModel.driver).joinedload(db_models.DriverModel.company),
+            )
             if normalized_company_ids:
                 query = query.filter(db_models.FleetVehicleModel.company_id.in_(normalized_company_ids))
             elif company_id:
@@ -245,7 +275,11 @@ class FleetRepository:
 
         db = SessionLocal()
         try:
-            row = db.query(db_models.FleetVehicleModel).filter(
+            row = db.query(db_models.FleetVehicleModel).options(
+                joinedload(db_models.FleetVehicleModel.company),
+                joinedload(db_models.FleetVehicleModel.documents),
+                joinedload(db_models.FleetVehicleModel.driver_assignments).joinedload(db_models.FleetVehicleDriverAssignmentModel.driver).joinedload(db_models.DriverModel.company),
+            ).filter(
                 db_models.FleetVehicleModel.id == str(vehicle_id)
             ).first()
             if row is None:

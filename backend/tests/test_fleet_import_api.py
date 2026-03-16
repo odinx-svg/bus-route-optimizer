@@ -1,4 +1,5 @@
 from io import BytesIO
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -101,3 +102,151 @@ def test_fleet_import_commit_and_ute_catalog_endpoints(monkeypatch):
     assert vehicles_response.status_code == 200
     vehicles_body = vehicles_response.json()
     assert len(vehicles_body["vehicles"]) == 3
+
+
+def test_vehicle_weekly_plan_endpoint(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+    db = Session()
+    try:
+        company = models.CompanyModel(id="company_a", name="AAV & COND'BUS", is_default=False)
+        db.add(company)
+        driver = models.DriverModel(
+            id=str(uuid4()),
+            company_id="company_a",
+            full_name="Juan Perez",
+            phone="600111222",
+            preferred_channel="whatsapp",
+            status="active",
+        )
+        workspace = models.OptimizationWorkspaceModel(
+            id=str(uuid4()),
+            name="Vigo - Mos",
+            company_id="company_a",
+            working_version_id=None,
+            published_version_id=None,
+            archived=False,
+        )
+        version = models.OptimizationWorkspaceVersionModel(
+            id=str(uuid4()),
+            workspace_id=str(workspace.id),
+            version_number=1,
+            save_kind="publish",
+            routes_payload=[],
+            schedule_by_day={"L": {"schedule": []}},
+            fleet_snapshot={},
+            summary_metrics={},
+        )
+        vehicle = models.FleetVehicleModel(
+            id="veh-a-1",
+            company_id="company_a",
+            vehicle_code="BUS-A1",
+            plate="1234ABC",
+            seats_base=55,
+            seats_pmr=0,
+            seats_min=55,
+            seats_max=55,
+            status="active",
+        )
+        driver_assignment = models.FleetVehicleDriverAssignmentModel(
+            id=str(uuid4()),
+            vehicle_id="veh-a-1",
+            driver_id=str(driver.id),
+            day_code="default",
+        )
+        assignment = models.PublishedFleetAssignmentModel(
+            id=str(uuid4()),
+            company_id="company_a",
+            workspace_id=str(workspace.id),
+            workspace_version_id=str(version.id),
+            day="L",
+            bus_id="B001",
+            route_id="R001",
+            start_minute=480,
+            end_minute=540,
+            assigned_vehicle_id="veh-a-1",
+            assignment_type="real",
+            active=True,
+            details={},
+        )
+        db.add_all([company, driver, workspace, version, vehicle, driver_assignment, assignment])
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/api/fleet/vehicles/veh-a-1/weekly-plan")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["vehicle_code"] == "BUS-A1"
+    assert body["plate"] == "1234ABC"
+    assert body["total_assignments"] == 1
+    assert body["default_driver_name"] == "Juan Perez"
+    monday = next(day for day in body["days"] if day["day"] == "L")
+    assert monday["route_count"] == 1
+    assert monday["assignments"][0]["workspace_name"] == "Vigo - Mos"
+    assert monday["assignments"][0]["start_time"] == "08:00"
+    assert monday["assignments"][0]["driver_name"] == "Juan Perez"
+
+
+def test_driver_crud_and_vehicle_assignment_endpoint(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+    db = Session()
+    try:
+        company = models.CompanyModel(id="company_a", name="AAV & COND'BUS", is_default=False)
+        vehicle = models.FleetVehicleModel(
+            id="veh-a-1",
+            company_id="company_a",
+            vehicle_code="BUS-A1",
+            plate="1234ABC",
+            seats_base=55,
+            seats_pmr=0,
+            seats_min=55,
+            seats_max=55,
+            status="active",
+        )
+        db.add_all([company, vehicle])
+        db.commit()
+    finally:
+        db.close()
+
+    create_response = client.post(
+        "/api/fleet/drivers",
+        json={
+            "company_id": "company_a",
+            "full_name": "Laura Diaz",
+            "phone": "699000111",
+            "email": "laura@example.com",
+            "preferred_channel": "telegram",
+            "telegram_chat_id": "driver_laura",
+            "status": "active",
+            "notes": "Conduce lunes y martes",
+        },
+    )
+    assert create_response.status_code == 201
+    driver = create_response.json()
+    assert driver["full_name"] == "Laura Diaz"
+
+    list_response = client.get("/api/fleet/drivers?company_id=company_a")
+    assert list_response.status_code == 200
+    listed = list_response.json()
+    assert len(listed) == 1
+
+    assign_response = client.put(
+        "/api/fleet/vehicles/veh-a-1/drivers",
+        json={
+            "default_driver_id": driver["id"],
+            "assignments": [
+                {"day_code": "L", "driver_id": driver["id"]},
+                {"day_code": "M", "driver_id": driver["id"]},
+            ],
+        },
+    )
+    assert assign_response.status_code == 200
+    assigned = assign_response.json()
+    assert assigned["default_driver_name"] == "Laura Diaz"
+    assert len(assigned["driver_assignments"]) == 3
+
+    vehicle_response = client.get("/api/fleet/vehicles/veh-a-1")
+    assert vehicle_response.status_code == 200
+    vehicle_body = vehicle_response.json()
+    assert vehicle_body["default_driver_name"] == "Laura Diaz"
+    assert len(vehicle_body["driver_assignments"]) == 3

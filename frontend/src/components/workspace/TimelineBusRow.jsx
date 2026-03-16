@@ -134,6 +134,25 @@ const getRouteCapacityRangeLabel = (route) => {
 
 const formatHour = (h) => `${String(h).padStart(2, '0')}:00`;
 
+const getBusPrimaryLabel = (bus = {}) => {
+  const plate = String(bus?.assigned_vehicle_plate || '').trim();
+  const code = String(bus?.assigned_vehicle_code || '').trim();
+  const fallback = String(bus?.id || bus?.bus_id || 'BUS').trim() || 'BUS';
+  return plate || code || fallback;
+};
+
+const getBusSecondaryLabel = (bus = {}) => {
+  const internalId = String(bus?.id || bus?.bus_id || '').trim();
+  const plate = String(bus?.assigned_vehicle_plate || '').trim();
+  const code = String(bus?.assigned_vehicle_code || '').trim();
+  const company = String(bus?.assigned_company_name || '').trim();
+  const parts = [];
+  if (internalId && (plate || code)) parts.push(`Plan ${internalId}`);
+  if (code && plate && code !== plate) parts.push(code);
+  if (company) parts.push(company);
+  return parts.join(' · ');
+};
+
 // ============================================================================
 // COMPRESIIN DE TIMELINE
 // ============================================================================
@@ -934,6 +953,9 @@ export function TimelineBusRow({
   isPinned = false,
   onTogglePin = null,
 }) {
+  const primaryBusLabel = getBusPrimaryLabel(bus);
+  const secondaryBusLabel = getBusSecondaryLabel(bus);
+  const showingAssignedVehicle = primaryBusLabel !== String(bus?.id || '').trim();
   const { isOver, setNodeRef } = useDroppable({ 
     id: `bus-${bus.id}`,
     data: { type: 'bus', busId: bus.id }
@@ -1032,10 +1054,10 @@ export function TimelineBusRow({
         {/* ID del bus - grande y prominente */}
         <div className="flex items-center gap-2">
           <div className={`
-            text-[29px] font-semibold tracking-tight leading-none tabular-nums data-mono
+            ${showingAssignedVehicle ? 'text-[20px]' : 'text-[29px]'} font-semibold tracking-tight leading-none tabular-nums data-mono truncate
             ${isActive ? 'text-cyan-300' : 'text-slate-100'}
           `}>
-            {bus.id}
+            {primaryBusLabel}
           </div>
 
           {typeof onTogglePin === 'function' && (
@@ -1152,6 +1174,11 @@ export function TimelineBusRow({
             </button>
           )}
         </div>
+        {secondaryBusLabel ? (
+          <div className="mt-1 truncate text-[9px] text-slate-500">
+            {secondaryBusLabel}
+          </div>
+        ) : null}
         
         {/* Stats */}
         <div className="mt-1.5 flex items-center gap-2">

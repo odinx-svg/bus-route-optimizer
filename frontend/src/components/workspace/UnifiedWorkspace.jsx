@@ -261,12 +261,27 @@ function normalizeWorkspaceBuses(busList = []) {
         id: normalizedId || '',
         routes: [...currentRoutes],
         type: bus?.type || 'standard',
+        bus_id: bus?.bus_id || normalizedId || '',
+        assigned_vehicle_code: bus?.assigned_vehicle_code || null,
+        assigned_vehicle_plate: bus?.assigned_vehicle_plate || null,
+        assigned_company_name: bus?.assigned_company_name || null,
+        assigned_vehicle_seats_min: bus?.assigned_vehicle_seats_min ?? null,
+        assigned_vehicle_seats_max: bus?.assigned_vehicle_seats_max ?? null,
+        fleet_assignment_type: bus?.fleet_assignment_type || null,
+        fleet_binding_state: bus?.fleet_binding_state || null,
       });
       continue;
     }
 
     const target = merged.get(key);
     target.routes.push(...currentRoutes);
+    if (!target.assigned_vehicle_code && bus?.assigned_vehicle_code) target.assigned_vehicle_code = bus.assigned_vehicle_code;
+    if (!target.assigned_vehicle_plate && bus?.assigned_vehicle_plate) target.assigned_vehicle_plate = bus.assigned_vehicle_plate;
+    if (!target.assigned_company_name && bus?.assigned_company_name) target.assigned_company_name = bus.assigned_company_name;
+    if ((target.assigned_vehicle_seats_min == null) && (bus?.assigned_vehicle_seats_min != null)) target.assigned_vehicle_seats_min = bus.assigned_vehicle_seats_min;
+    if ((target.assigned_vehicle_seats_max == null) && (bus?.assigned_vehicle_seats_max != null)) target.assigned_vehicle_seats_max = bus.assigned_vehicle_seats_max;
+    if (!target.fleet_assignment_type && bus?.fleet_assignment_type) target.fleet_assignment_type = bus.fleet_assignment_type;
+    if (!target.fleet_binding_state && bus?.fleet_binding_state) target.fleet_binding_state = bus.fleet_binding_state;
   }
 
   const mergedList = Array.from(merged.values()).map((bus) => ({
@@ -562,6 +577,14 @@ export function UnifiedWorkspace({
     if (initialSchedule) {
       const mappedBuses = initialSchedule.map((bus, idx) => ({
         id: bus.bus_id || bus.id || `B${String(idx + 1).padStart(3, '0')}`,
+        bus_id: bus.bus_id || bus.id || `B${String(idx + 1).padStart(3, '0')}`,
+        assigned_vehicle_code: bus.assigned_vehicle_code || null,
+        assigned_vehicle_plate: bus.assigned_vehicle_plate || null,
+        assigned_company_name: bus.assigned_company_name || null,
+        assigned_vehicle_seats_min: bus.assigned_vehicle_seats_min ?? null,
+        assigned_vehicle_seats_max: bus.assigned_vehicle_seats_max ?? null,
+        fleet_assignment_type: bus.fleet_assignment_type || null,
+        fleet_binding_state: bus.fleet_binding_state || null,
         routes: (bus.items || bus.routes || []).map(item => ({
           id: item.route_id || item.id,
           code: item.route_code || item.route_id || item.id,
@@ -744,6 +767,14 @@ export function UnifiedWorkspace({
     if (initialSchedule && !isInitialized) {
       const mappedBuses = initialSchedule.map((bus, idx) => ({
         id: bus.bus_id || bus.id || `B${String(idx + 1).padStart(3, '0')}`,
+        bus_id: bus.bus_id || bus.id || `B${String(idx + 1).padStart(3, '0')}`,
+        assigned_vehicle_code: bus.assigned_vehicle_code || null,
+        assigned_vehicle_plate: bus.assigned_vehicle_plate || null,
+        assigned_company_name: bus.assigned_company_name || null,
+        assigned_vehicle_seats_min: bus.assigned_vehicle_seats_min ?? null,
+        assigned_vehicle_seats_max: bus.assigned_vehicle_seats_max ?? null,
+        fleet_assignment_type: bus.fleet_assignment_type || null,
+        fleet_binding_state: bus.fleet_binding_state || null,
         routes: (bus.items || bus.routes || []).map(item => ({
           id: item.route_id || item.id,
           code: item.route_code || item.route_id || item.id,

@@ -1,12 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, Bus, FileText, MapPin, Pencil, Plus, Save, Trash2, Upload, X } from 'lucide-react';
+import { Building2, Bus, Download, FileText, MapPin, Pencil, Phone, Plus, Save, Trash2, Upload, User, X } from 'lucide-react';
 import { notifications } from '../services/notifications';
 import {
   commitFleetImport,
+  createFleetDriver,
   createFleetVehicle,
+  deleteFleetDriver,
+  fetchFleetDrivers,
   deleteFleetVehicle,
+  fetchVehicleWeeklyPlan,
   fetchFleetVehicles,
   previewFleetImport,
+  updateFleetDriver,
+  updateVehicleDriverAssignments,
   updateFleetVehicle,
 } from '../services/fleetService';
 
@@ -31,9 +37,45 @@ const EMPTY_FORM = {
 const STATUS_LABEL = { active: 'Activo', maintenance: 'Taller', inactive: 'Inactivo' };
 const DETAIL_TABS = [
   { id: 'data', label: 'Datos' },
+  { id: 'drivers', label: 'Conductores' },
   { id: 'documents', label: 'Documentos' },
   { id: 'gps', label: 'GPS' },
+  { id: 'weekly_plan', label: 'Plan semanal' },
 ];
+
+const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
+const DRIVER_CHANNEL_LABELS = { manual: 'Manual', whatsapp: 'WhatsApp', telegram: 'Telegram', call: 'Llamada' };
+const DRIVER_DAY_ORDER = ['default', 'L', 'M', 'Mc', 'X', 'V'];
+const EMPTY_DRIVER_FORM = {
+  full_name: '',
+  phone: '',
+  email: '',
+  preferred_channel: 'manual',
+  whatsapp_phone: '',
+  telegram_chat_id: '',
+  status: 'active',
+  notes: '',
+};
+
+const minuteToLabel = (value) => {
+  const safe = Number(value || 0);
+  const hours = Math.floor(safe / 60);
+  const minutes = safe % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const buildDriverAssignmentDraft = (vehicle) => {
+  const mapping = { default_driver_id: '', days: { L: '', M: '', Mc: '', X: '', V: '' } };
+  (vehicle?.driver_assignments || []).forEach((assignment) => {
+    const dayCode = String(assignment?.day_code || '').trim();
+    if (dayCode === 'default') {
+      mapping.default_driver_id = String(assignment?.driver_id || '').trim();
+    } else if (mapping.days[dayCode] !== undefined) {
+      mapping.days[dayCode] = String(assignment?.driver_id || '').trim();
+    }
+  });
+  return mapping;
+};
 
 const toPayload = (form) => ({
   vehicle_code: String(form.vehicle_code || '').trim(),
@@ -117,6 +159,15 @@ export default function FleetPage() {
   const [uteName, setUteName] = useState('');
   const [previewingImport, setPreviewingImport] = useState(false);
   const [committingImport, setCommittingImport] = useState(false);
+  const [weeklyPlanCache, setWeeklyPlanCache] = useState({});
+  const [weeklyPlanLoading, setWeeklyPlanLoading] = useState(false);
+  const [driversByCompany, setDriversByCompany] = useState({});
+  const [driversLoading, setDriversLoading] = useState(false);
+  const [driverForm, setDriverForm] = useState(EMPTY_DRIVER_FORM);
+  const [driverEditingId, setDriverEditingId] = useState(null);
+  const [driverSaving, setDriverSaving] = useState(false);
+  const [driverAssignmentsDraft, setDriverAssignmentsDraft] = useState({ default_driver_id: '', days: { L: '', M: '', Mc: '', X: '', V: '' } });
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
 
   const loadFleet = async () => {
     setLoading(true);
@@ -258,6 +309,163 @@ export default function FleetPage() {
   const selectedVehicle = useMemo(() => vehicles.find((vehicle) => String(vehicle.id) === String(selectedId)) || null, [selectedId, vehicles]);
   const isEditing = Boolean(editingId);
   const activeForm = isEditing ? form : (selectedVehicle ? fromVehicle(selectedVehicle) : EMPTY_FORM);
+  const selectedWeeklyPlan = selectedVehicle ? weeklyPlanCache[String(selectedVehicle.id)] || null : null;
+  const selectedVehicleDrivers = selectedVehicle
+    ? (driversByCompany[String(selectedVehicle.company_id || '').trim()] || [])
+    : [];
+
+  const invalidateWeeklyPlan = (vehicleId) => {
+    const key = String(vehicleId || '').trim();
+    if (!key) return;
+    setWeeklyPlanCache((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const loadVehicleWeeklyPlan = async (vehicleId, { force = false } = {}) => {
+    const key = String(vehicleId || '').trim();
+    if (!key) return null;
+    if (!force && weeklyPlanCache[key]) return weeklyPlanCache[key];
+    setWeeklyPlanLoading(true);
+    try {
+      const data = await fetchVehicleWeeklyPlan(key);
+      setWeeklyPlanCache((prev) => ({ ...prev, [key]: data }));
+      return data;
+    } catch (error) {
+      notifications.error('No se pudo cargar el plan semanal', error.message);
+      return null;
+    } finally {
+      setWeeklyPlanLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedVehicle || isEditing || detailTab !== 'weekly_plan') return;
+    loadVehicleWeeklyPlan(selectedVehicle.id);
+  }, [detailTab, isEditing, selectedVehicle]);
+
+  const loadCompanyDrivers = async (companyId, { force = false } = {}) => {
+    const key = String(companyId || '').trim();
+    if (!key) return [];
+    if (!force && driversByCompany[key]) return driversByCompany[key];
+    setDriversLoading(true);
+    try {
+      const data = await fetchFleetDrivers({ companyId: key });
+      setDriversByCompany((prev) => ({ ...prev, [key]: data || [] }));
+      return data || [];
+    } catch (error) {
+      notifications.error('No se pudo cargar la lista de conductores', error.message);
+      return [];
+    } finally {
+      setDriversLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedVehicle || detailTab !== 'drivers') return;
+    loadCompanyDrivers(selectedVehicle.company_id);
+    setDriverAssignmentsDraft(buildDriverAssignmentDraft(selectedVehicle));
+    setDriverEditingId(null);
+    setDriverForm(EMPTY_DRIVER_FORM);
+  }, [detailTab, selectedVehicle]);
+
+  const handleSaveDriver = async () => {
+    if (!selectedVehicle?.company_id) {
+      notifications.warning('Empresa requerida', 'Selecciona primero un vehiculo con empresa');
+      return;
+    }
+    if (!String(driverForm.full_name || '').trim()) {
+      notifications.warning('Nombre requerido', 'Indica el nombre del conductor');
+      return;
+    }
+    setDriverSaving(true);
+    try {
+      const payload = {
+        company_id: String(selectedVehicle.company_id),
+        full_name: String(driverForm.full_name || '').trim(),
+        phone: String(driverForm.phone || '').trim() || null,
+        email: String(driverForm.email || '').trim() || null,
+        preferred_channel: driverForm.preferred_channel || 'manual',
+        whatsapp_phone: String(driverForm.whatsapp_phone || '').trim() || null,
+        telegram_chat_id: String(driverForm.telegram_chat_id || '').trim() || null,
+        status: driverForm.status || 'active',
+        notes: String(driverForm.notes || '').trim() || null,
+      };
+      const saved = driverEditingId
+        ? await updateFleetDriver(driverEditingId, payload)
+        : await createFleetDriver(payload);
+      notifications.success('Conductor guardado', saved.full_name);
+      await loadCompanyDrivers(selectedVehicle.company_id, { force: true });
+      setDriverEditingId(null);
+      setDriverForm(EMPTY_DRIVER_FORM);
+    } catch (error) {
+      notifications.error('No se pudo guardar el conductor', error.message);
+    } finally {
+      setDriverSaving(false);
+    }
+  };
+
+  const handleEditDriver = (driver) => {
+    setDriverEditingId(driver.id);
+    setDriverForm({
+      full_name: driver.full_name || '',
+      phone: driver.phone || '',
+      email: driver.email || '',
+      preferred_channel: driver.preferred_channel || 'manual',
+      whatsapp_phone: driver.whatsapp_phone || '',
+      telegram_chat_id: driver.telegram_chat_id || '',
+      status: driver.status || 'active',
+      notes: driver.notes || '',
+    });
+  };
+
+  const handleDeleteDriver = async (driver) => {
+    if (!driver) return;
+    if (!window.confirm(`Eliminar conductor ${driver.full_name}?`)) return;
+    try {
+      await deleteFleetDriver(driver.id);
+      notifications.success('Conductor eliminado', driver.full_name);
+      if (selectedVehicle?.company_id) {
+        await loadCompanyDrivers(selectedVehicle.company_id, { force: true });
+      }
+      if (String(driverAssignmentsDraft.default_driver_id || '') === String(driver.id)) {
+        setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: '' }));
+      }
+      setDriverAssignmentsDraft((prev) => ({
+        ...prev,
+        days: Object.fromEntries(Object.entries(prev.days || {}).map(([day, value]) => [day, String(value) === String(driver.id) ? '' : value])),
+      }));
+    } catch (error) {
+      notifications.error('No se pudo eliminar el conductor', error.message);
+    }
+  };
+
+  const handleSaveDriverAssignments = async () => {
+    if (!selectedVehicle) return;
+    setAssignmentSaving(true);
+    try {
+      const payload = {
+        default_driver_id: String(driverAssignmentsDraft.default_driver_id || '').trim() || null,
+        assignments: DRIVER_DAY_ORDER.filter((dayCode) => dayCode !== 'default').map((dayCode) => ({
+          day_code: dayCode,
+          driver_id: String(driverAssignmentsDraft.days?.[dayCode] || '').trim() || null,
+        })),
+      };
+      await updateVehicleDriverAssignments(selectedVehicle.id, payload);
+      notifications.success('Conductores asignados', 'La ficha del vehiculo ya refleja el reparto semanal');
+      await loadFleet();
+      invalidateWeeklyPlan(selectedVehicle.id);
+      if (detailTab === 'weekly_plan') {
+        await loadVehicleWeeklyPlan(selectedVehicle.id, { force: true });
+      }
+    } catch (error) {
+      notifications.error('No se pudo guardar la asignacion de conductores', error.message);
+    } finally {
+      setAssignmentSaving(false);
+    }
+  };
 
   const startCreate = () => {
     setEditingId('new');
@@ -345,6 +553,39 @@ export default function FleetPage() {
       documents.splice(index, 1);
       return { ...prev, documents };
     });
+  };
+
+  const downloadWeeklyPlanCsv = () => {
+    if (!selectedVehicle || !selectedWeeklyPlan) return;
+    const lines = [
+      ['Dia', 'Hora inicio', 'Hora fin', 'Ruta', 'Workspace', 'Bus plan', 'Empresa', 'Conductor', 'Telefono', 'Tipo'],
+    ];
+    (selectedWeeklyPlan.days || []).forEach((day) => {
+      (day.assignments || []).forEach((assignment) => {
+        lines.push([
+          day.day_label || DAY_LABELS[day.day] || day.day,
+          assignment.start_time || minuteToLabel(assignment.start_minute),
+          assignment.end_time || minuteToLabel(assignment.end_minute),
+          assignment.route_id || '',
+          assignment.workspace_name || assignment.workspace_id || '',
+          assignment.bus_id || '',
+          assignment.company_name || assignment.company_id || '',
+          assignment.driver_name || '',
+          assignment.driver_phone || '',
+          assignment.assignment_type || '',
+        ]);
+      });
+    });
+    const csv = lines.map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `plan_semanal_${selectedVehicle.vehicle_code || selectedVehicle.plate || selectedVehicle.id}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -629,6 +870,12 @@ export default function FleetPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {selectedVehicle && !isEditing && detailTab === 'weekly_plan' && (
+                <button onClick={downloadWeeklyPlanCsv} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
+                  <Download size={12} />
+                  Descargar CSV
+                </button>
+              )}
               {selectedVehicle && !isEditing && (
                 <>
                   <button onClick={() => startEdit(selectedVehicle)} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
@@ -672,7 +919,7 @@ export default function FleetPage() {
           ) : (
             <div className="mt-5 space-y-4">
               {!isEditing && selectedVehicle && (
-                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
                   <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
                     <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Empresa</p>
                     <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicle.company_name || selectedVehicle.company_id || 'Sin empresa'}</p>
@@ -688,6 +935,10 @@ export default function FleetPage() {
                   <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
                     <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">GPS</p>
                     <p className="mt-1 text-[13px] font-semibold text-white">{hasGpsLink(selectedVehicle) ? 'Vinculado' : 'Pendiente'}</p>
+                  </div>
+                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductor habitual</p>
+                    <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicle.default_driver_name || 'Sin asignar'}</p>
                   </div>
                 </div>
               )}
@@ -775,6 +1026,174 @@ export default function FleetPage() {
                 </div>
               )}
 
+              {detailTab === 'drivers' && selectedVehicle && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
+                    <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3 xl:col-span-2">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductor habitual</p>
+                      <p className="mt-1 text-[16px] font-semibold text-white">{selectedVehicle.default_driver_name || 'Sin asignar'}</p>
+                      <p className="mt-1 text-[11px] text-slate-400">{selectedVehicle.default_driver_phone || 'Sin telefono registrado'}</p>
+                    </div>
+                    <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductores de empresa</p>
+                      <p className="mt-1 text-[20px] font-semibold data-mono text-cyan-300">{selectedVehicleDrivers.length}</p>
+                    </div>
+                    <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Dias configurados</p>
+                      <p className="mt-1 text-[20px] font-semibold data-mono text-amber-200">
+                        {Object.values(driverAssignmentsDraft.days || {}).filter(Boolean).length}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-cyan-300" />
+                        <div>
+                          <p className="text-[12px] font-semibold text-white">Asignacion semanal de conductores</p>
+                          <p className="text-[11px] text-slate-400">Define quien usa este autobus habitualmente y quien lo lleva cada dia si rota.</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveDriverAssignments}
+                        disabled={assignmentSaving || driversLoading}
+                        className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] disabled:opacity-60"
+                      >
+                        {assignmentSaving ? 'Guardando...' : 'Guardar asignacion'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                      <label className="space-y-1">
+                        <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Conductor habitual</span>
+                        <select
+                          value={driverAssignmentsDraft.default_driver_id}
+                          onChange={(event) => setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: event.target.value }))}
+                          className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]"
+                        >
+                          <option value="">Sin asignar</option>
+                          {selectedVehicleDrivers.map((driver) => (
+                            <option key={driver.id} value={driver.id}>
+                              {driver.full_name} {driver.phone ? `· ${driver.phone}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3 text-[11px] text-slate-400">
+                        Si un dia no tiene conductor propio, el sistema usara el habitual como referencia operativa y futura base de envio.
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                      {Object.entries(DAY_LABELS).map(([dayCode, dayLabel]) => (
+                        <label key={dayCode} className="space-y-1 rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                          <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">{dayLabel}</span>
+                          <select
+                            value={driverAssignmentsDraft.days?.[dayCode] || ''}
+                            onChange={(event) => setDriverAssignmentsDraft((prev) => ({
+                              ...prev,
+                              days: { ...(prev.days || {}), [dayCode]: event.target.value },
+                            }))}
+                            className="w-full rounded-md border border-white/10 bg-[#09111b] px-3 py-2 text-[12px]"
+                          >
+                            <option value="">Usar habitual</option>
+                            {selectedVehicleDrivers.map((driver) => (
+                              <option key={driver.id} value={driver.id}>
+                                {driver.full_name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-[420px_1fr]">
+                    <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-cyan-300" />
+                        <div>
+                          <p className="text-[12px] font-semibold text-white">{driverEditingId ? 'Editar conductor' : 'Nuevo conductor'}</p>
+                          <p className="text-[11px] text-slate-400">Prepara ya la ficha para futuras comunicaciones automaticas.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        <input value={driverForm.full_name} onChange={(event) => setDriverForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Nombre completo" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                        <input value={driverForm.phone} onChange={(event) => setDriverForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Telefono" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                        <input value={driverForm.email} onChange={(event) => setDriverForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                        <div className="grid grid-cols-2 gap-3">
+                          <select value={driverForm.preferred_channel} onChange={(event) => setDriverForm((prev) => ({ ...prev, preferred_channel: event.target.value }))} className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]">
+                            {Object.entries(DRIVER_CHANNEL_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+                          <select value={driverForm.status} onChange={(event) => setDriverForm((prev) => ({ ...prev, status: event.target.value }))} className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]">
+                            <option value="active">Activo</option>
+                            <option value="inactive">Inactivo</option>
+                          </select>
+                        </div>
+                        <input value={driverForm.whatsapp_phone} onChange={(event) => setDriverForm((prev) => ({ ...prev, whatsapp_phone: event.target.value }))} placeholder="WhatsApp (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                        <input value={driverForm.telegram_chat_id} onChange={(event) => setDriverForm((prev) => ({ ...prev, telegram_chat_id: event.target.value }))} placeholder="Telegram chat id (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                        <textarea value={driverForm.notes} onChange={(event) => setDriverForm((prev) => ({ ...prev, notes: event.target.value }))} rows={3} placeholder="Notas" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={handleSaveDriver} disabled={driverSaving} className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] disabled:opacity-60">
+                          {driverSaving ? 'Guardando...' : (driverEditingId ? 'Guardar conductor' : 'Crear conductor')}
+                        </button>
+                        {driverEditingId && (
+                          <button type="button" onClick={() => { setDriverEditingId(null); setDriverForm(EMPTY_DRIVER_FORM); }} className="control-btn rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]">
+                            Cancelar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[12px] font-semibold text-white">Conductores disponibles</p>
+                          <p className="text-[11px] text-slate-400">Solo se muestran los conductores de la empresa propietaria del autobus.</p>
+                        </div>
+                        <button type="button" onClick={() => loadCompanyDrivers(selectedVehicle.company_id, { force: true })} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                          {driversLoading ? 'Cargando...' : 'Actualizar'}
+                        </button>
+                      </div>
+
+                      {selectedVehicleDrivers.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-white/10 p-4 text-[12px] text-slate-400">
+                          Todavia no hay conductores cargados para esta empresa.
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedVehicleDrivers.map((driver) => (
+                            <div key={driver.id} className="flex items-start justify-between gap-3 rounded-[14px] border border-white/10 bg-[#0f1723] p-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-[13px] font-semibold text-white">{driver.full_name}</p>
+                                <p className="truncate text-[11px] text-slate-400">{driver.phone || 'Sin telefono'} · {DRIVER_CHANNEL_LABELS[driver.preferred_channel] || driver.preferred_channel}</p>
+                                <p className="truncate text-[10px] text-slate-500">{driver.status === 'active' ? 'Activo' : 'Inactivo'}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button type="button" onClick={() => setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: driver.id }))} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                                  Habitual
+                                </button>
+                                <button type="button" onClick={() => handleEditDriver(driver)} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                                  Editar
+                                </button>
+                                <button type="button" onClick={() => handleDeleteDriver(driver)} className="rounded-md border border-red-500/35 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-300 hover:bg-red-500/10">
+                                  Borrar
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {detailTab === 'documents' && (
                 <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
                   <div className="mb-3 flex items-center justify-between">
@@ -849,6 +1268,116 @@ export default function FleetPage() {
                         </p>
                       </div>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {detailTab === 'weekly_plan' && (
+                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[12px] font-semibold text-white">Plan semanal publicado</p>
+                      <p className="text-[11px] text-slate-400">Muestra la agenda operativa real del vehiculo segun las optimizaciones ya publicadas.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => selectedVehicle && loadVehicleWeeklyPlan(selectedVehicle.id, { force: true })}
+                      className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+                    >
+                      {weeklyPlanLoading ? 'Actualizando...' : 'Actualizar'}
+                    </button>
+                  </div>
+
+                  {!selectedVehicle ? null : weeklyPlanLoading && !selectedWeeklyPlan ? (
+                    <div className="rounded-xl border border-white/10 bg-[#0f1723] p-4 text-[12px] text-slate-300">
+                      Cargando plan semanal...
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                        <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                          <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Servicios</p>
+                          <p className="mt-1 text-[20px] font-semibold data-mono text-white">{selectedWeeklyPlan?.total_assignments ?? 0}</p>
+                        </div>
+                        <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                          <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Dias con servicio</p>
+                          <p className="mt-1 text-[20px] font-semibold data-mono text-cyan-300">{selectedWeeklyPlan?.total_days_with_service ?? 0}</p>
+                        </div>
+                        <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                          <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Workspaces</p>
+                          <p className="mt-1 text-[20px] font-semibold data-mono text-amber-200">{selectedWeeklyPlan?.total_workspaces ?? 0}</p>
+                        </div>
+                        <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                          <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Vehiculo</p>
+                          <p className="mt-1 text-[13px] font-semibold text-white data-mono">{selectedVehicle.plate || selectedVehicle.vehicle_code}</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                        <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductor habitual</p>
+                        <p className="mt-1 text-[13px] font-semibold text-white">{selectedWeeklyPlan?.default_driver_name || selectedVehicle.default_driver_name || 'Sin asignar'}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {selectedWeeklyPlan?.default_driver_phone || selectedVehicle.default_driver_phone || 'Sin telefono'}
+                          {' · '}
+                          {DRIVER_CHANNEL_LABELS[selectedWeeklyPlan?.default_driver_channel || selectedVehicle.default_driver_channel] || 'Manual'}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        {(selectedWeeklyPlan?.days || []).map((day) => (
+                          <div key={day.day} className="rounded-[14px] border border-white/10 bg-[#0f1723] overflow-hidden">
+                            <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-white/[0.03] px-3 py-2">
+                              <div>
+                                <p className="text-[12px] font-semibold text-white">{day.day_label || DAY_LABELS[day.day] || day.day}</p>
+                                <p className="text-[10px] text-slate-400">
+                                  {day.route_count || 0} servicios
+                                  {day.first_start_minute != null && day.last_end_minute != null
+                                    ? ` · ${minuteToLabel(day.first_start_minute)} - ${minuteToLabel(day.last_end_minute)}`
+                                    : ''}
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] text-slate-300 data-mono">
+                                {day.route_count || 0}
+                              </span>
+                            </div>
+
+                            {(day.assignments || []).length === 0 ? (
+                              <div className="px-3 py-3 text-[11px] text-slate-500">Sin servicio publicado para este dia.</div>
+                            ) : (
+                              <div className="divide-y divide-white/5">
+                                {(day.assignments || []).map((assignment, index) => (
+                                  <div key={`${day.day}-${assignment.route_id}-${index}`} className="grid grid-cols-[110px_1fr_180px_180px_110px] gap-3 px-3 py-2 text-[11px]">
+                                    <div className="text-slate-200 data-mono">
+                                      {assignment.start_time || minuteToLabel(assignment.start_minute)} - {assignment.end_time || minuteToLabel(assignment.end_minute)}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="truncate font-semibold text-white data-mono">{assignment.route_id}</p>
+                                      <p className="truncate text-slate-400">{assignment.workspace_name || assignment.workspace_id}</p>
+                                    </div>
+                                    <div className="min-w-0 text-slate-300">
+                                      <p className="truncate">Plan {assignment.bus_id}</p>
+                                      <p className="truncate text-slate-500">{assignment.company_name || assignment.company_id || 'Sin empresa'}</p>
+                                    </div>
+                                    <div className="min-w-0 text-slate-300">
+                                      <p className="truncate">{assignment.driver_name || selectedWeeklyPlan?.default_driver_name || 'Sin conductor'}</p>
+                                      <p className="truncate text-slate-500">
+                                        {assignment.driver_phone || selectedWeeklyPlan?.default_driver_phone || 'Sin telefono'}
+                                        {assignment.preferred_channel ? ` · ${DRIVER_CHANNEL_LABELS[assignment.preferred_channel] || assignment.preferred_channel}` : ''}
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${assignment.assignment_type === 'real' ? 'bg-emerald-500/[0.16] text-emerald-200' : 'bg-amber-500/[0.16] text-amber-200'}`}>
+                                        {assignment.assignment_type === 'real' ? 'REAL' : 'PROVISIONAL'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               )}

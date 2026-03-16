@@ -44,6 +44,8 @@ REQUIRED_TABLES: List[str] = [
     "ute_members",
     "fleet_vehicles",
     "fleet_vehicle_documents",
+    "fleet_drivers",
+    "fleet_vehicle_driver_assignments",
     "published_fleet_assignments",
     "optimization_workspaces",
     "optimization_workspace_versions",

@@ -427,6 +427,97 @@ for /f "tokens=5" %a in ('netstat -aon ^| findstr ":8000"') do taskkill /F /PID 
 
 ---
 
+## 📌 Nota Operativa: Conductores en Flota
+
+### Estado actual
+
+1. `Flota` ya incluye `Plan semanal` por vehículo con descarga CSV.
+2. Ya existe capa de conductores por empresa.
+3. Cada autobús puede guardar:
+   - conductor habitual
+   - conductor distinto por día (`L`, `M`, `Mc`, `X`, `V`)
+4. El plan semanal del vehículo ya puede mostrar también el conductor asignado.
+5. La mensajería automática todavía no está activada.
+
+## 📌 Pendiente Funcional: Conductores y Envío Automático de Trabajo
+
+> **Nota de producto para próximas iteraciones:** esta parte no está implementada todavía, pero debe tenerse en cuenta al seguir evolucionando `Flota`, `Plan semanal` y la publicación operativa.
+
+### Objetivo
+
+Cuando una unidad tenga su planificación semanal visible en `Flota`, el sistema deberá poder relacionar esa unidad con el conductor habitual o con los conductores asignados por día, para preparar en el futuro un flujo automático de envío del trabajo diario.
+
+### Requisitos funcionales esperados
+
+1. **Ficha de vehículo con conductor asociado**
+   - Cada autobús deberá poder guardar:
+     - conductor principal habitual
+     - o conductores distintos según el día (`L`, `M`, `Mc`, `X`, `V`)
+
+2. **Modelo operativo realista**
+   - Debe contemplarse que un mismo autobús pueda:
+     - tener un conductor fijo
+     - o rotar entre distintos conductores según el día
+   - Este segundo caso se considera normal y debe soportarse de forma nativa.
+
+3. **Plan semanal enriquecido**
+   - En el apartado `Flota -> detalle del vehículo -> Plan semanal` deberá poder verse:
+     - qué servicio tiene ese autobús cada día
+     - qué conductor lo tiene asignado ese día
+
+4. **Preparación para mensajería automática**
+   - El sistema deberá quedar preparado para integrar en el futuro:
+     - WhatsApp
+     - Telegram
+     - u otro canal de mensajería
+   - Objetivo futuro:
+     - enviar automáticamente cada día, a una hora configurable, el trabajo al conductor que toque
+
+5. **Workflow futuro esperado**
+   - Publicación / reconciliación de flota
+   - Resolución de qué vehículo hace qué trabajo
+   - Resolución de qué conductor lleva ese vehículo ese día
+   - Generación del resumen diario del servicio
+   - Envío automático del mensaje al conductor correspondiente
+
+### Implicaciones de diseño a tener en cuenta
+
+1. **Nueva entidad o bloque de datos de conductores**
+   - Será necesario modelar conductores como dato propio del sistema.
+
+2. **Relación conductor-vehículo por día**
+   - No basta con un único campo `driver_name`.
+   - Hará falta soportar asignación por día o por calendario operativo.
+
+3. **Datos mínimos del conductor**
+   - Nombre
+   - Teléfono
+   - Canal preferido de contacto
+   - Estado (activo/inactivo)
+
+4. **Integración con planificación**
+   - El `Plan semanal` del vehículo deberá poder consumir tanto:
+     - la planificación publicada del bus
+     - como la asignación del conductor para ese día
+
+5. **No mezclar todavía con el núcleo de optimización**
+   - En esta fase debe considerarse una capa operativa posterior.
+   - Primero se decide flota/vehículo.
+   - Después se resuelve conductor y comunicación.
+
+### Sugerencia de implementación futura
+
+Cuando se aborde esta funcionalidad, partir de esta secuencia:
+
+1. Crear CRUD de conductores
+2. Añadir asignación conductor habitual / conductor por día en `Flota`
+3. Mostrar conductor en `Plan semanal`
+4. Generar resumen diario del trabajo por conductor
+5. Integrar con proveedor de mensajería
+6. Añadir scheduler para envío automático a hora configurable
+
+---
+
 > **Recuerda:** Cada vez que hagas cambios que afecten el inicio del proyecto, actualiza `start-tutti.bat` y documenta en este archivo.
 
 *Última actualización: 2026-03-07*

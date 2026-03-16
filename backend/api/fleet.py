@@ -76,11 +76,77 @@ class FleetVehicleUpdate(FleetVehicleBase):
     pass
 
 
+class VehicleDriverAssignmentResponse(BaseModel):
+    id: Optional[str] = None
+    day_code: str
+    day_label: str
+    driver_id: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_phone: Optional[str] = None
+    driver_status: Optional[str] = None
+    preferred_channel: Optional[str] = None
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class FleetVehicleResponse(FleetVehicleBase):
     id: str
     created_at: str
     updated_at: str
     age_years: Optional[int] = None
+    default_driver_id: Optional[str] = None
+    default_driver_name: Optional[str] = None
+    default_driver_phone: Optional[str] = None
+    default_driver_channel: Optional[str] = None
+    driver_assignments: List[VehicleDriverAssignmentResponse] = Field(default_factory=list)
+
+
+class FleetDriverBase(BaseModel):
+    company_id: str = Field(min_length=1, max_length=64)
+    full_name: str = Field(min_length=1, max_length=120)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    email: Optional[str] = Field(default=None, max_length=120)
+    preferred_channel: Literal["manual", "whatsapp", "telegram", "call"] = "manual"
+    whatsapp_phone: Optional[str] = Field(default=None, max_length=40)
+    telegram_chat_id: Optional[str] = Field(default=None, max_length=120)
+    status: Literal["active", "inactive"] = "active"
+    notes: Optional[str] = Field(default=None, max_length=1200)
+
+
+class FleetDriverCreate(FleetDriverBase):
+    pass
+
+
+class FleetDriverUpdate(FleetDriverBase):
+    pass
+
+
+class FleetDriverResponse(FleetDriverBase):
+    id: str
+    company_name: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class VehicleDriverAssignmentInput(BaseModel):
+    day_code: Literal["default", "L", "M", "Mc", "X", "V"]
+    driver_id: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
+class VehicleDriverAssignmentsUpdateRequest(BaseModel):
+    default_driver_id: Optional[str] = None
+    assignments: List[VehicleDriverAssignmentInput] = Field(default_factory=list)
+
+
+class VehicleDriverAssignmentsResponse(BaseModel):
+    vehicle_id: str
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+    default_driver_id: Optional[str] = None
+    default_driver_name: Optional[str] = None
+    driver_assignments: List[VehicleDriverAssignmentResponse] = Field(default_factory=list)
 
 
 class FleetSummary(BaseModel):
@@ -155,6 +221,51 @@ class FleetImportCommitResponse(BaseModel):
     summary_by_company: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class VehicleWeeklyPlanAssignmentResponse(BaseModel):
+    day: str
+    day_label: str
+    bus_id: str
+    route_id: str
+    start_minute: int
+    end_minute: int
+    start_time: str
+    end_time: str
+    workspace_id: str
+    workspace_name: Optional[str] = None
+    workspace_version_id: str
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+    assignment_type: str = "real"
+    driver_id: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_phone: Optional[str] = None
+    preferred_channel: Optional[str] = None
+
+
+class VehicleWeeklyPlanDayResponse(BaseModel):
+    day: str
+    day_label: str
+    route_count: int = 0
+    first_start_minute: Optional[int] = None
+    last_end_minute: Optional[int] = None
+    assignments: List[VehicleWeeklyPlanAssignmentResponse] = Field(default_factory=list)
+
+
+class VehicleWeeklyPlanResponse(BaseModel):
+    vehicle_id: str
+    vehicle_code: Optional[str] = None
+    plate: Optional[str] = None
+    total_assignments: int = 0
+    total_routes: int = 0
+    total_days_with_service: int = 0
+    total_workspaces: int = 0
+    default_driver_id: Optional[str] = None
+    default_driver_name: Optional[str] = None
+    default_driver_phone: Optional[str] = None
+    default_driver_channel: Optional[str] = None
+    days: List[VehicleWeeklyPlanDayResponse] = Field(default_factory=list)
+
+
 class TelematicsLinkTestRequest(BaseModel):
     provider: str = Field(min_length=1, max_length=64)
     external_vehicle_id: str = Field(min_length=1, max_length=120)
@@ -201,6 +312,11 @@ def _to_response(vehicle: dict) -> FleetVehicleResponse:
         created_at=str(vehicle.get("created_at", "")),
         updated_at=str(vehicle.get("updated_at", "")),
         age_years=age_years,
+        default_driver_id=str(vehicle.get("default_driver_id", "") or "") or None,
+        default_driver_name=str(vehicle.get("default_driver_name", "") or "") or None,
+        default_driver_phone=str(vehicle.get("default_driver_phone", "") or "") or None,
+        default_driver_channel=str(vehicle.get("default_driver_channel", "") or "") or None,
+        driver_assignments=[_serialize_driver_assignment(item) for item in (vehicle.get("driver_assignments", []) or []) if isinstance(item, dict)],
     )
 
 
@@ -246,6 +362,73 @@ def _to_ute_response(ute) -> UTEResponse:
 def _require_db():
     if not is_database_available() or SessionLocal is None:
         raise HTTPException(status_code=503, detail="Database not available")
+
+
+DAY_LABELS = {
+    "default": "Habitual",
+    "L": "Lunes",
+    "M": "Martes",
+    "Mc": "Miercoles",
+    "X": "Jueves",
+    "V": "Viernes",
+}
+
+
+def _minute_to_hhmm(value: int) -> str:
+    safe = max(0, int(value or 0))
+    hours = safe // 60
+    minutes = safe % 60
+    return f"{hours:02d}:{minutes:02d}"
+
+
+def _serialize_driver_assignment(raw: Dict[str, Any]) -> VehicleDriverAssignmentResponse:
+    day_code = str(raw.get("day_code", "default") or "default")
+    return VehicleDriverAssignmentResponse(
+        id=str(raw.get("id", "") or "") or None,
+        day_code=day_code,
+        day_label=DAY_LABELS.get(day_code, day_code),
+        driver_id=str(raw.get("driver_id", "") or "") or None,
+        driver_name=str(raw.get("driver_name", "") or "") or None,
+        driver_phone=str(raw.get("driver_phone", "") or "") or None,
+        driver_status=str(raw.get("driver_status", "") or "") or None,
+        preferred_channel=str(raw.get("preferred_channel", "") or "") or None,
+        company_id=str(raw.get("company_id", "") or "") or None,
+        company_name=str(raw.get("company_name", "") or "") or None,
+        notes=str(raw.get("notes", "") or "") or None,
+    )
+
+
+def _driver_assignment_map(vehicle: dict) -> Dict[str, Dict[str, Any]]:
+    assignments = vehicle.get("driver_assignments", []) or []
+    mapping: Dict[str, Dict[str, Any]] = {}
+    for raw in assignments:
+        if isinstance(raw, dict):
+            day_code = str(raw.get("day_code", "default") or "default").strip() or "default"
+            mapping[day_code] = raw
+    return mapping
+
+
+def _resolve_driver_for_day(vehicle: dict, day: str) -> Optional[Dict[str, Any]]:
+    mapping = _driver_assignment_map(vehicle)
+    return mapping.get(day) or mapping.get("default")
+
+
+def _serialize_driver(driver) -> FleetDriverResponse:
+    return FleetDriverResponse(
+        id=str(driver.id),
+        company_id=str(driver.company_id),
+        company_name=str(driver.company.name or "") if driver.company else None,
+        full_name=str(driver.full_name or ""),
+        phone=str(driver.phone or "") or None,
+        email=str(driver.email or "") or None,
+        preferred_channel=str(driver.preferred_channel or "manual"),
+        whatsapp_phone=str(driver.whatsapp_phone or "") or None,
+        telegram_chat_id=str(driver.telegram_chat_id or "") or None,
+        status=str(driver.status or "active"),
+        notes=str(driver.notes or "") or None,
+        created_at=driver.created_at.isoformat() if driver.created_at else None,
+        updated_at=driver.updated_at.isoformat() if driver.updated_at else None,
+    )
 
 
 def _assert_companies_exist(db, company_ids: List[str]) -> List[str]:
@@ -307,12 +490,299 @@ async def list_fleet_companies(active_only: bool = Query(default=True)) -> List[
         db.close()
 
 
+@router.get("/drivers", response_model=List[FleetDriverResponse])
+async def list_fleet_drivers(
+    company_id: Optional[str] = Query(default=None),
+    active_only: bool = Query(default=False),
+) -> List[FleetDriverResponse]:
+    _require_db()
+    db = SessionLocal()
+    try:
+        query = db.query(db_models.DriverModel).outerjoin(db_models.CompanyModel)
+        if company_id:
+            query = query.filter(db_models.DriverModel.company_id == str(company_id).strip())
+        if active_only:
+            query = query.filter(db_models.DriverModel.status == "active")
+        rows = query.order_by(db_models.DriverModel.full_name.asc()).all()
+        return [_serialize_driver(row) for row in rows]
+    finally:
+        db.close()
+
+
+@router.post("/drivers", response_model=FleetDriverResponse, status_code=status.HTTP_201_CREATED)
+async def create_fleet_driver(payload: FleetDriverCreate) -> FleetDriverResponse:
+    _require_db()
+    db = SessionLocal()
+    try:
+        company = db_crud.get_company(db, str(payload.company_id).strip())
+        if company is None:
+            raise HTTPException(status_code=404, detail="Empresa no encontrada")
+        now = datetime.utcnow()
+        driver = db_models.DriverModel(
+            id=str(uuid4()),
+            company_id=str(payload.company_id).strip(),
+            full_name=str(payload.full_name).strip(),
+            phone=str(payload.phone or "").strip() or None,
+            email=str(payload.email or "").strip() or None,
+            preferred_channel=str(payload.preferred_channel or "manual"),
+            whatsapp_phone=str(payload.whatsapp_phone or "").strip() or None,
+            telegram_chat_id=str(payload.telegram_chat_id or "").strip() or None,
+            status=str(payload.status or "active"),
+            notes=str(payload.notes or "").strip() or None,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(driver)
+        db.commit()
+        db.refresh(driver)
+        return _serialize_driver(driver)
+    finally:
+        db.close()
+
+
+@router.put("/drivers/{driver_id}", response_model=FleetDriverResponse)
+async def update_fleet_driver(driver_id: str, payload: FleetDriverUpdate) -> FleetDriverResponse:
+    _require_db()
+    db = SessionLocal()
+    try:
+        driver = db.query(db_models.DriverModel).filter(db_models.DriverModel.id == str(driver_id)).first()
+        if driver is None:
+            raise HTTPException(status_code=404, detail="Conductor no encontrado")
+        company = db_crud.get_company(db, str(payload.company_id).strip())
+        if company is None:
+            raise HTTPException(status_code=404, detail="Empresa no encontrada")
+        driver.company_id = str(payload.company_id).strip()
+        driver.full_name = str(payload.full_name).strip()
+        driver.phone = str(payload.phone or "").strip() or None
+        driver.email = str(payload.email or "").strip() or None
+        driver.preferred_channel = str(payload.preferred_channel or "manual")
+        driver.whatsapp_phone = str(payload.whatsapp_phone or "").strip() or None
+        driver.telegram_chat_id = str(payload.telegram_chat_id or "").strip() or None
+        driver.status = str(payload.status or "active")
+        driver.notes = str(payload.notes or "").strip() or None
+        driver.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(driver)
+        return _serialize_driver(driver)
+    finally:
+        db.close()
+
+
+@router.delete("/drivers/{driver_id}")
+async def delete_fleet_driver(driver_id: str) -> dict:
+    _require_db()
+    db = SessionLocal()
+    try:
+        driver = db.query(db_models.DriverModel).filter(db_models.DriverModel.id == str(driver_id)).first()
+        if driver is None:
+            raise HTTPException(status_code=404, detail="Conductor no encontrado")
+        db.delete(driver)
+        db.commit()
+        return {"success": True, "driver_id": str(driver_id)}
+    finally:
+        db.close()
+
+
+@router.put("/vehicles/{vehicle_id}/drivers", response_model=VehicleDriverAssignmentsResponse)
+async def update_vehicle_driver_assignments(
+    vehicle_id: str,
+    payload: VehicleDriverAssignmentsUpdateRequest,
+    company_id: Optional[str] = Query(default=None),
+) -> VehicleDriverAssignmentsResponse:
+    _require_db()
+    db = SessionLocal()
+    try:
+        vehicle = db.query(db_models.FleetVehicleModel).filter(
+            db_models.FleetVehicleModel.id == str(vehicle_id)
+        ).first()
+        if vehicle is None:
+            raise HTTPException(status_code=404, detail="Vehiculo no encontrado")
+        if company_id and str(vehicle.company_id) != str(company_id).strip():
+            raise HTTPException(status_code=404, detail="Vehiculo no encontrado")
+
+        requested_driver_ids: List[str] = []
+        if payload.default_driver_id:
+            requested_driver_ids.append(str(payload.default_driver_id).strip())
+        for item in payload.assignments:
+            if item.driver_id:
+                requested_driver_ids.append(str(item.driver_id).strip())
+
+        drivers_by_id: Dict[str, Any] = {}
+        if requested_driver_ids:
+            rows = db.query(db_models.DriverModel).filter(db_models.DriverModel.id.in_(requested_driver_ids)).all()
+            drivers_by_id = {str(row.id): row for row in rows}
+            missing = [driver_id for driver_id in requested_driver_ids if driver_id not in drivers_by_id]
+            if missing:
+                raise HTTPException(status_code=404, detail=f"Conductores no encontrados: {', '.join(missing)}")
+            if any(str(row.company_id) != str(vehicle.company_id) for row in rows):
+                raise HTTPException(status_code=400, detail="Todos los conductores deben pertenecer a la empresa del vehiculo")
+
+        db.query(db_models.FleetVehicleDriverAssignmentModel).filter(
+            db_models.FleetVehicleDriverAssignmentModel.vehicle_id == str(vehicle.id)
+        ).delete()
+
+        now = datetime.utcnow()
+        persisted: List[VehicleDriverAssignmentResponse] = []
+
+        def _store(day_code: str, driver_id: str, notes: Optional[str] = None) -> None:
+            driver = drivers_by_id.get(driver_id)
+            row = db_models.FleetVehicleDriverAssignmentModel(
+                id=str(uuid4()),
+                vehicle_id=str(vehicle.id),
+                driver_id=str(driver_id),
+                day_code=str(day_code),
+                notes=str(notes or "").strip() or None,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(row)
+            persisted.append(
+                VehicleDriverAssignmentResponse(
+                    id=str(row.id),
+                    day_code=str(day_code),
+                    day_label=DAY_LABELS.get(str(day_code), str(day_code)),
+                    driver_id=str(driver_id),
+                    driver_name=str(driver.full_name or "") if driver else None,
+                    driver_phone=(str(driver.phone or "") or None) if driver else None,
+                    driver_status=str(driver.status or "active") if driver else None,
+                    preferred_channel=str(driver.preferred_channel or "manual") if driver else None,
+                    company_id=str(driver.company_id) if driver else None,
+                    company_name=str(driver.company.name or "") if driver and driver.company else None,
+                    notes=str(notes or "").strip() or None,
+                )
+            )
+
+        if payload.default_driver_id:
+            _store("default", str(payload.default_driver_id).strip())
+
+        seen_days = set()
+        for item in payload.assignments:
+            day_code = str(item.day_code or "").strip()
+            if day_code == "default" or day_code in seen_days or not item.driver_id:
+                continue
+            seen_days.add(day_code)
+            _store(day_code, str(item.driver_id).strip(), item.notes)
+
+        db.commit()
+
+        default_assignment = next((item for item in persisted if item.day_code == "default"), None)
+        return VehicleDriverAssignmentsResponse(
+            vehicle_id=str(vehicle.id),
+            company_id=str(vehicle.company_id),
+            company_name=str(vehicle.company.name or "") if vehicle.company else None,
+            default_driver_id=default_assignment.driver_id if default_assignment else None,
+            default_driver_name=default_assignment.driver_name if default_assignment else None,
+            driver_assignments=sorted(
+                persisted,
+                key=lambda item: (0 if item.day_code == "default" else 1, item.day_code),
+            ),
+        )
+    finally:
+        db.close()
+
+
 @router.get("/vehicles/{vehicle_id}", response_model=FleetVehicleResponse)
 async def get_vehicle(vehicle_id: str, company_id: Optional[str] = Query(default=None)) -> FleetVehicleResponse:
     vehicle = fleet_repository.get_vehicle(vehicle_id, company_id=company_id)
     if not vehicle:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehículo no encontrado")
     return _to_response(vehicle)
+
+
+@router.get("/vehicles/{vehicle_id}/weekly-plan", response_model=VehicleWeeklyPlanResponse)
+async def get_vehicle_weekly_plan(vehicle_id: str, company_id: Optional[str] = Query(default=None)) -> VehicleWeeklyPlanResponse:
+    _require_db()
+    vehicle = fleet_repository.get_vehicle(vehicle_id, company_id=company_id)
+    if not vehicle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado")
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(
+                db_models.PublishedFleetAssignmentModel,
+                db_models.OptimizationWorkspaceModel.name,
+                db_models.CompanyModel.name,
+            )
+            .outerjoin(
+                db_models.OptimizationWorkspaceModel,
+                db_models.OptimizationWorkspaceModel.id == db_models.PublishedFleetAssignmentModel.workspace_id,
+            )
+            .outerjoin(
+                db_models.CompanyModel,
+                db_models.CompanyModel.id == db_models.PublishedFleetAssignmentModel.company_id,
+            )
+            .filter(
+                db_models.PublishedFleetAssignmentModel.assigned_vehicle_id == str(vehicle_id),
+                db_models.PublishedFleetAssignmentModel.active.is_(True),
+            )
+            .order_by(
+                db_models.PublishedFleetAssignmentModel.day.asc(),
+                db_models.PublishedFleetAssignmentModel.start_minute.asc(),
+                db_models.PublishedFleetAssignmentModel.route_id.asc(),
+            )
+            .all()
+        )
+
+        assignments_by_day: Dict[str, List[VehicleWeeklyPlanAssignmentResponse]] = {day: [] for day in DAY_LABELS}
+        workspace_ids = set()
+        for assignment_row, workspace_name, company_name in rows:
+            day = str(assignment_row.day or "").strip()
+            driver_for_day = _resolve_driver_for_day(vehicle, day)
+            assignment = VehicleWeeklyPlanAssignmentResponse(
+                day=day,
+                day_label=DAY_LABELS.get(day, day),
+                bus_id=str(assignment_row.bus_id or ""),
+                route_id=str(assignment_row.route_id or ""),
+                start_minute=int(assignment_row.start_minute or 0),
+                end_minute=int(assignment_row.end_minute or 0),
+                start_time=_minute_to_hhmm(int(assignment_row.start_minute or 0)),
+                end_time=_minute_to_hhmm(int(assignment_row.end_minute or 0)),
+                workspace_id=str(assignment_row.workspace_id or ""),
+                workspace_name=str(workspace_name or "") or None,
+                workspace_version_id=str(assignment_row.workspace_version_id or ""),
+                company_id=str(assignment_row.company_id or "") or None,
+                company_name=str(company_name or "") or None,
+                assignment_type=str(assignment_row.assignment_type or "real"),
+                driver_id=str(driver_for_day.get("driver_id", "") or "") or None if driver_for_day else None,
+                driver_name=str(driver_for_day.get("driver_name", "") or "") or None if driver_for_day else None,
+                driver_phone=str(driver_for_day.get("driver_phone", "") or "") or None if driver_for_day else None,
+                preferred_channel=str(driver_for_day.get("preferred_channel", "") or "") or None if driver_for_day else None,
+            )
+            assignments_by_day.setdefault(day, []).append(assignment)
+            workspace_ids.add(str(assignment_row.workspace_id or ""))
+
+        days: List[VehicleWeeklyPlanDayResponse] = []
+        for day in ("L", "M", "Mc", "X", "V"):
+            assignments = assignments_by_day.get(day, [])
+            days.append(
+                VehicleWeeklyPlanDayResponse(
+                    day=day,
+                    day_label=DAY_LABELS.get(day, day),
+                    route_count=len(assignments),
+                    first_start_minute=min((item.start_minute for item in assignments), default=None),
+                    last_end_minute=max((item.end_minute for item in assignments), default=None),
+                    assignments=assignments,
+                )
+            )
+
+        total_assignments = sum(day.route_count for day in days)
+        return VehicleWeeklyPlanResponse(
+            vehicle_id=str(vehicle_id),
+            vehicle_code=str(vehicle.get("vehicle_code", "") or "") or None,
+            plate=str(vehicle.get("plate", "") or "") or None,
+            total_assignments=total_assignments,
+            total_routes=total_assignments,
+            total_days_with_service=sum(1 for day in days if day.route_count > 0),
+            total_workspaces=len([workspace_id for workspace_id in workspace_ids if workspace_id]),
+            default_driver_id=str(vehicle.get("default_driver_id", "") or "") or None,
+            default_driver_name=str(vehicle.get("default_driver_name", "") or "") or None,
+            default_driver_phone=str(vehicle.get("default_driver_phone", "") or "") or None,
+            default_driver_channel=str(vehicle.get("default_driver_channel", "") or "") or None,
+            days=days,
+        )
+    finally:
+        db.close()
 
 
 @router.post("/vehicles", response_model=FleetVehicleResponse, status_code=status.HTTP_201_CREATED)

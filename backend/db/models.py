@@ -151,6 +151,11 @@ class CompanyModel(Base):
         "OptimizationWorkspaceModel",
         back_populates="company",
     )
+    drivers = relationship(
+        "DriverModel",
+        back_populates="company",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<CompanyModel(id='{self.id}', name='{self.name}', is_default={self.is_default})>"
@@ -190,6 +195,11 @@ class FleetVehicleModel(Base):
     company = relationship("CompanyModel", back_populates="fleet_vehicles")
     documents = relationship(
         "FleetVehicleDocumentModel",
+        back_populates="vehicle",
+        cascade="all, delete-orphan",
+    )
+    driver_assignments = relationship(
+        "FleetVehicleDriverAssignmentModel",
         back_populates="vehicle",
         cascade="all, delete-orphan",
     )
@@ -267,6 +277,69 @@ class FleetVehicleDocumentModel(Base):
 
     def __repr__(self):
         return f"<FleetVehicleDocumentModel(id='{self.id}', vehicle_id='{self.vehicle_id}', type='{self.doc_type}')>"
+
+
+class DriverModel(Base):
+    """Driver data for regular vehicle ownership and future messaging automation."""
+    __tablename__ = "fleet_drivers"
+
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    company_id = Column(String(64), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True)
+    full_name = Column(String(120), nullable=False)
+    phone = Column(String(40), nullable=True)
+    email = Column(String(120), nullable=True)
+    preferred_channel = Column(String(32), nullable=False, default="manual")
+    whatsapp_phone = Column(String(40), nullable=True)
+    telegram_chat_id = Column(String(120), nullable=True)
+    status = Column(String(32), nullable=False, default="active")
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    company = relationship("CompanyModel", back_populates="drivers")
+    vehicle_assignments = relationship(
+        "FleetVehicleDriverAssignmentModel",
+        back_populates="driver",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self):
+        return f"<DriverModel(id='{self.id}', company_id='{self.company_id}', full_name='{self.full_name}')>"
+
+
+class FleetVehicleDriverAssignmentModel(Base):
+    """Recurring assignment of a driver to a vehicle, either default or per day."""
+    __tablename__ = "fleet_vehicle_driver_assignments"
+    __table_args__ = (
+        UniqueConstraint("vehicle_id", "day_code", name="uq_vehicle_driver_assignment_day"),
+    )
+
+    id = Column(UUIDType, primary_key=True, default=lambda: str(uuid.uuid4()))
+    vehicle_id = Column(
+        UUIDType,
+        ForeignKey("fleet_vehicles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    driver_id = Column(
+        UUIDType,
+        ForeignKey("fleet_drivers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    day_code = Column(String(16), nullable=False, default="default")  # default|L|M|Mc|X|V
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    vehicle = relationship("FleetVehicleModel", back_populates="driver_assignments")
+    driver = relationship("DriverModel", back_populates="vehicle_assignments")
+
+    def __repr__(self):
+        return (
+            f"<FleetVehicleDriverAssignmentModel(vehicle_id='{self.vehicle_id}', "
+            f"driver_id='{self.driver_id}', day_code='{self.day_code}')>"
+        )
 
 
 class OptimizationWorkspaceModel(Base):

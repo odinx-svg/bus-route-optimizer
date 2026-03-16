@@ -26,6 +26,71 @@ export const listFleetCompanies = async () => {
   return response.json();
 };
 
+export const fetchVehicleWeeklyPlan = async (vehicleId) => {
+  const response = await fetch(`${API_URL}/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/weekly-plan`);
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
+export const fetchFleetDrivers = async ({ companyId = '', activeOnly = false } = {}) => {
+  const params = new URLSearchParams();
+  if (companyId) params.set('company_id', companyId);
+  if (activeOnly) params.set('active_only', 'true');
+  const response = await fetch(`${API_URL}/api/fleet/drivers${params.toString() ? `?${params.toString()}` : ''}`);
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
+export const createFleetDriver = async (payload) => {
+  const response = await fetch(`${API_URL}/api/fleet/drivers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
+export const updateFleetDriver = async (driverId, payload) => {
+  const response = await fetch(`${API_URL}/api/fleet/drivers/${encodeURIComponent(driverId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
+export const deleteFleetDriver = async (driverId) => {
+  const response = await fetch(`${API_URL}/api/fleet/drivers/${encodeURIComponent(driverId)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
+export const updateVehicleDriverAssignments = async (vehicleId, payload) => {
+  const response = await fetch(`${API_URL}/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/drivers`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
 export const createFleetVehicle = async (payload) => {
   const response = await fetch(`${API_URL}/api/fleet/vehicles`, {
     method: 'POST',
