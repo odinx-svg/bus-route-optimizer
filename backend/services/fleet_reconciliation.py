@@ -178,24 +178,32 @@ def _build_company_mix(
         for row in company_capacity_summary
     }
     recommendations: List[Dict[str, Any]] = []
-    for company_key, recommendation in recommendation_by_company.items():
+    all_company_keys = {
+        *capacity_by_company.keys(),
+        *coverage_by_company.keys(),
+        *recommendation_by_company.keys(),
+    }
+    for company_key in all_company_keys:
+        recommendation = recommendation_by_company.get(company_key, {})
         capacity = capacity_by_company.get(company_key, {})
         coverage = coverage_by_company.get(company_key, {})
+        sample_vehicle_codes = recommendation.get("vehicle_codes", []) or capacity.get("vehicle_codes", []) or []
         recommendations.append(
             {
-                "company_id": recommendation.get("company_id"),
-                "company_name": recommendation.get("company_name"),
+                "company_id": recommendation.get("company_id") or coverage.get("company_id") or capacity.get("company_id"),
+                "company_name": recommendation.get("company_name") or coverage.get("company_name") or capacity.get("company_name"),
                 "recommended_count": int(recommendation.get("recommended_count", 0) or 0),
                 "available_vehicle_count": int(capacity.get("available_vehicle_count", 0) or 0),
                 "coverable_assignments": int(coverage.get("coverable_assignments", 0) or 0),
                 "candidate_vehicle_count": len(coverage.get("candidate_vehicle_ids", set())),
-                "vehicle_codes": recommendation.get("vehicle_codes", []),
+                "vehicle_codes": sample_vehicle_codes[:4],
             }
         )
     recommendations.sort(
         key=lambda row: (
             -int(row.get("recommended_count", 0) or 0),
             -int(row.get("coverable_assignments", 0) or 0),
+            -int(row.get("available_vehicle_count", 0) or 0),
             str(row.get("company_name") or ""),
         )
     )
