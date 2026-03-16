@@ -109,3 +109,15 @@ export const listUTEs = async ({ activeOnly = true } = {}) => {
   }
   return response.json();
 };
+
+export const createUTE = async (payload) => {
+  const response = await fetch(`${API_URL}/api/fleet/utes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};

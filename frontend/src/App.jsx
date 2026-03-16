@@ -7,7 +7,7 @@ import OptimizationProgress from './components/OptimizationProgress';
 import StudioErrorBoundary from './components/StudioErrorBoundary';
 import ControlHubPage from './pages/ControlHubPage';
 import FleetPage from './pages/FleetPage';
-import { listFleetCompanies, listUTEs } from './services/fleetService';
+import { createUTE, listFleetCompanies, listUTEs } from './services/fleetService';
 import { notifications } from './services/notifications';
 import { clearGeometryCache } from './services/RouteService';
 import { buildRouteCapacityMap, getItemCapacityNeeded } from './utils/capacity';
@@ -1418,10 +1418,12 @@ function FleetReconciliationModal({
 function FleetScopeChoiceModal({
   open = false,
   workspaceCompany = null,
+  fleetCompanies = [],
   uteOptions = [],
   applying = false,
   onChooseCompany = null,
   onChooseUte = null,
+  onCreateUte = null,
   onClose = null,
 }) {
   if (!open) return null;
@@ -1467,6 +1469,21 @@ function FleetScopeChoiceModal({
             </p>
           </button>
         </div>
+        {!firstUte && Array.isArray(fleetCompanies) && fleetCompanies.length > 1 && (
+          <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3">
+            <p className="text-[12px] text-amber-100">
+              Ya tienes varias empresas cargadas. Si aun no existe la UTE, puedes crearla ahora mismo con AAV como empresa principal y el resto como socios.
+            </p>
+            <button
+              type="button"
+              onClick={onCreateUte}
+              disabled={applying || typeof onCreateUte !== 'function' || !workspaceCompany}
+              className="mt-3 rounded-md border border-amber-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Crear UTE con empresas cargadas
+            </button>
+          </div>
+        )}
         <div className="mt-4 flex justify-end">
           <button
             type="button"
@@ -1631,6 +1648,28 @@ function App() {
       return [];
     }
   }, []);
+
+  const createWorkspaceFleetUte = useCallback(async () => {
+    const workspaceCompany = Array.isArray(fleetCompanies)
+      ? fleetCompanies.find((company) => String(company.id) === String(activeWorkspaceDetail?.company_id || activeWorkspaceSummary?.company_id || ''))
+      : null;
+    if (!workspaceCompany?.id) {
+      throw new Error('No hay empresa principal valida para crear la UTE');
+    }
+    const memberCompanyIds = (Array.isArray(fleetCompanies) ? fleetCompanies : [])
+      .map((company) => String(company?.id || '').trim())
+      .filter(Boolean);
+    if (memberCompanyIds.length < 2) {
+      throw new Error('Hace falta al menos una empresa socia adicional para crear la UTE');
+    }
+    const ute = await createUTE({
+      name: `UTE ${workspaceCompany.name}`,
+      owner_company_id: String(workspaceCompany.id),
+      member_company_ids: memberCompanyIds,
+    });
+    await refreshUTEOptions();
+    return ute;
+  }, [activeWorkspaceDetail?.company_id, activeWorkspaceSummary?.company_id, fleetCompanies, refreshUTEOptions]);
 
   const refreshFleetCompanies = useCallback(async () => {
     try {
@@ -3007,10 +3046,22 @@ function App() {
         workspaceCompany={Array.isArray(fleetCompanies)
           ? fleetCompanies.find((company) => String(company.id) === String(activeWorkspaceDetail?.company_id || activeWorkspaceSummary?.company_id || ''))
           : null}
+        fleetCompanies={fleetCompanies}
         uteOptions={uteOptions}
         applying={fleetScopeChoiceModal.applying}
         onChooseCompany={() => openFleetReconciliationForScope({ scopeMode: 'company', busId: fleetScopeChoiceModal.busId })}
         onChooseUte={() => openFleetReconciliationForScope({ scopeMode: 'ute', busId: fleetScopeChoiceModal.busId })}
+        onCreateUte={async () => {
+          try {
+            setFleetScopeChoiceModal((prev) => ({ ...prev, applying: true }));
+            const createdUte = await createWorkspaceFleetUte();
+            notifications.success('UTE creada', createdUte?.name || 'La UTE ya esta disponible');
+            setFleetScopeChoiceModal((prev) => ({ ...prev, applying: false }));
+          } catch (error) {
+            setFleetScopeChoiceModal((prev) => ({ ...prev, applying: false }));
+            notifications.error('No se pudo crear la UTE', error?.message || 'Error creando la UTE');
+          }
+        }}
         onClose={() => setFleetScopeChoiceModal({ open: false, busId: null, applying: false })}
       />
     </Layout>
