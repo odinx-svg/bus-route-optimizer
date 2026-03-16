@@ -1557,6 +1557,10 @@ function App() {
     busId: null,
     applying: false,
   });
+  const workspaceCompanyId = useMemo(
+    () => String(activeWorkspaceDetail?.company_id || '').trim() || '',
+    [activeWorkspaceDetail?.company_id]
+  );
   const [pendingOptimizationRequest, setPendingOptimizationRequest] = useState(null);
 
   const [pipelineJobId, setPipelineJobId] = useState(null);
@@ -1651,7 +1655,7 @@ function App() {
 
   const createWorkspaceFleetUte = useCallback(async () => {
     const workspaceCompany = Array.isArray(fleetCompanies)
-      ? fleetCompanies.find((company) => String(company.id) === String(activeWorkspaceDetail?.company_id || activeWorkspaceSummary?.company_id || ''))
+      ? fleetCompanies.find((company) => String(company.id) === workspaceCompanyId)
       : null;
     if (!workspaceCompany?.id) {
       throw new Error('No hay empresa principal valida para crear la UTE');
@@ -1669,7 +1673,7 @@ function App() {
     });
     await refreshUTEOptions();
     return ute;
-  }, [activeWorkspaceDetail?.company_id, activeWorkspaceSummary?.company_id, fleetCompanies, refreshUTEOptions]);
+  }, [fleetCompanies, refreshUTEOptions, workspaceCompanyId]);
 
   const refreshFleetCompanies = useCallback(async () => {
     try {
