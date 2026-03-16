@@ -342,6 +342,13 @@ function LoadOptionsModal({
   onSave,
 }) {
   const [value, setValue] = useState(normalizeOptimizationOptions(initialValue));
+  const isUteMode = String(value.fleet_scope_mode || 'company') === 'ute';
+  const selectedWorkspaceCompany = Array.isArray(workspaceCompanies)
+    ? workspaceCompanies.find((company) => String(company.id) === String(workspaceCompanyId || ''))
+    : null;
+  const selectedUte = Array.isArray(uteOptions)
+    ? uteOptions.find((ute) => String(ute.id) === String(value.fleet_scope_ute_id || ''))
+    : null;
 
   useEffect(() => {
     if (!open) return;
@@ -459,6 +466,72 @@ function LoadOptionsModal({
           </div>
         </div>
 
+        <div className="mt-4 rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.1em] text-cyan-300">Como quieres trabajar esta optimizacion</p>
+              <p className="mt-1 text-[12px] text-slate-300">
+                Elige una opcion simple: solo tu empresa o toda la UTE.
+              </p>
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
+              Ahora mismo: {isUteMode ? 'Toda la UTE' : 'Solo mi empresa'}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setValue((prev) => ({
+                ...normalizeOptimizationOptions(prev),
+                fleet_scope_mode: 'company',
+                fleet_scope_ute_id: null,
+              }))}
+              className={`rounded-xl border px-4 py-4 text-left transition ${
+                !isUteMode
+                  ? 'border-cyan-400/60 bg-cyan-500/10'
+                  : 'border-[#2a4057] bg-[#09101d] hover:border-cyan-500/30'
+              }`}
+            >
+              <p className="text-[14px] font-semibold text-white">Solo mi empresa</p>
+              <p className="mt-1 text-[12px] text-slate-300">
+                Usar solo los buses de mi empresa principal.
+              </p>
+              <p className="mt-2 text-[11px] text-slate-400">
+                Empresa actual: {selectedWorkspaceCompany
+                  ? `${selectedWorkspaceCompany.name} (${selectedWorkspaceCompany.active_vehicle_count || 0} buses activos)`
+                  : 'Selecciona una empresa principal arriba'}
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setValue((prev) => ({
+                ...normalizeOptimizationOptions(prev),
+                fleet_scope_mode: 'ute',
+                fleet_scope_ute_id: prev.fleet_scope_ute_id || (uteOptions[0]?.id || null),
+              }))}
+              className={`rounded-xl border px-4 py-4 text-left transition ${
+                isUteMode
+                  ? 'border-emerald-400/60 bg-emerald-500/10'
+                  : 'border-[#2a4057] bg-[#09101d] hover:border-emerald-500/30'
+              }`}
+            >
+              <p className="text-[14px] font-semibold text-white">Toda la UTE</p>
+              <p className="mt-1 text-[12px] text-slate-300">
+                Usar AAV y tambien las empresas socias de la UTE.
+              </p>
+              <p className="mt-2 text-[11px] text-slate-400">
+                UTE seleccionada: {selectedUte?.name || (uteOptions[0]?.name || 'Selecciona una UTE abajo')}
+              </p>
+            </button>
+          </div>
+          <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-slate-300">
+            {!isUteMode
+              ? 'Usa esta opcion si quieres optimizar solo con los buses de AAV.'
+              : 'Usa esta opcion si quieres mezclar buses de AAV con AUTNA, ESTEVEZ, MELYTOUR y el resto de socios.'}
+          </div>
+        </div>
+
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 flex items-center gap-2 text-[12px] text-slate-200">
             <input
@@ -504,33 +577,12 @@ function LoadOptionsModal({
           </label>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
-            Ambito de flota
-            <select
-              value={value.fleet_scope_mode || 'company'}
-              onChange={(event) => setValue((prev) => ({
-                ...normalizeOptimizationOptions(prev),
-                fleet_scope_mode: event.target.value === 'ute' ? 'ute' : 'company',
-                fleet_scope_ute_id: event.target.value === 'ute'
-                  ? (prev.fleet_scope_ute_id || (uteOptions[0]?.id || null))
-                  : null,
-              }))}
-              className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1 text-[12px] text-white"
-            >
-              <option value="company">Empresa</option>
-              <option value="ute">UTE</option>
-            </select>
-            <p className="mt-1 text-[10px] text-slate-400">
-              Empresa: solo flota propia. UTE: flota conjunta de empresas miembro.
-            </p>
-          </label>
-
-          <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
-            UTE activa
+            Grupo UTE a usar
             <select
               value={value.fleet_scope_ute_id || ''}
-              disabled={(value.fleet_scope_mode || 'company') !== 'ute'}
+              disabled={!isUteMode}
               onChange={(event) => setValue((prev) => ({
                 ...normalizeOptimizationOptions(prev),
                 fleet_scope_ute_id: event.target.value || null,
@@ -543,7 +595,7 @@ function LoadOptionsModal({
               ))}
             </select>
             <p className="mt-1 text-[10px] text-slate-400">
-              Se usa para preview/publicacion y deteccion de conflictos cruzados.
+              Solo hace falta cuando eliges "Toda la UTE".
             </p>
           </label>
           <label className="rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-2 text-[12px] text-slate-200">
@@ -1363,6 +1415,73 @@ function FleetReconciliationModal({
   );
 }
 
+function FleetScopeChoiceModal({
+  open = false,
+  workspaceCompany = null,
+  uteOptions = [],
+  applying = false,
+  onChooseCompany = null,
+  onChooseUte = null,
+  onClose = null,
+}) {
+  if (!open) return null;
+  const firstUte = Array.isArray(uteOptions) && uteOptions.length > 0 ? uteOptions[0] : null;
+  return (
+    <div className="fixed inset-0 z-[1264] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={applying ? undefined : onClose} />
+      <div className="relative w-full max-w-3xl rounded-xl border border-cyan-500/25 bg-[#0b141f] p-5 shadow-2xl">
+        <p className="text-[11px] uppercase tracking-[0.1em] text-cyan-300">Reconciliar flota</p>
+        <h3 className="mt-2 text-[24px] font-semibold text-white">Elige con que flota quieres trabajar</h3>
+        <p className="mt-2 text-[13px] text-slate-300">
+          Antes de asignar buses reales, dime si esta optimizacion debe usar solo tu empresa o toda la UTE.
+        </p>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={onChooseCompany}
+            disabled={applying}
+            className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-4 text-left transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <p className="text-[15px] font-semibold text-white">Solo mi empresa</p>
+            <p className="mt-1 text-[12px] text-slate-300">
+              Usar solo la flota propia para esta reconciliacion.
+            </p>
+            <p className="mt-2 text-[11px] text-slate-400">
+              Empresa actual: {workspaceCompany
+                ? `${workspaceCompany.name} (${workspaceCompany.active_vehicle_count || 0} buses activos)`
+                : 'No hay empresa principal seleccionada'}
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={onChooseUte}
+            disabled={applying || !firstUte}
+            className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-4 text-left transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <p className="text-[15px] font-semibold text-white">Toda la UTE</p>
+            <p className="mt-1 text-[12px] text-slate-300">
+              Usar la flota de tu empresa y tambien la de los socios.
+            </p>
+            <p className="mt-2 text-[11px] text-slate-400">
+              {firstUte ? `UTE disponible: ${firstUte.name}` : 'No hay ninguna UTE disponible todavia'}
+            </p>
+          </button>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={applying}
+            className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5 disabled:opacity-60"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [routes, setRoutes] = useState([]);
   const [parseReport, setParseReport] = useState(null);
@@ -1413,6 +1532,11 @@ function App() {
     scopeLabel: '',
     scopeVehicleCount: 0,
     scopeMode: 'company',
+    busId: null,
+    applying: false,
+  });
+  const [fleetScopeChoiceModal, setFleetScopeChoiceModal] = useState({
+    open: false,
     busId: null,
     applying: false,
   });
@@ -2449,7 +2573,43 @@ function App() {
 
   const openFleetReconciliationCenter = useCallback(async (busId = null) => {
     if (!activeWorkspaceId) return;
+    setFleetScopeChoiceModal({
+      open: true,
+      busId: busId || null,
+      applying: false,
+    });
+  }, [activeWorkspaceId]);
+
+  const openFleetReconciliationForScope = useCallback(async ({ scopeMode, busId = null }) => {
+    if (!activeWorkspaceId) return;
     try {
+      setFleetScopeChoiceModal((prev) => ({ ...prev, applying: true }));
+      const normalizedScopeMode = String(scopeMode || 'company') === 'ute' ? 'ute' : 'company';
+      let optionsToPersist = null;
+      if (
+        normalizedScopeMode !== String(activeOptimizationOptions?.fleet_scope_mode || 'company')
+        || (
+          normalizedScopeMode === 'ute'
+          && !String(activeOptimizationOptions?.fleet_scope_ute_id || '').trim()
+          && uteOptions[0]?.id
+        )
+      ) {
+        optionsToPersist = normalizeOptimizationOptions({
+          ...(activeOptimizationOptions || DEFAULT_OPTIMIZATION_OPTIONS),
+          fleet_scope_mode: normalizedScopeMode,
+          fleet_scope_ute_id: normalizedScopeMode === 'ute'
+            ? (activeOptimizationOptions?.fleet_scope_ute_id || uteOptions[0]?.id || null)
+            : null,
+        });
+        const persisted = await setWorkspaceOptimizationOptions(activeWorkspaceId, optionsToPersist);
+        const normalizedPersisted = normalizeOptimizationOptions(persisted);
+        setActiveOptimizationOptions(normalizedPersisted);
+        setOptimizationOptionsByWorkspace((prev) => ({
+          ...prev,
+          [String(activeWorkspaceId)]: normalizedPersisted,
+        }));
+      }
+      setFleetScopeChoiceModal({ open: false, busId: null, applying: false });
       const data = await getWorkspaceFleetReconciliation(activeWorkspaceId, activeDay).catch(() => null);
       const dayItems = Array.isArray(data?.reconciliation_day?.items)
         ? data.reconciliation_day.items
@@ -2471,9 +2631,10 @@ function App() {
         applying: false,
       });
     } catch (error) {
+      setFleetScopeChoiceModal((prev) => ({ ...prev, applying: false }));
       notifications.error('No se pudo abrir la reconciliacion', error?.message || 'Error cargando sugerencias');
     }
-  }, [activeDay, activeWorkspaceId]);
+  }, [activeDay, activeOptimizationOptions, activeWorkspaceId, uteOptions]);
 
   const applyFleetReconciliationProposal = useCallback(async (companyAllocations = [], busSelections = []) => {
     if (!activeWorkspaceId) return;
@@ -2840,6 +3001,17 @@ function App() {
         applying={fleetReconciliationModal.applying}
         onApply={applyFleetReconciliationProposal}
         onClose={() => setFleetReconciliationModal({ open: false, items: [], companyMix: null, dayLabel: '', scopeLabel: '', scopeVehicleCount: 0, scopeMode: 'company', busId: null, applying: false })}
+      />
+      <FleetScopeChoiceModal
+        open={fleetScopeChoiceModal.open}
+        workspaceCompany={Array.isArray(fleetCompanies)
+          ? fleetCompanies.find((company) => String(company.id) === String(activeWorkspaceDetail?.company_id || activeWorkspaceSummary?.company_id || ''))
+          : null}
+        uteOptions={uteOptions}
+        applying={fleetScopeChoiceModal.applying}
+        onChooseCompany={() => openFleetReconciliationForScope({ scopeMode: 'company', busId: fleetScopeChoiceModal.busId })}
+        onChooseUte={() => openFleetReconciliationForScope({ scopeMode: 'ute', busId: fleetScopeChoiceModal.busId })}
+        onClose={() => setFleetScopeChoiceModal({ open: false, busId: null, applying: false })}
       />
     </Layout>
   );
