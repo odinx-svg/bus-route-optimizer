@@ -328,10 +328,19 @@ class FleetReconciliationCompanyAllocation(BaseModel):
     count: int = Field(default=0, ge=0)
 
 
+class FleetReconciliationBusSelection(BaseModel):
+    day: Optional[str] = None
+    bus_id: str = Field(..., min_length=1, max_length=96)
+    company_id: Optional[str] = None
+    vehicle_id: Optional[str] = None
+    excluded_vehicle_ids: List[str] = Field(default_factory=list)
+
+
 class FleetReconciliationApplyRequest(BaseModel):
     day: Optional[str] = None
     bus_ids: List[str] = Field(default_factory=list)
     company_allocations: List[FleetReconciliationCompanyAllocation] = Field(default_factory=list)
+    bus_selections: List[FleetReconciliationBusSelection] = Field(default_factory=list)
     checkpoint_name: Optional[str] = None
 
 
@@ -381,6 +390,11 @@ class WorkspaceCreateRequest(BaseModel):
 class WorkspaceRenameRequest(BaseModel):
     """Rename workspace request."""
     name: str = Field(..., min_length=1, max_length=120)
+
+
+class WorkspaceCompanyUpdateRequest(BaseModel):
+    """Change primary company used by company-scope workspaces."""
+    company_id: str = Field(..., min_length=1, max_length=64)
 
 
 class WorkspaceDeleteRequest(BaseModel):

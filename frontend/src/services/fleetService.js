@@ -18,6 +18,14 @@ export const fetchFleetVehicles = async () => {
   return response.json();
 };
 
+export const listFleetCompanies = async () => {
+  const response = await fetch(`${API_URL}/api/fleet/companies`);
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+  return response.json();
+};
+
 export const createFleetVehicle = async (payload) => {
   const response = await fetch(`${API_URL}/api/fleet/vehicles`, {
     method: 'POST',

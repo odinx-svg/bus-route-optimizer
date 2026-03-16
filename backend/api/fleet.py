@@ -92,6 +92,15 @@ class FleetSummary(BaseModel):
     avg_seats_max: float
 
 
+class CompanyFleetSummaryResponse(BaseModel):
+    id: str
+    name: str
+    is_default: bool = False
+    vehicle_count: int = 0
+    active_vehicle_count: int = 0
+    total_seats_max: int = 0
+
+
 class FleetListResponse(BaseModel):
     vehicles: List[FleetVehicleResponse]
     summary: FleetSummary
@@ -268,6 +277,34 @@ async def list_vehicles(
     vehicles_raw = fleet_repository.list_vehicles(company_id=company_id, company_ids=company_ids_list or None)
     vehicles = [_to_response(v) for v in vehicles_raw]
     return FleetListResponse(vehicles=vehicles, summary=_build_summary(vehicles))
+
+
+@router.get("/companies", response_model=List[CompanyFleetSummaryResponse])
+async def list_fleet_companies(active_only: bool = Query(default=True)) -> List[CompanyFleetSummaryResponse]:
+    _require_db()
+    db = SessionLocal()
+    try:
+        companies = db_crud.list_companies(db, active_only=active_only)
+        rows: List[CompanyFleetSummaryResponse] = []
+        for company in companies:
+            vehicles = fleet_repository.list_vehicles(company_id=str(company.id))
+            active_vehicles = [
+                vehicle for vehicle in vehicles
+                if str(vehicle.get("status", "active") or "active").strip().lower() == "active"
+            ]
+            rows.append(
+                CompanyFleetSummaryResponse(
+                    id=str(company.id),
+                    name=str(company.name or ""),
+                    is_default=bool(company.is_default),
+                    vehicle_count=len(vehicles),
+                    active_vehicle_count=len(active_vehicles),
+                    total_seats_max=sum(int(vehicle.get("seats_max", 0) or 0) for vehicle in active_vehicles),
+                )
+            )
+        return rows
+    finally:
+        db.close()
 
 
 @router.get("/vehicles/{vehicle_id}", response_model=FleetVehicleResponse)

@@ -77,6 +77,15 @@ export async function renameWorkspace(workspaceId, name) {
   return parseResponse(response);
 }
 
+export async function updateWorkspaceCompany(workspaceId, companyId) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/company`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ company_id: companyId }),
+  });
+  return parseResponse(response);
+}
+
 export async function archiveWorkspace(workspaceId) {
   const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/archive`, {
     method: 'POST',

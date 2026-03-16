@@ -263,7 +263,7 @@ def _build_virtual_reconciliation_report(
                     }
                 )
             suggestions.sort(key=lambda row: (int(row.get("overflow", 0)), int(row.get("seats_max", 0)), str(row.get("vehicle_code", ""))))
-            top_suggestions = suggestions[:5]
+            top_suggestions = suggestions[:12]
 
             route_ids: List[str] = []
             for item in (bus.get("items", []) if isinstance(bus.get("items"), list) else []):

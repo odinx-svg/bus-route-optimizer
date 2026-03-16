@@ -23,6 +23,7 @@ from services.fleet_publication import (
     preview_workspace_publication,
     persist_publication_assignments,
 )
+from services.fleet_repository import FleetRepository
 from services.fleet_scope import resolve_workspace_fleet_scope
 from services.workspace_options import (
     DEFAULT_WORKSPACE_OPTIMIZATION_OPTIONS,
@@ -32,6 +33,7 @@ from services.workspace_options import (
 )
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
+fleet_repository = FleetRepository()
 
 
 def _safe_dict(value: Any) -> Dict[str, Any]:
@@ -326,12 +328,14 @@ def _reconciliation_key(day: Any, bus_id: Any) -> str:
 def _select_reconciliation_assignments(
     rows: List[Dict[str, Any]],
     company_targets: Optional[Dict[str, int]] = None,
+    bus_preferences: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     normalized_targets = {
         str(company_id or "unassigned"): max(0, int(count or 0))
         for company_id, count in (company_targets or {}).items()
     }
     remaining_targets = dict(normalized_targets)
+    normalized_preferences = bus_preferences if isinstance(bus_preferences, dict) else {}
     selected_windows: Dict[str, Dict[str, List[List[int]]]] = {}
     selected_assignments: Dict[str, Dict[str, Any]] = {}
     unresolved: List[Dict[str, Any]] = []
@@ -362,19 +366,69 @@ def _select_reconciliation_assignments(
             for existing_start, existing_end in vehicle_windows
         )
 
+    def _normalize_candidate_company(candidate: Dict[str, Any]) -> str:
+        return str(candidate.get("company_id") or "unassigned")
+
     for row in ordered_rows:
         suggestions = row.get("suggested_real_vehicles", []) if isinstance(row.get("suggested_real_vehicles"), list) else []
+        row_key = _reconciliation_key(row.get("day"), row.get("bus_id"))
+        preference = normalized_preferences.get(row_key, {}) if isinstance(normalized_preferences.get(row_key), dict) else {}
+        excluded_vehicle_ids = {
+            str(vehicle_id).strip()
+            for vehicle_id in (preference.get("excluded_vehicle_ids") or [])
+            if str(vehicle_id).strip()
+        }
+        preferred_vehicle_id = str(preference.get("vehicle_id") or "").strip()
+        preferred_company_id = str(preference.get("company_id") or "").strip()
+        if excluded_vehicle_ids:
+            suggestions = [
+                candidate
+                for candidate in suggestions
+                if str(candidate.get("vehicle_id") or "").strip() not in excluded_vehicle_ids
+            ]
         chosen: Optional[Dict[str, Any]] = None
+        if preferred_vehicle_id:
+            exact_match = next(
+                (
+                    candidate for candidate in suggestions
+                    if str(candidate.get("vehicle_id") or "").strip() == preferred_vehicle_id
+                ),
+                None,
+            )
+            if exact_match is not None and _candidate_available(row, exact_match):
+                chosen = exact_match
+            else:
+                unresolved.append(
+                    {
+                        "day": row.get("day"),
+                        "bus_id": row.get("bus_id"),
+                        "required_capacity": int(row.get("required_capacity", row.get("required_seats", 0)) or 0),
+                        "reason": "preferred_vehicle_unavailable",
+                        "preferred_vehicle_id": preferred_vehicle_id,
+                    }
+                )
+                continue
+        if chosen is None and preferred_company_id:
+            preferred_company_candidates = [
+                candidate
+                for candidate in suggestions
+                if _normalize_candidate_company(candidate) == preferred_company_id
+            ]
+            for candidate in preferred_company_candidates:
+                if _candidate_available(row, candidate):
+                    chosen = candidate
+                    break
         if remaining_targets:
             prioritized = [
                 candidate
                 for candidate in suggestions
-                if remaining_targets.get(str(candidate.get("company_id") or "unassigned"), 0) > 0
+                if remaining_targets.get(_normalize_candidate_company(candidate), 0) > 0
             ]
-            for candidate in prioritized:
-                if _candidate_available(row, candidate):
-                    chosen = candidate
-                    break
+            if chosen is None:
+                for candidate in prioritized:
+                    if _candidate_available(row, candidate):
+                        chosen = candidate
+                        break
         if chosen is None:
             for candidate in suggestions:
                 if _candidate_available(row, candidate):
@@ -391,8 +445,7 @@ def _select_reconciliation_assignments(
             )
             continue
 
-        key = _reconciliation_key(row.get("day"), row.get("bus_id"))
-        selected_assignments[key] = chosen
+        selected_assignments[row_key] = chosen
         vehicle_id = str(chosen.get("vehicle_id") or "").strip()
         day = str(row.get("day") or "").strip()
         time_window = row.get("time_window", {}) if isinstance(row.get("time_window"), dict) else {}
@@ -401,7 +454,7 @@ def _select_reconciliation_assignments(
         if end_minute <= start_minute:
             end_minute = start_minute + 1
         selected_windows.setdefault(vehicle_id, {}).setdefault(day, []).append([start_minute, end_minute])
-        company_key = str(chosen.get("company_id") or "unassigned")
+        company_key = _normalize_candidate_company(chosen)
         if remaining_targets.get(company_key, 0) > 0:
             remaining_targets[company_key] -= 1
 
@@ -752,6 +805,8 @@ async def get_workspace_fleet_preview(
             str(cid) for cid in (scope.get("scope_company_ids") or [])
             if str(cid).strip()
         ]
+        scope_vehicle_count = len(fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids))
+        scope_company_names = scope.get("scope_company_names") if isinstance(scope.get("scope_company_names"), dict) else {}
         preview = preview_workspace_publication(
             db,
             company_id=company_id,
@@ -770,6 +825,8 @@ async def get_workspace_fleet_preview(
                 "scope_mode": scope.get("scope_mode"),
                 "scope_label": scope_label,
                 "scope_company_ids": scope_company_ids,
+                "scope_company_names": scope_company_names,
+                "scope_vehicle_count": scope_vehicle_count,
                 "ute_id": scope.get("ute_id"),
                 "ute_name": scope.get("ute_name"),
                 "day": day,
@@ -792,6 +849,8 @@ async def get_workspace_fleet_preview(
             "scope_mode": scope.get("scope_mode"),
             "scope_label": scope_label,
             "scope_company_ids": scope_company_ids,
+            "scope_company_names": scope_company_names,
+            "scope_vehicle_count": scope_vehicle_count,
             "ute_id": scope.get("ute_id"),
             "ute_name": scope.get("ute_name"),
             "blocked": bool(preview.get("blocked", False)),
@@ -841,6 +900,8 @@ async def get_workspace_fleet_reconciliation(
             str(cid) for cid in (scope.get("scope_company_ids") or [])
             if str(cid).strip()
         ]
+        scope_vehicle_count = len(fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids))
+        scope_company_names = scope.get("scope_company_names") if isinstance(scope.get("scope_company_names"), dict) else {}
         preview = preview_workspace_publication(
             db,
             company_id=company_id,
@@ -857,6 +918,8 @@ async def get_workspace_fleet_reconciliation(
             "scope_mode": scope.get("scope_mode"),
             "scope_label": _build_scope_label(scope.get("scope_mode"), scope.get("ute_name")),
             "scope_company_ids": scope_company_ids,
+            "scope_company_names": scope_company_names,
+            "scope_vehicle_count": scope_vehicle_count,
             "ute_id": scope.get("ute_id"),
             "ute_name": scope.get("ute_name"),
             "virtual_publish_policy": virtual_policy,
@@ -910,6 +973,8 @@ async def apply_workspace_fleet_reconciliation(
             str(cid) for cid in (scope.get("scope_company_ids") or [])
             if str(cid).strip()
         ]
+        scope_vehicle_count = len(fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids))
+        scope_company_names = scope.get("scope_company_names") if isinstance(scope.get("scope_company_names"), dict) else {}
 
         preview = preview_workspace_publication(
             db,
@@ -949,7 +1014,19 @@ async def apply_workspace_fleet_reconciliation(
             for row in (payload.company_allocations or [])
             if int(row.count or 0) > 0
         }
-        applied = _select_reconciliation_assignments(target_rows, company_targets)
+        bus_preferences: Dict[str, Dict[str, Any]] = {}
+        for selection in (payload.bus_selections or []):
+            key = _reconciliation_key(selection.day or requested_day, selection.bus_id)
+            bus_preferences[key] = {
+                "company_id": str(selection.company_id or "").strip() or None,
+                "vehicle_id": str(selection.vehicle_id or "").strip() or None,
+                "excluded_vehicle_ids": [
+                    str(vehicle_id).strip()
+                    for vehicle_id in (selection.excluded_vehicle_ids or [])
+                    if str(vehicle_id).strip()
+                ],
+            }
+        applied = _select_reconciliation_assignments(target_rows, company_targets, bus_preferences)
         selected_assignments = applied.get("selected_assignments", {}) if isinstance(applied.get("selected_assignments"), dict) else {}
         if not selected_assignments:
             raise HTTPException(
@@ -974,6 +1051,8 @@ async def apply_workspace_fleet_reconciliation(
             "company_id": company_id,
             "scope_mode": scope.get("scope_mode"),
             "scope_company_ids": scope_company_ids,
+            "scope_company_names": scope_company_names,
+            "scope_vehicle_count": scope_vehicle_count,
             "ute_id": scope.get("ute_id"),
             "ute_name": scope.get("ute_name"),
             "real_assigned": int(updated_preview.get("real_assigned", 0)),
@@ -1067,6 +1146,7 @@ async def publish_workspace(
             str(cid) for cid in (scope.get("scope_company_ids") or [])
             if str(cid).strip()
         ]
+        scope_vehicle_count = len(fleet_repository.list_active_profiles(company_id=company_id, company_ids=scope_company_ids))
         publish_payload = _build_publish_payload(workspace, payload)
         normalized_schedule = db_crud.normalize_schedule_by_day(publish_payload.schedule_by_day or {})
         preview = preview_workspace_publication(
@@ -1085,6 +1165,8 @@ async def publish_workspace(
                         "company_id": company_id,
                         "scope_mode": scope.get("scope_mode"),
                         "scope_company_ids": scope_company_ids,
+                        "scope_label": _build_scope_label(scope.get("scope_mode"), scope.get("ute_name")),
+                        "scope_vehicle_count": scope_vehicle_count,
                         "ute_id": scope.get("ute_id"),
                         "ute_name": scope.get("ute_name"),
                         "real_assigned": int(preview.get("real_assigned", 0)),
@@ -1106,6 +1188,8 @@ async def publish_workspace(
                         "company_id": company_id,
                         "scope_mode": scope.get("scope_mode"),
                         "scope_company_ids": scope_company_ids,
+                        "scope_label": _build_scope_label(scope.get("scope_mode"), scope.get("ute_name")),
+                        "scope_vehicle_count": scope_vehicle_count,
                         "ute_id": scope.get("ute_id"),
                         "ute_name": scope.get("ute_name"),
                         "real_assigned": int(preview.get("real_assigned", 0)),
@@ -1191,6 +1275,35 @@ async def rename_workspace(
         if hydrated is None:
             raise HTTPException(status_code=500, detail="Workspace serialization failed")
         return _to_workspace_response(hydrated)
+    finally:
+        db.close()
+
+
+@router.post("/{workspace_id}/company", response_model=schemas.WorkspaceDetailResponse)
+async def update_workspace_company(
+    workspace_id: str,
+    payload: schemas.WorkspaceCompanyUpdateRequest = Body(...),
+) -> schemas.WorkspaceDetailResponse:
+    """Update the primary company used by company-scope planning/publish flows."""
+    if not is_database_available() or SessionLocal is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    _ensure_tables_ready()
+
+    db = SessionLocal()
+    try:
+        workspace = db_crud.get_workspace(db, workspace_id)
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        company = db_crud.get_company(db, str(payload.company_id).strip())
+        if company is None:
+            raise HTTPException(status_code=404, detail="Empresa no encontrada")
+        workspace.company_id = str(company.id)
+        workspace.updated_at = datetime.utcnow()
+        db.commit()
+        hydrated = db_crud.get_workspace(db, workspace_id)
+        if hydrated is None:
+            raise HTTPException(status_code=500, detail="Workspace serialization failed")
+        return _to_workspace_detail_response(hydrated)
     finally:
         db.close()
 

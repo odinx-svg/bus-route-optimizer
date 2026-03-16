@@ -7,7 +7,7 @@ import OptimizationProgress from './components/OptimizationProgress';
 import StudioErrorBoundary from './components/StudioErrorBoundary';
 import ControlHubPage from './pages/ControlHubPage';
 import FleetPage from './pages/FleetPage';
-import { listUTEs } from './services/fleetService';
+import { listFleetCompanies, listUTEs } from './services/fleetService';
 import { notifications } from './services/notifications';
 import { clearGeometryCache } from './services/RouteService';
 import { buildRouteCapacityMap, getItemCapacityNeeded } from './utils/capacity';
@@ -29,6 +29,7 @@ import {
   saveWorkspaceVersion,
   setWorkspaceOptimizationOptions,
   setLastOpenWorkspace,
+  updateWorkspaceCompany,
 } from './services/workspaceService';
 import { useWorkspaceStudioStore } from './stores/workspaceStudioStore';
 import {
@@ -333,6 +334,10 @@ function LoadOptionsModal({
   title = 'Reglas de optimizacion',
   initialValue = DEFAULT_OPTIMIZATION_OPTIONS,
   uteOptions = [],
+  workspaceCompanies = [],
+  workspaceCompanyId = null,
+  workspaceCompanyChanging = false,
+  onWorkspaceCompanyChange = null,
   onCancel,
   onSave,
 }) {
@@ -421,6 +426,37 @@ function LoadOptionsModal({
           <button type="button" onClick={() => applyPreset('efficient')} className="rounded-full border border-emerald-500/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-emerald-100 hover:bg-emerald-500/10">
             Mas eficiencia
           </button>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-[#2a4057] bg-[#0a1324] px-3 py-3">
+          <p className="text-[11px] uppercase tracking-[0.1em] text-cyan-300">Empresa principal del workspace</p>
+          <div className="mt-2 grid gap-3 md:grid-cols-[1.4fr_0.8fr]">
+            <label className="text-[12px] text-slate-200">
+              Empresa usada cuando el ambito esta en modo `Empresa`
+              <select
+                value={workspaceCompanyId || ''}
+                onChange={(event) => onWorkspaceCompanyChange?.(event.target.value || null)}
+                disabled={workspaceCompanyChanging || workspaceCompanies.length === 0}
+                className="mt-1 w-full rounded border border-[#35506a] bg-[#09101d] px-2 py-1.5 text-[12px] text-white disabled:opacity-60"
+              >
+                <option value="">Selecciona empresa</option>
+                {workspaceCompanies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {company.name} ({company.active_vehicle_count || 0} buses activos)
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-slate-400">
+                Si aqui apuntas a una empresa sin buses, la asignacion real no encontrara candidatos.
+              </p>
+            </label>
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-slate-300">
+              <p className="uppercase tracking-[0.08em] text-slate-500">Consejo</p>
+              <p className="mt-2 leading-5">
+                Si vas a trabajar con socios, cambia el ambito a `UTE`. Si trabajas solo con una empresa, asegurate de elegir aqui la que tenga la flota cargada.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -690,6 +726,7 @@ function PlanningOverviewBar({
   onOpenReconciliation,
   onOpenRules,
   optimizationOptions = null,
+  workspaceCompanies = [],
 }) {
   if (!workspace) return null;
 
@@ -706,6 +743,14 @@ function PlanningOverviewBar({
   const routeRulesCount = Array.isArray(optimizationOptions?.route_load_constraints)
     ? optimizationOptions.route_load_constraints.filter((row) => row?.enabled !== false).length
     : 0;
+  const currentCompany = Array.isArray(workspaceCompanies)
+    ? workspaceCompanies.find((company) => String(company.id) === String(workspace?.company_id || ''))
+    : null;
+  const companyScopeWithoutFleet = (
+    String(optimizationOptions?.fleet_scope_mode || 'company') !== 'ute'
+    && currentCompany
+    && Number(currentCompany.active_vehicle_count || 0) === 0
+  );
   const primaryActionLabel = fleetVirtual > 0 ? 'Reconciliar flota' : 'Abrir reglas';
   const primaryActionHandler = fleetVirtual > 0 ? onOpenReconciliation : onOpenRules;
 
@@ -778,6 +823,11 @@ function PlanningOverviewBar({
         <div className="mt-3 rounded-xl border border-white/10 bg-[#09111b] p-3 space-y-3">
           {blockingText ? (
             <p className="text-[12px] text-amber-100">{blockingText}</p>
+          ) : null}
+          {companyScopeWithoutFleet ? (
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
+              La empresa principal actual del workspace es <span className="font-semibold">{currentCompany?.name}</span> y tiene 0 buses activos. Cambia la empresa principal o usa modo UTE para que la flota real aparezca en la asignacion.
+            </div>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -912,6 +962,8 @@ function FleetReconciliationModal({
   companyMix = null,
   dayLabel = '',
   scopeLabel = '',
+  scopeVehicleCount = 0,
+  scopeMode = 'company',
   busId = null,
   applying = false,
   onApply = null,
@@ -930,6 +982,9 @@ function FleetReconciliationModal({
     : 'Asignacion recomendada de buses reales';
   const [allocationByCompany, setAllocationByCompany] = useState({});
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [preferredCompanyByBus, setPreferredCompanyByBus] = useState({});
+  const [selectedVehicleByBus, setSelectedVehicleByBus] = useState({});
+  const [excludedVehicleIdsByBus, setExcludedVehicleIdsByBus] = useState({});
 
   useEffect(() => {
     if (!open) return;
@@ -939,8 +994,11 @@ function FleetReconciliationModal({
       nextState[key] = Number(company?.recommended_count || 0);
     });
     setAllocationByCompany(nextState);
-    setDetailsOpen(false);
-  }, [open, recommendedCompanies]);
+    setPreferredCompanyByBus({});
+    setSelectedVehicleByBus({});
+    setExcludedVehicleIdsByBus({});
+    setDetailsOpen(Boolean(busId));
+  }, [busId, open, recommendedCompanies]);
 
   if (!open) return null;
 
@@ -955,13 +1013,76 @@ function FleetReconciliationModal({
       [normalizedKey]: Number.isFinite(parsed) ? Math.max(0, parsed) : 0,
     }));
   };
+  const handlePreferredCompanyChange = (rowKey, companyId) => {
+    setPreferredCompanyByBus((prev) => ({
+      ...prev,
+      [rowKey]: companyId || '',
+    }));
+    setSelectedVehicleByBus((prev) => ({
+      ...prev,
+      [rowKey]: '',
+    }));
+  };
+  const handleVehicleSelectionChange = (rowKey, vehicleId, candidates = []) => {
+    const normalizedVehicleId = String(vehicleId || '').trim();
+    setSelectedVehicleByBus((prev) => ({
+      ...prev,
+      [rowKey]: normalizedVehicleId,
+    }));
+    if (!normalizedVehicleId) return;
+    const selectedCandidate = (Array.isArray(candidates) ? candidates : []).find(
+      (candidate) => String(candidate?.vehicle_id || '') === normalizedVehicleId
+    );
+    if (selectedCandidate?.company_id) {
+      setPreferredCompanyByBus((prev) => ({
+        ...prev,
+        [rowKey]: String(selectedCandidate.company_id),
+      }));
+    }
+  };
+  const handleToggleExcludedVehicle = (rowKey, vehicleId) => {
+    const normalizedVehicleId = String(vehicleId || '').trim();
+    if (!normalizedVehicleId) return;
+    setExcludedVehicleIdsByBus((prev) => {
+      const current = Array.isArray(prev[rowKey]) ? prev[rowKey] : [];
+      const exists = current.includes(normalizedVehicleId);
+      const next = exists
+        ? current.filter((value) => value !== normalizedVehicleId)
+        : [...current, normalizedVehicleId];
+      return {
+        ...prev,
+        [rowKey]: next,
+      };
+    });
+    setSelectedVehicleByBus((prev) => (
+      String(prev[rowKey] || '') === normalizedVehicleId
+        ? { ...prev, [rowKey]: '' }
+        : prev
+    ));
+  };
   const handleApply = () => {
     if (typeof onApply !== 'function') return;
     const payload = recommendedCompanies.map((company) => ({
       company_id: company?.company_id || null,
       count: Math.max(0, Number(allocationByCompany[String(company?.company_id || 'unassigned')] || 0)),
     }));
-    onApply(payload);
+    const busSelections = (Array.isArray(items) ? items : []).map((row) => {
+      const rowKey = `${row?.day || ''}::${row?.bus_id || ''}`;
+      const companyId = String(preferredCompanyByBus[rowKey] || '').trim();
+      const vehicleId = String(selectedVehicleByBus[rowKey] || '').trim();
+      const excludedVehicleIds = Array.isArray(excludedVehicleIdsByBus[rowKey])
+        ? excludedVehicleIdsByBus[rowKey].filter(Boolean)
+        : [];
+      if (!companyId && !vehicleId && excludedVehicleIds.length === 0) return null;
+      return {
+        day: row?.day || null,
+        bus_id: row?.bus_id || '',
+        company_id: companyId || null,
+        vehicle_id: vehicleId || null,
+        excluded_vehicle_ids: excludedVehicleIds,
+      };
+    }).filter(Boolean);
+    onApply(payload, busSelections);
   };
 
   return (
@@ -974,6 +1095,11 @@ function FleetReconciliationModal({
             ? 'Este bus provisional necesita una propuesta de empresa y un candidato real para cerrar la operacion.'
             : `La optimizacion necesita ${totalPendingBuses} buses reales${dayLabel ? ` para ${dayLabel.toLowerCase()}` : ''}. Aqui tienes una propuesta inicial por empresa${scopeLabel ? ` dentro de ${scopeLabel}` : ''}.`}
         </p>
+        {scopeMode === 'company' && Number(scopeVehicleCount || 0) === 0 && (
+          <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
+            Esta optimizacion esta en modo Empresa, pero la empresa principal actual no tiene buses activos dentro del ambito usado. Cambia la empresa principal del workspace o pasa a modo UTE.
+          </div>
+        )}
         <div className="mt-4 space-y-3">
           <section className="rounded-xl border border-[#2a4057] bg-[#0d1724] p-4">
             <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
@@ -1011,6 +1137,9 @@ function FleetReconciliationModal({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8ba3bd]">Reparto por empresa</p>
                 <p className="mt-1 text-[12px] text-slate-400">
                   Ajusta aqui de que empresa quieres sacar los buses reales. El sistema intentara respetar este reparto.
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Si fijas una matricula concreta en el detalle por bus, esa decision manda sobre este reparto.
                 </p>
               </div>
               <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300">
@@ -1090,6 +1219,26 @@ function FleetReconciliationModal({
                   const candidates = Array.isArray(row?.suggested_real_vehicles || row?.suggestions)
                     ? (row?.suggested_real_vehicles || row?.suggestions)
                     : [];
+                  const rowKey = `${row?.day || ''}::${row?.bus_id || ''}`;
+                  const preferredCompanyId = String(preferredCompanyByBus[rowKey] || '').trim();
+                  const excludedVehicleIds = Array.isArray(excludedVehicleIdsByBus[rowKey])
+                    ? excludedVehicleIdsByBus[rowKey]
+                    : [];
+                  const companyOptions = Array.from(new Map(
+                    candidates.map((candidate) => [
+                      String(candidate?.company_id || 'unassigned'),
+                      {
+                        company_id: candidate?.company_id || null,
+                        company_name: candidate?.company_name || 'Empresa sin identificar',
+                      },
+                    ])
+                  ).values());
+                  const filteredCandidates = candidates.filter((candidate) => {
+                    const candidateVehicleId = String(candidate?.vehicle_id || '');
+                    if (excludedVehicleIds.includes(candidateVehicleId)) return false;
+                    if (preferredCompanyId && String(candidate?.company_id || 'unassigned') !== preferredCompanyId) return false;
+                    return true;
+                  });
                   const bestCandidate = candidates[0] || null;
                   return (
                     <div key={`${row?.day || 'D'}-${row?.bus_id || 'BUS'}-${idx}`} className="rounded-xl border border-[#2a4057] bg-[#0a1320] p-3">
@@ -1115,6 +1264,63 @@ function FleetReconciliationModal({
                           ? candidates.slice(0, 3).map((candidate) => `${candidate.vehicle_code || candidate.vehicle_id} / ${candidate.company_name || 'Empresa'} (${candidate.seats_max}P)`).join(', ')
                           : 'Sin sugerencias libres'}
                       </p>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <label className="text-[11px] text-slate-300">
+                          Empresa preferida para este provisional
+                          <select
+                            value={preferredCompanyId}
+                            onChange={(event) => handlePreferredCompanyChange(rowKey, event.target.value)}
+                            className="mt-1 w-full rounded-lg border border-[#2a4057] bg-[#08111b] px-3 py-2 text-[12px] text-white outline-none focus:border-cyan-400"
+                          >
+                            <option value="">Automatico segun recomendacion</option>
+                            {companyOptions.map((company) => (
+                              <option key={`${rowKey}-${company.company_id || 'unassigned'}`} value={company.company_id || 'unassigned'}>
+                                {company.company_name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-[11px] text-slate-300">
+                          Bus real exacto
+                          <select
+                            value={String(selectedVehicleByBus[rowKey] || '')}
+                            onChange={(event) => handleVehicleSelectionChange(rowKey, event.target.value, filteredCandidates)}
+                            className="mt-1 w-full rounded-lg border border-[#2a4057] bg-[#08111b] px-3 py-2 text-[12px] text-white outline-none focus:border-cyan-400"
+                          >
+                            <option value="">Que el sistema lo elija</option>
+                            {filteredCandidates.map((candidate) => (
+                              <option key={`${rowKey}-${candidate.vehicle_id}`} value={candidate.vehicle_id}>
+                                {(candidate.vehicle_code || candidate.vehicle_id)} · {candidate.company_name || 'Empresa'} · {candidate.seats_max}P
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      {candidates.length > 0 && (
+                        <div className="mt-4">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Candidatos visibles</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {candidates.map((candidate) => {
+                              const candidateVehicleId = String(candidate?.vehicle_id || '');
+                              const blocked = excludedVehicleIds.includes(candidateVehicleId);
+                              return (
+                                <button
+                                  key={`${rowKey}-${candidateVehicleId}-toggle`}
+                                  type="button"
+                                  onClick={() => handleToggleExcludedVehicle(rowKey, candidateVehicleId)}
+                                  className={`rounded-full border px-2.5 py-1 text-[10px] transition ${
+                                    blocked
+                                      ? 'border-rose-500/30 bg-rose-500/10 text-rose-100'
+                                      : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
+                                  }`}
+                                >
+                                  {blocked ? 'Descartado' : 'Disponible'}: {candidate.vehicle_code || candidate.vehicle_id}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1180,6 +1386,8 @@ function App() {
   const [createFlowMode, setCreateFlowMode] = useState(false);
   const [optimizationOptionsByWorkspace, setOptimizationOptionsByWorkspace] = useState({});
   const [uteOptions, setUteOptions] = useState([]);
+  const [fleetCompanies, setFleetCompanies] = useState([]);
+  const [workspaceCompanyChanging, setWorkspaceCompanyChanging] = useState(false);
   const [activeOptimizationOptions, setActiveOptimizationOptions] = useState(
     normalizeOptimizationOptions(DEFAULT_OPTIMIZATION_OPTIONS)
   );
@@ -1203,6 +1411,8 @@ function App() {
     companyMix: null,
     dayLabel: '',
     scopeLabel: '',
+    scopeVehicleCount: 0,
+    scopeMode: 'company',
     busId: null,
     applying: false,
   });
@@ -1298,6 +1508,18 @@ function App() {
     }
   }, []);
 
+  const refreshFleetCompanies = useCallback(async () => {
+    try {
+      const items = await listFleetCompanies();
+      const normalized = Array.isArray(items) ? items : [];
+      setFleetCompanies(normalized);
+      return normalized;
+    } catch {
+      setFleetCompanies([]);
+      return [];
+    }
+  }, []);
+
   const openLoadOptionsModal = useCallback(async ({ workspaceId = null, workspaceName = '' } = {}) => {
     const normalizedName = String(workspaceName || '').trim();
     const title = workspaceId
@@ -1307,13 +1529,13 @@ function App() {
       const loaded = await fetchAndStoreWorkspaceOptions(workspaceId);
       setActiveOptimizationOptions(loaded);
     }
-    await refreshUTEOptions();
+    await Promise.all([refreshUTEOptions(), refreshFleetCompanies()]);
     setLoadOptionsModal({
       open: true,
       workspaceId: workspaceId || null,
       title,
     });
-  }, [fetchAndStoreWorkspaceOptions, refreshUTEOptions]);
+  }, [fetchAndStoreWorkspaceOptions, refreshFleetCompanies, refreshUTEOptions]);
 
   const closeLoadOptionsModal = useCallback(() => {
     setLoadOptionsModal({ open: false, workspaceId: null, title: 'Reglas de optimizacion' });
@@ -1350,12 +1572,37 @@ function App() {
     }
   }, [activeWorkspaceId, closeLoadOptionsModal, loadOptionsModal.workspaceId, pendingOptimizationRequest]);
 
+  const handleWorkspaceCompanyChange = useCallback(async (companyId) => {
+    const workspaceId = loadOptionsModal.workspaceId || activeWorkspaceId;
+    const normalizedCompanyId = String(companyId || '').trim();
+    if (!workspaceId || !normalizedCompanyId) return;
+    try {
+      setWorkspaceCompanyChanging(true);
+      const detail = await updateWorkspaceCompany(workspaceId, normalizedCompanyId);
+      setActiveWorkspaceDetail(detail);
+      setWorkspaces((prev) => prev.map((item) => (
+        String(item.id) === String(workspaceId)
+          ? { ...item, company_id: detail.company_id, scope_summary: detail.scope_summary, readiness_summary: detail.readiness_summary }
+          : item
+      )));
+      notifications.success('Empresa principal actualizada', 'La optimizacion ya usara esa empresa en modo Empresa');
+    } catch (error) {
+      notifications.error('No se pudo cambiar la empresa', error?.message || 'Error actualizando el workspace');
+    } finally {
+      setWorkspaceCompanyChanging(false);
+    }
+  }, [activeWorkspaceId, loadOptionsModal.workspaceId]);
+
   const refreshWorkspaces = useCallback(async () => {
     const data = await listWorkspaces().catch(() => ({ items: [] }));
     const items = Array.isArray(data?.items) ? data.items : [];
     setWorkspaces(items);
     return items;
   }, []);
+
+  useEffect(() => {
+    refreshFleetCompanies().catch(() => {});
+  }, [refreshFleetCompanies]);
 
   const hydrateWorkspaceDetail = useCallback((detail) => {
     const workingVersion = detail?.working_version || detail?.published_version || null;
@@ -2009,6 +2256,8 @@ function App() {
               companyMix: fleetPreview?.reconciliation?.company_mix || null,
               dayLabel: DAY_LABELS[payload.day || activeDay] || payload.day || activeDay,
               scopeLabel: fleetPreview?.scope_label || '',
+              scopeVehicleCount: Number(fleetPreview?.scope_vehicle_count || 0),
+              scopeMode: String(fleetPreview?.scope_mode || 'company'),
               busId: null,
               applying: false,
             });
@@ -2033,6 +2282,8 @@ function App() {
                 companyMix: publication?.reconciliation?.company_mix || null,
                 dayLabel: DAY_LABELS[payload.day || activeDay] || payload.day || activeDay,
                 scopeLabel: publication?.scope_label || '',
+                scopeVehicleCount: Number(publication?.scope_vehicle_count || 0),
+                scopeMode: String(publication?.scope_mode || 'company'),
                 busId: null,
                 applying: false,
               });
@@ -2214,6 +2465,8 @@ function App() {
         companyMix: modalCompanyMix,
         dayLabel: DAY_LABELS[activeDay] || activeDay,
         scopeLabel: data?.scope_label || '',
+        scopeVehicleCount: Number(data?.scope_vehicle_count || 0),
+        scopeMode: String(data?.scope_mode || 'company'),
         busId: busId || null,
         applying: false,
       });
@@ -2222,7 +2475,7 @@ function App() {
     }
   }, [activeDay, activeWorkspaceId]);
 
-  const applyFleetReconciliationProposal = useCallback(async (companyAllocations = []) => {
+  const applyFleetReconciliationProposal = useCallback(async (companyAllocations = [], busSelections = []) => {
     if (!activeWorkspaceId) return;
     try {
       setFleetReconciliationModal((prev) => ({ ...prev, applying: true }));
@@ -2230,6 +2483,7 @@ function App() {
         day: activeDay,
         bus_ids: fleetReconciliationModal.busId ? [fleetReconciliationModal.busId] : [],
         company_allocations: Array.isArray(companyAllocations) ? companyAllocations : [],
+        bus_selections: Array.isArray(busSelections) ? busSelections : [],
       });
 
       if (result?.schedule_by_day && typeof result.schedule_by_day === 'object') {
@@ -2246,6 +2500,8 @@ function App() {
         companyMix: null,
         dayLabel: '',
         scopeLabel: '',
+        scopeVehicleCount: 0,
+        scopeMode: 'company',
         busId: null,
         applying: false,
       });
@@ -2423,6 +2679,7 @@ function App() {
                     workspaceName: activeWorkspaceSummary?.name || '',
                   })}
                   optimizationOptions={activeOptimizationOptions}
+                  workspaceCompanies={fleetCompanies}
                 />
                 <div className="flex-1 min-h-0">
                   <StudioErrorBoundary
@@ -2507,6 +2764,19 @@ function App() {
             : activeOptimizationOptions
         }
         uteOptions={uteOptions}
+        workspaceCompanies={fleetCompanies}
+        workspaceCompanyId={
+          loadOptionsModal.workspaceId
+            ? (
+                (String(activeWorkspaceDetail?.id || '') === String(loadOptionsModal.workspaceId)
+                  ? activeWorkspaceDetail?.company_id
+                  : workspaces.find((item) => String(item.id) === String(loadOptionsModal.workspaceId))?.company_id)
+                || ''
+              )
+            : ''
+        }
+        workspaceCompanyChanging={workspaceCompanyChanging}
+        onWorkspaceCompanyChange={handleWorkspaceCompanyChange}
         onCancel={closeLoadOptionsModal}
         onSave={handleSaveLoadOptions}
       />
@@ -2564,10 +2834,12 @@ function App() {
         companyMix={fleetReconciliationModal.companyMix}
         dayLabel={fleetReconciliationModal.dayLabel}
         scopeLabel={fleetReconciliationModal.scopeLabel}
+        scopeVehicleCount={fleetReconciliationModal.scopeVehicleCount}
+        scopeMode={fleetReconciliationModal.scopeMode}
         busId={fleetReconciliationModal.busId}
         applying={fleetReconciliationModal.applying}
         onApply={applyFleetReconciliationProposal}
-        onClose={() => setFleetReconciliationModal({ open: false, items: [], companyMix: null, dayLabel: '', scopeLabel: '', busId: null, applying: false })}
+        onClose={() => setFleetReconciliationModal({ open: false, items: [], companyMix: null, dayLabel: '', scopeLabel: '', scopeVehicleCount: 0, scopeMode: 'company', busId: null, applying: false })}
       />
     </Layout>
   );
