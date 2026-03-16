@@ -2621,8 +2621,9 @@ function App() {
 
   const openFleetReconciliationForScope = useCallback(async ({ scopeMode, busId = null }) => {
     if (!activeWorkspaceId) return;
+    const loadingToast = notifications.loading('Preparando reconciliacion de flota...');
     try {
-      setFleetScopeChoiceModal((prev) => ({ ...prev, applying: true }));
+      setFleetScopeChoiceModal({ open: false, busId: null, applying: false });
       const normalizedScopeMode = String(scopeMode || 'company') === 'ute' ? 'ute' : 'company';
       let availableUteOptions = Array.isArray(uteOptions) ? [...uteOptions] : [];
       if (
@@ -2637,6 +2638,9 @@ function App() {
           );
           availableUteOptions = [createdUte];
         }
+      }
+      if (normalizedScopeMode === 'ute' && !availableUteOptions[0]?.id) {
+        throw new Error('No se pudo preparar una UTE valida con las empresas cargadas');
       }
       let optionsToPersist = null;
       if (
@@ -2662,8 +2666,10 @@ function App() {
           [String(activeWorkspaceId)]: normalizedPersisted,
         }));
       }
-      setFleetScopeChoiceModal({ open: false, busId: null, applying: false });
-      const data = await getWorkspaceFleetReconciliation(activeWorkspaceId, activeDay).catch(() => null);
+      const data = await getWorkspaceFleetReconciliation(activeWorkspaceId, activeDay);
+      if (!data || typeof data !== 'object') {
+        throw new Error('La reconciliacion no devolvio datos validos');
+      }
       const dayItems = Array.isArray(data?.reconciliation_day?.items)
         ? data.reconciliation_day.items
         : (Array.isArray(data?.pending_assignments) ? data.pending_assignments : []);
@@ -2684,8 +2690,9 @@ function App() {
         applying: false,
       });
     } catch (error) {
-      setFleetScopeChoiceModal((prev) => ({ ...prev, applying: false }));
       notifications.error('No se pudo abrir la reconciliacion', error?.message || 'Error cargando sugerencias');
+    } finally {
+      notifications.dismiss(loadingToast);
     }
   }, [activeDay, activeOptimizationOptions, activeWorkspaceId, createWorkspaceFleetUte, uteOptions]);
 
