@@ -775,6 +775,7 @@ function PlanningOverviewBar({
   workspace = null,
   activeDay = 'L',
   stats = null,
+  scheduleByDay = null,
   onOpenReconciliation,
   onOpenRules,
   optimizationOptions = null,
@@ -788,8 +789,14 @@ function PlanningOverviewBar({
   const nextActionLabel = getNextActionLabel(workspace.next_recommended_action);
   const blockingText = getBlockingReasonText(workspace.blocking_reason);
   const stageItems = getPlanningStageLabels(workspace);
-  const fleetReal = workspace?.summary_metrics?.fleet_real_assigned ?? workspace?.summary_metrics?.fleet_assigned ?? 0;
-  const fleetVirtual = workspace?.pending_virtual_count ?? workspace?.summary_metrics?.fleet_virtual_created ?? 0;
+  const activeDaySchedule = Array.isArray(scheduleByDay?.[activeDay]?.schedule)
+    ? scheduleByDay[activeDay].schedule
+    : [];
+  const activeDayFleetReal = activeDaySchedule.filter((bus) => String(bus?.fleet_assignment_type || '').toLowerCase() === 'real').length;
+  const activeDayFleetVirtual = activeDaySchedule.filter((bus) => String(bus?.fleet_assignment_type || '').toLowerCase() !== 'real').length;
+  const fleetReal = activeDayFleetReal;
+  const fleetVirtual = activeDayFleetVirtual;
+  const weekFleetVirtual = Number(workspace?.pending_virtual_count ?? workspace?.summary_metrics?.fleet_virtual_created ?? 0);
   const scopeLabel = getScopeLabel(workspace.scope_summary);
   const hasConflict = Number(workspace?.conflict_count || 0) > 0;
   const routeRulesCount = Array.isArray(optimizationOptions?.route_load_constraints)
@@ -833,7 +840,7 @@ function PlanningOverviewBar({
               {stats?.routes ?? 0} rutas
             </span>
             <span className={`rounded-full border px-2.5 py-1 ${fleetVirtual > 0 ? 'border-amber-500/25 bg-amber-500/10 text-amber-100' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'}`}>
-              {fleetVirtual} provisionales
+              {fleetVirtual} provisionales hoy
             </span>
             {hasConflict ? (
               <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-100">
@@ -913,9 +920,9 @@ function PlanningOverviewBar({
           </div>
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
-            <PublicationStatusCard title="Flota real" value={fleetReal} tone="success" helper="Buses reales ya vinculados." compact />
+            <PublicationStatusCard title="Flota real hoy" value={fleetReal} tone="success" helper="Buses reales del dia activo." compact />
             <PublicationStatusCard title="Estado de publicacion" value={readiness.label} helper="Resumen del estado operativo actual." compact />
-            <PublicationStatusCard title="Buses provisionales pendientes" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={fleetVirtual > 0 ? 'Requieren asignacion real antes de publicar.' : 'No quedan pendientes.'} compact />
+            <PublicationStatusCard title="Provisionales hoy" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={weekFleetVirtual > fleetVirtual ? `Semana completa: ${weekFleetVirtual}` : (fleetVirtual > 0 ? 'Requieren asignacion real antes de publicar.' : 'No quedan pendientes.')} compact />
             <PublicationStatusCard title="Conflictos reales" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} helper={hasConflict ? 'Hay una colision real con otra publicacion.' : 'No hay bloqueos detectados.'} compact />
           </div>
 
@@ -1169,7 +1176,7 @@ function FleetReconciliationModal({
   return (
     <div className="fixed inset-0 z-[1265] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative w-full max-w-5xl rounded-xl border border-amber-500/35 bg-[#0b141f] p-4 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col rounded-xl border border-amber-500/35 bg-[#0b141f] p-4 shadow-2xl">
         <h3 className="text-[16px] font-semibold text-white">{modalTitle}</h3>
         <p className="mt-2 text-[12px] text-[#8ba3bd]">
           {busId
@@ -1181,7 +1188,7 @@ function FleetReconciliationModal({
             Esta optimizacion esta en modo Empresa, pero la empresa principal actual no tiene buses activos dentro del ambito usado. Cambia la empresa principal del workspace o pasa a modo UTE.
           </div>
         )}
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           <section className="rounded-xl border border-[#2a4057] bg-[#0d1724] p-4">
             <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
               <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
@@ -1437,7 +1444,7 @@ function FleetReconciliationModal({
             )}
           </section>
         </div>
-        <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
           <div className="text-[11px] text-slate-400">
             {totalPendingBuses > 0
               ? (
@@ -2988,6 +2995,7 @@ function App() {
                   workspace={activeWorkspaceSummary}
                   activeDay={activeDay}
                   stats={calculateStats()}
+                  scheduleByDay={scheduleByDay}
                   onOpenReconciliation={() => openFleetReconciliationCenter()}
                   onOpenRules={() => openLoadOptionsModal({
                     workspaceId: activeWorkspaceId,
