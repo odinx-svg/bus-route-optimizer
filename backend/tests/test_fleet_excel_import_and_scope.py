@@ -106,6 +106,45 @@ def test_commit_fleet_excel_import_creates_companies_vehicles_and_ute(monkeypatc
         db.close()
 
 
+def test_commit_fleet_excel_import_promotes_primary_company_when_default_is_empty(monkeypatch):
+    Session = _make_session_factory()
+    monkeypatch.setattr(fleet_repo_module, "SessionLocal", Session)
+    monkeypatch.setattr(fleet_repo_module, "is_database_available", lambda: True)
+
+    db = Session()
+    try:
+        default_company = crud.ensure_default_company(db)
+        workspace = crud.create_workspace(
+            db,
+            schemas.WorkspaceCreateRequest(
+                name="Workspace Legacy Default",
+                company_id=str(default_company.id),
+            ),
+        )
+        db.commit()
+
+        result = commit_fleet_excel_import(
+            db,
+            file_bytes=_build_excel_bytes(),
+            primary_sheet_name="AAV & COND'BUS",
+            ute_name="UTE Test",
+        )
+        db.commit()
+
+        hydrated_workspace = crud.get_workspace(db, str(workspace.id))
+        primary_company = crud.get_company(db, result["primary_company_id"])
+        default_company_after = crud.get_company(db, crud.DEFAULT_COMPANY_ID)
+
+        assert hydrated_workspace is not None
+        assert primary_company is not None
+        assert default_company_after is not None
+        assert str(hydrated_workspace.company_id) == str(primary_company.id)
+        assert bool(primary_company.is_default) is True
+        assert bool(default_company_after.is_default) is False
+    finally:
+        db.close()
+
+
 def test_resolve_workspace_fleet_scope_company_and_ute_modes():
     Session = _make_session_factory()
     db = Session()
@@ -158,4 +197,3 @@ def test_resolve_workspace_fleet_scope_company_and_ute_modes():
         assert fallback_scope.get("scope_fallback_reason") == "ute_not_found_or_inactive"
     finally:
         db.close()
-

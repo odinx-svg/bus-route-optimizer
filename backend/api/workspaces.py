@@ -262,6 +262,37 @@ def _workspace_company_id(db, workspace: OptimizationWorkspaceModel) -> str:
     return company_id
 
 
+def _repair_workspace_primary_company(db, workspace: OptimizationWorkspaceModel) -> OptimizationWorkspaceModel:
+    """
+    Repair legacy workspaces still bound to the placeholder default company.
+
+    If `company_main` has no active fleet and there is a single active UTE,
+    promote that UTE owner as the workspace primary company.
+    """
+    default_company = db_crud.ensure_default_company(db)
+    current_company_id = str(workspace.company_id or "").strip() or str(default_company.id)
+    if current_company_id != str(default_company.id):
+        return workspace
+
+    default_vehicle_count = len(fleet_repository.list_active_profiles(company_id=str(default_company.id)))
+    if default_vehicle_count > 0:
+        return workspace
+
+    active_utes = db_crud.list_utes(db, active_only=True)
+    if len(active_utes) != 1:
+        return workspace
+
+    owner_company_id = str(active_utes[0].owner_company_id or "").strip()
+    if not owner_company_id or owner_company_id == str(default_company.id):
+        return workspace
+
+    workspace.company_id = owner_company_id
+    workspace.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(workspace)
+    return workspace
+
+
 def _build_scope_label(scope_mode: Any, ute_name: Any = None) -> str:
     normalized_mode = str(scope_mode or "company").strip().lower()
     normalized_ute_name = str(ute_name or "").strip()
@@ -568,6 +599,7 @@ async def list_workspaces(
             city=city,
             updated_from=updated_from,
         )
+        workspaces = [_repair_workspace_primary_company(db, ws) for ws in workspaces]
         items = [_to_workspace_response(ws) for ws in workspaces]
         return schemas.WorkspaceListResponse(items=items, total=len(items))
     finally:
@@ -645,6 +677,7 @@ async def get_workspace_options(workspace_id: str) -> schemas.WorkspaceOptimizat
         workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
         options = get_workspace_optimization_options(db, workspace_id)
         return schemas.WorkspaceOptimizationOptions(**options)
     finally:
@@ -670,6 +703,7 @@ async def set_workspace_options(
         workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
         options = set_workspace_optimization_options(db, workspace_id, payload.model_dump())
         return schemas.WorkspaceOptimizationOptions(**options)
     finally:
@@ -688,6 +722,7 @@ async def get_workspace(workspace_id: str) -> schemas.WorkspaceDetailResponse:
         workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
         db_crud.set_app_meta(db, "last_open_workspace_id", workspace_id)
         return _to_workspace_detail_response(workspace)
     finally:
@@ -791,6 +826,7 @@ async def get_workspace_fleet_preview(
         workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
         working_version = workspace.working_version or workspace.published_version
         if working_version is None:
             raise HTTPException(status_code=409, detail="Workspace has no version to preview")
@@ -885,6 +921,7 @@ async def get_workspace_fleet_reconciliation(
         workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
         working_version = workspace.working_version or workspace.published_version
         if working_version is None:
             raise HTTPException(status_code=409, detail="Workspace has no version to reconcile")
@@ -958,6 +995,7 @@ async def apply_workspace_fleet_reconciliation(
         workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
         working_version = workspace.working_version or workspace.published_version
         if working_version is None:
             raise HTTPException(status_code=409, detail="Workspace has no version to reconcile")
@@ -1135,6 +1173,7 @@ async def publish_workspace(
         workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
 
         scope = resolve_workspace_fleet_scope(db, workspace)
         options = get_workspace_optimization_options(db, workspace_id)
@@ -1294,6 +1333,7 @@ async def update_workspace_company(
         workspace = db_crud.get_workspace(db, workspace_id)
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
         company = db_crud.get_company(db, str(payload.company_id).strip())
         if company is None:
             raise HTTPException(status_code=404, detail="Empresa no encontrada")

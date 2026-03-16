@@ -871,3 +871,48 @@ def test_update_workspace_company_changes_primary_company(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["company_id"] == "company_demo"
+
+
+def test_get_workspace_repairs_legacy_default_company_to_single_ute_owner(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+
+    db = Session()
+    try:
+        default_company = crud.ensure_default_company(db)
+        owner = crud.ensure_company(db, name="AAV & COND'BUS", preferred_id="company_aav")
+        partner = crud.ensure_company(db, name="AUTNA", preferred_id="company_autna")
+        workspace = crud.create_workspace(
+            db,
+            schemas.WorkspaceCreateRequest(
+                name="Workspace Legacy Scope",
+                company_id=str(default_company.id),
+            ),
+        )
+        crud.create_or_update_ute(
+            db,
+            ute_name="UTE AAV",
+            owner_company_id=str(owner.id),
+            member_company_ids=[str(owner.id), str(partner.id)],
+        )
+        db.add(
+            models.FleetVehicleModel(
+                id="veh-aav-1",
+                company_id=str(owner.id),
+                vehicle_code="B001",
+                plate="1111AAA",
+                seats_base=55,
+                seats_pmr=0,
+                seats_min=55,
+                seats_max=55,
+                status="active",
+            )
+        )
+        db.commit()
+        workspace_id = str(workspace.id)
+    finally:
+        db.close()
+
+    response = client.get(f"/api/workspaces/{workspace_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["company_id"] == "company_aav"

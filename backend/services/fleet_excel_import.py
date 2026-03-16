@@ -12,11 +12,13 @@ from __future__ import annotations
 import io
 import re
 import unicodedata
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from openpyxl import load_workbook
 
 from db import crud as db_crud
+from db import models as db_models
 from services.fleet_repository import FleetRepository
 
 
@@ -344,6 +346,45 @@ def commit_fleet_excel_import(
     if not primary_company_id:
         raise ValueError("No se pudo resolver la empresa principal")
 
+    default_company = db_crud.ensure_default_company(db)
+    default_company_id = str(default_company.id)
+    primary_company = db_crud.get_company(db, primary_company_id)
+    default_company_vehicle_count = db.query(db_models.FleetVehicleModel).filter(
+        db_models.FleetVehicleModel.company_id == default_company_id
+    ).count()
+    if (
+        primary_company is not None
+        and primary_company_id != default_company_id
+        and default_company_vehicle_count == 0
+    ):
+        db.query(db_models.CompanyModel).filter(
+                db_models.CompanyModel.id == default_company_id
+        ).update(
+            {
+                db_models.CompanyModel.is_default: False,
+                db_models.CompanyModel.updated_at: datetime.utcnow(),
+            },
+            synchronize_session=False,
+        )
+        db.query(db_models.CompanyModel).filter(
+            db_models.CompanyModel.id == primary_company_id
+        ).update(
+            {
+                db_models.CompanyModel.is_default: True,
+                db_models.CompanyModel.updated_at: datetime.utcnow(),
+            },
+            synchronize_session=False,
+        )
+        db.query(db_models.OptimizationWorkspaceModel).filter(
+            db_models.OptimizationWorkspaceModel.company_id == default_company_id
+        ).update(
+            {
+                db_models.OptimizationWorkspaceModel.company_id: primary_company_id,
+                db_models.OptimizationWorkspaceModel.updated_at: datetime.utcnow(),
+            },
+            synchronize_session=False,
+        )
+
     default_ute_name = f"UTE {str(primary_sheet.get('sheet_name', primary_sheet_name_clean)).strip()}"
     ute = db_crud.create_or_update_ute(
         db,
@@ -364,4 +405,3 @@ def commit_fleet_excel_import(
         "total_updated": sum(int(item["updated"]) for item in summary_by_company.values()),
         "total_invalid": sum(int(item["invalid"]) for item in summary_by_company.values()),
     }
-
