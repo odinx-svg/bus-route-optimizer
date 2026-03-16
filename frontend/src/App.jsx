@@ -1021,12 +1021,16 @@ function FleetReconciliationModal({
   onApply = null,
   onClose,
 }) {
-  const effectiveCompanyMix = companyMix && typeof companyMix === 'object'
-    ? companyMix
-    : buildCompanyMixFallback(items);
-  const recommendedCompanies = Array.isArray(effectiveCompanyMix?.recommended_companies)
-    ? effectiveCompanyMix.recommended_companies
-    : [];
+  const effectiveCompanyMix = useMemo(() => (
+    companyMix && typeof companyMix === 'object'
+      ? companyMix
+      : buildCompanyMixFallback(items)
+  ), [companyMix, items]);
+  const recommendedCompanies = useMemo(() => (
+    Array.isArray(effectiveCompanyMix?.recommended_companies)
+      ? effectiveCompanyMix.recommended_companies
+      : []
+  ), [effectiveCompanyMix]);
   const totalPendingBuses = Number(effectiveCompanyMix?.total_pending_buses || items.length || 0);
   const uncoveredBuses = Number(effectiveCompanyMix?.uncovered_buses || 0);
   const modalTitle = busId
