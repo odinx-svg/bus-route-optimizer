@@ -44,15 +44,12 @@ const Header = ({
   hasStudioAccess,
 }) => {
   return (
-    <header className="gt-header-gradient gt-border-b flex items-center px-4 py-2.5 flex-shrink-0 z-50 gap-3">
-      <div className="flex items-center gap-2.5 mr-1">
+    <header className="gt-header-gradient gt-border-b relative flex items-center justify-center px-4 py-2.5 flex-shrink-0 z-50">
+      <div className="absolute left-4 top-1/2 flex -translate-y-1/2 items-center gap-2.5">
         <div className="w-10 h-10 rounded-[14px] border border-cyan-400/20 bg-[#0a1a29] flex items-center justify-center overflow-hidden shadow-[0_12px_32px_rgba(5,18,30,0.35)]">
           <img src={tuttiSymbol} alt="TUTTI" className="w-full h-full object-cover" />
         </div>
-        <div className="flex flex-col leading-tight">
-          <span className="text-[12px] font-semibold text-gt-text tracking-[0.12em] uppercase data-mono">TUTTI</span>
-          <span className="text-[9px] text-cyan-200/70 font-medium tracking-[0.16em] uppercase">Operacion activa</span>
-        </div>
+        <span className="text-[12px] font-semibold text-gt-text tracking-[0.12em] uppercase data-mono">TUTTI</span>
       </div>
 
       <ViewTabs
@@ -60,8 +57,6 @@ const Header = ({
         setViewMode={setViewMode}
         hasStudioAccess={hasStudioAccess}
       />
-
-      <div className="flex-1" />
     </header>
   );
 };

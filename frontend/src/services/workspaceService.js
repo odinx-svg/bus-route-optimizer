@@ -155,3 +155,12 @@ export async function getWorkspaceFleetReconciliation(workspaceId, day = null) {
   const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/fleet-reconciliation${suffix}`);
   return parseResponse(response);
 }
+
+export async function applyWorkspaceFleetReconciliation(workspaceId, payload = {}) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/fleet-reconciliation/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse(response);
+}

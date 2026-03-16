@@ -111,7 +111,7 @@ def test_preview_workspace_publication_marks_blocked(monkeypatch):
             schedule_by_day,
             fleet_profiles=None,
             company_id=None,
-            company_ids=None,
+            scope_company_ids=None,
             binding_state="preview",
         ):
             bus = BusSchedule(
@@ -140,7 +140,7 @@ def test_preview_workspace_publication_marks_blocked(monkeypatch):
 
         monkeypatch.setattr(
             fleet_publication,
-            "assign_fleet_profiles_to_schedule_by_day",
+            "_assign_schedule_by_day_preserving_existing",
             _fake_assign,
         )
 

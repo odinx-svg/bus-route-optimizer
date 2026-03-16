@@ -414,9 +414,39 @@ def test_fleet_reconciliation_endpoint_normalizes_pending_assignments(monkeypatc
             "candidate_rows": [],
             "reconciliation": {
                 "pending_count": 1,
+                "company_mix": {
+                    "total_pending_buses": 1,
+                    "recommended_companies": [
+                        {
+                            "company_id": "company_a",
+                            "company_name": "Empresa A",
+                            "recommended_count": 1,
+                            "coverable_assignments": 1,
+                            "candidate_vehicle_count": 1,
+                            "vehicle_codes": ["B001"],
+                        }
+                    ],
+                    "companies_with_options": 1,
+                    "uncovered_buses": 0,
+                },
                 "by_day": {
                     "L": {
                         "pending_virtual": 1,
+                        "company_mix": {
+                            "total_pending_buses": 1,
+                            "recommended_companies": [
+                                {
+                                    "company_id": "company_a",
+                                    "company_name": "Empresa A",
+                                    "recommended_count": 1,
+                                    "coverable_assignments": 1,
+                                    "candidate_vehicle_count": 1,
+                                    "vehicle_codes": ["B001"],
+                                }
+                            ],
+                            "companies_with_options": 1,
+                            "uncovered_buses": 0,
+                        },
                         "items": [
                             {
                                 "day": "L",
@@ -444,9 +474,183 @@ def test_fleet_reconciliation_endpoint_normalizes_pending_assignments(monkeypatc
 
     monkeypatch.setattr(workspaces_api, "preview_workspace_publication", _preview_virtual)
 
-    response = client.get(f"/api/workspaces/{workspace.id}/fleet-reconciliation")
+    response = client.get(f"/api/workspaces/{workspace.id}/fleet-reconciliation?day=L")
     assert response.status_code == 200
     body = response.json()
     assert body["pending_assignments"][0]["required_capacity"] == 40
     assert body["pending_assignments"][0]["time_window"] == {"start_minute": 480, "end_minute": 560}
     assert body["pending_assignments"][0]["suggested_real_vehicles"][0]["vehicle_code"] == "B001"
+    assert body["reconciliation"]["company_mix"]["total_pending_buses"] == 1
+    assert body["reconciliation"]["company_mix"]["recommended_companies"][0]["company_name"] == "Empresa A"
+    assert body["reconciliation_day"]["company_mix"]["recommended_companies"][0]["recommended_count"] == 1
+
+
+def test_apply_fleet_reconciliation_persists_selected_real_assignments(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+
+    db = Session()
+    try:
+        workspace = crud.create_workspace(
+            db,
+            schemas.WorkspaceCreateRequest(
+                name="Workspace Reconciliation",
+                schedule_by_day={
+                    "L": {
+                        "schedule": [
+                            {
+                                "bus_id": "B-V1",
+                                "fleet_assignment_type": "virtual",
+                                "items": [
+                                    {
+                                        "route_id": "R001",
+                                        "start_time": "08:00:00",
+                                        "end_time": "09:00:00",
+                                        "type": "entry",
+                                        "capacity_needed": 40,
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+            ),
+        )
+    finally:
+        db.close()
+
+    def _preview_for_apply(db, company_id, schedule_by_day, exclude_workspace_id=None, scope_company_ids=None):
+        bus_payload = (((schedule_by_day or {}).get("L") or {}).get("schedule") or [{}])[0]
+        already_real = str(bus_payload.get("assigned_vehicle_id") or "").strip() == "veh-1"
+        if already_real:
+            return {
+                "blocked": False,
+                "conflicts": [],
+                "real_assigned": 1,
+                "virtual_created": 0,
+                "days": {"L": {"fleet_assigned": 1, "virtual_buses": 0}},
+                "schedule_by_day": schedule_by_day,
+                "candidate_rows": [
+                    {
+                        "day": "L",
+                        "bus_id": "B-V1",
+                        "route_id": "R001",
+                        "start_minute": 8 * 60,
+                        "end_minute": 9 * 60,
+                        "assigned_vehicle_id": "veh-1",
+                        "assignment_type": "real",
+                    }
+                ],
+                "reconciliation": {
+                    "pending_count": 0,
+                    "by_day": {"L": {"pending_virtual": 0, "items": [], "company_mix": {"total_pending_buses": 0, "recommended_companies": [], "companies_with_options": 0, "uncovered_buses": 0}}},
+                    "items": [],
+                    "company_mix": {"total_pending_buses": 0, "recommended_companies": [], "companies_with_options": 0, "uncovered_buses": 0},
+                },
+            }
+        return {
+            "blocked": False,
+            "conflicts": [],
+            "real_assigned": 0,
+            "virtual_created": 1,
+            "days": {"L": {"fleet_assigned": 0, "virtual_buses": 1}},
+            "schedule_by_day": schedule_by_day,
+            "candidate_rows": [],
+            "reconciliation": {
+                "pending_count": 1,
+                "by_day": {
+                    "L": {
+                        "pending_virtual": 1,
+                        "company_mix": {
+                            "total_pending_buses": 1,
+                            "recommended_companies": [
+                                {
+                                    "company_id": "company_a",
+                                    "company_name": "Empresa A",
+                                    "recommended_count": 1,
+                                    "coverable_assignments": 1,
+                                    "candidate_vehicle_count": 1,
+                                    "vehicle_codes": ["B001"],
+                                }
+                            ],
+                            "companies_with_options": 1,
+                            "uncovered_buses": 0,
+                        },
+                        "items": [
+                            {
+                                "day": "L",
+                                "bus_id": "B-V1",
+                                "required_seats": 40,
+                                "start_minute": 480,
+                                "end_minute": 540,
+                                "suggestions": [
+                                    {
+                                        "vehicle_id": "veh-1",
+                                        "vehicle_code": "B001",
+                                        "company_id": "company_a",
+                                        "company_name": "Empresa A",
+                                        "seats_base": 55,
+                                        "seats_pmr": 0,
+                                        "seats_min": 55,
+                                        "seats_max": 55,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                },
+                "items": [
+                    {
+                        "day": "L",
+                        "bus_id": "B-V1",
+                        "required_seats": 40,
+                        "start_minute": 480,
+                        "end_minute": 540,
+                        "suggestions": [
+                            {
+                                "vehicle_id": "veh-1",
+                                "vehicle_code": "B001",
+                                "company_id": "company_a",
+                                "company_name": "Empresa A",
+                                "seats_base": 55,
+                                "seats_pmr": 0,
+                                "seats_min": 55,
+                                "seats_max": 55,
+                            }
+                        ],
+                    }
+                ],
+                "company_mix": {
+                    "total_pending_buses": 1,
+                    "recommended_companies": [
+                        {
+                            "company_id": "company_a",
+                            "company_name": "Empresa A",
+                            "recommended_count": 1,
+                            "coverable_assignments": 1,
+                            "candidate_vehicle_count": 1,
+                            "vehicle_codes": ["B001"],
+                        }
+                    ],
+                    "companies_with_options": 1,
+                    "uncovered_buses": 0,
+                },
+            },
+        }
+
+    monkeypatch.setattr(workspaces_api, "preview_workspace_publication", _preview_for_apply)
+
+    response = client.post(
+        f"/api/workspaces/{workspace.id}/fleet-reconciliation/apply",
+        json={
+            "day": "L",
+            "company_allocations": [{"company_id": "company_a", "count": 1}],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["applied_count"] == 1
+    assert body["remaining_pending"] == 0
+    assert body["applied_by_company"][0]["company_name"] == "Empresa A"
+    assigned_bus = body["schedule_by_day"]["L"]["schedule"][0]
+    assert assigned_bus["assigned_vehicle_id"] == "veh-1"
+    assert assigned_bus["fleet_assignment_type"] == "real"

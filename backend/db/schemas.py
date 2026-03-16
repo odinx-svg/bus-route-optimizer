@@ -323,6 +323,18 @@ class WorkspaceVersionCreate(BaseModel):
     summary_metrics: Optional[Dict[str, Any]] = None
 
 
+class FleetReconciliationCompanyAllocation(BaseModel):
+    company_id: Optional[str] = None
+    count: int = Field(default=0, ge=0)
+
+
+class FleetReconciliationApplyRequest(BaseModel):
+    day: Optional[str] = None
+    bus_ids: List[str] = Field(default_factory=list)
+    company_allocations: List[FleetReconciliationCompanyAllocation] = Field(default_factory=list)
+    checkpoint_name: Optional[str] = None
+
+
 class FleetPublicationSummary(BaseModel):
     company_id: Optional[str] = None
     scope_mode: Optional[str] = None
