@@ -33,7 +33,6 @@ import 'leaflet/dist/leaflet.css';
 import { 
   FileEdit, 
   Save, 
-  Upload, 
   AlertCircle, 
   CheckCircle, 
   Clock,
@@ -467,7 +466,6 @@ export function UnifiedWorkspace({
   validationReport = null,
   onValidationReportChange = null,
   onSave,
-  onPublish,
   onExport = null,
   onLiveScheduleChange = null,
   selectedBusIdExternal = null,
@@ -628,7 +626,6 @@ export function UnifiedWorkspace({
   const [isDraggingRoute, setIsDraggingRoute] = useState(false);
   const [activeDay, setActiveDay] = useState(externalActiveDay || 'L');
   const [isSaving, setIsSaving] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
   const [internalSelectedBusId, setInternalSelectedBusId] = useState(null);
   const [internalSelectedRouteId, setInternalSelectedRouteId] = useState(null);
   const selectedBusId = selectedBusIdExternal ?? internalSelectedBusId;
@@ -1983,7 +1980,7 @@ export function UnifiedWorkspace({
 
   const handleSaveDraft = useCallback(async () => {
     setIsSaving(true);
-    const loadingToast = notifications.loading('Guardando borrador...');
+    const loadingToast = notifications.loading(`Guardando ${DAY_LABELS[activeDay] || activeDay}...`);
     try {
       localStorage.setItem(STORAGE_KEY_DRAFT, JSON.stringify(buses));
       localStorage.setItem(STORAGE_KEY_STATUS, JSON.stringify({
@@ -1998,46 +1995,17 @@ export function UnifiedWorkspace({
 
       setHasUnsavedChanges(false);
       notifications.dismiss(loadingToast);
-      notifications.success('Borrador guardado', 'Cambios guardados localmente y en el sistema');
+      if (!onSave) {
+        notifications.success('Dia guardado', `${DAY_LABELS[activeDay] || activeDay} guardado en la optimizacion`);
+      }
     } catch (error) {
       console.error('Error saving draft:', error);
       notifications.dismiss(loadingToast);
-      notifications.error('Error al guardar', error.message || 'No se pudo guardar el borrador');
+      notifications.error('Error al guardar el dia', error.message || 'No se pudo guardar el dia activo');
     } finally {
       setIsSaving(false);
     }
   }, [activeDay, buses, buildScheduleData, mode, onSave]);
-
-  const handlePublish = useCallback(async () => {
-    const hasErrors = Object.values(validationResults).some(v => v.errors?.length > 0);
-    if (hasErrors) {
-      notifications.error('No se puede publicar', 'Corrige los errores primero');
-      return;
-    }
-
-    setIsPublishing(true);
-    const loadingToast = notifications.loading('Publicando horario...');
-
-    try {
-      const scheduleData = buildScheduleData();
-
-      if (onPublish) {
-        await onPublish(scheduleData);
-      } else if (onSave) {
-        await onSave(scheduleData);
-      }
-
-      setHasUnsavedChanges(false);
-      notifications.dismiss(loadingToast);
-      notifications.success('Horario publicado', 'El horario ha sido guardado correctamente');
-    } catch (error) {
-      console.error('Error publishing:', error);
-      notifications.dismiss(loadingToast);
-      notifications.error('Error al publicar', error.message);
-    } finally {
-      setIsPublishing(false);
-    }
-  }, [buildScheduleData, onPublish, onSave, validationResults]);
 
   const handleExportPdf = useCallback(() => {
     if (typeof onExport !== 'function') {
@@ -2534,20 +2502,7 @@ export function UnifiedWorkspace({
               ) : (
                 <Save className="w-3 h-3" />
               )}
-              {isSaving ? 'Guardando...' : 'Guardar'}
-            </button>
-            
-            <button
-              onClick={handlePublish}
-              disabled={isPublishing || hasErrors || buses.every(b => b.routes.length === 0)}
-              className="px-3 py-1.5 control-btn-primary disabled:opacity-50 disabled:cursor-not-allowed rounded-md text-[10px] font-bold tracking-[0.14em] uppercase transition-colors flex items-center gap-1"
-            >
-              {isPublishing ? (
-                <div className="w-3 h-3 border-2 border-[#051018]/40 border-t-[#051018] rounded-full animate-spin" />
-              ) : (
-                <Upload className="w-3 h-3" />
-              )}
-              Publicar
+              {isSaving ? 'Guardando dia...' : 'Guardar dia'}
             </button>
 
             <button

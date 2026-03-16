@@ -18,7 +18,6 @@ export default function OptimizationStudio({
   validationReport = null,
   onValidationReportChange,
   onSave,
-  onPublish,
   selectedBusId = null,
   selectedRouteId = null,
   onBusSelect,
@@ -27,6 +26,7 @@ export default function OptimizationStudio({
   pinnedBusIds = [],
   onTogglePinBus = null,
   onOpenReconciliation = null,
+  onStudioLiveScheduleChange = null,
 }) {
   const [studioTab, setStudioTab] = useState('mixed');
   const [splitPercent, setSplitPercent] = useState(40);
@@ -59,7 +59,10 @@ export default function OptimizationStudio({
       ...prev,
       [activeDay]: safeBuses,
     }));
-  }, [activeDay]);
+    if (typeof onStudioLiveScheduleChange === 'function') {
+      onStudioLiveScheduleChange(activeDay, safeBuses);
+    }
+  }, [activeDay, onStudioLiveScheduleChange]);
 
   const handleExportCurrentDay = useCallback((payload = {}) => {
     if (typeof onExport !== 'function') return;
@@ -159,7 +162,6 @@ export default function OptimizationStudio({
                 validationReport={validationReport}
                 onValidationReportChange={onValidationReportChange}
                 onSave={onSave}
-                onPublish={onPublish}
                 onLiveScheduleChange={handleLiveScheduleChange}
                 selectedBusIdExternal={selectedBusId}
                 selectedRouteIdExternal={selectedRouteId}
@@ -215,7 +217,6 @@ export default function OptimizationStudio({
               validationReport={validationReport}
               onValidationReportChange={onValidationReportChange}
               onSave={onSave}
-              onPublish={onPublish}
               onLiveScheduleChange={handleLiveScheduleChange}
               selectedBusIdExternal={selectedBusId}
               selectedRouteIdExternal={selectedRouteId}

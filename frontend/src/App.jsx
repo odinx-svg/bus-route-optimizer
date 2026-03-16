@@ -778,6 +778,8 @@ function PlanningOverviewBar({
   scheduleByDay = null,
   onOpenReconciliation,
   onOpenRules,
+  onPublishWeek,
+  publishDisabled = false,
   optimizationOptions = null,
   workspaceCompanies = [],
 }) {
@@ -810,9 +812,6 @@ function PlanningOverviewBar({
     && currentCompany
     && Number(currentCompany.active_vehicle_count || 0) === 0
   );
-  const primaryActionLabel = fleetVirtual > 0 ? 'Reconciliar flota' : 'Abrir reglas';
-  const primaryActionHandler = fleetVirtual > 0 ? onOpenReconciliation : onOpenRules;
-
   return (
     <div className="mb-2 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 px-3 py-2.5">
       <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
@@ -857,16 +856,29 @@ function PlanningOverviewBar({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          {fleetVirtual > 0 ? (
+            <button
+              type="button"
+              onClick={onOpenReconciliation}
+              className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
+            >
+              Reconciliar flota
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={primaryActionHandler}
-            className={`rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] ${
-              fleetVirtual > 0
-                ? 'border border-amber-500/35 text-amber-100 hover:bg-amber-500/10'
-                : 'border border-cyan-500/35 text-cyan-100 hover:bg-cyan-500/10'
-            }`}
+            onClick={onOpenRules}
+            className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
           >
-            {primaryActionLabel}
+            Abrir reglas
+          </button>
+          <button
+            type="button"
+            onClick={onPublishWeek}
+            disabled={publishDisabled}
+            className="rounded-md bg-cyan-400 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Publicar semana
           </button>
           <button
             type="button"
@@ -1562,6 +1574,7 @@ function App() {
   const [routes, setRoutes] = useState([]);
   const [parseReport, setParseReport] = useState(null);
   const [scheduleByDay, setScheduleByDay] = useState(createEmptyScheduleByDay());
+  const [studioLiveScheduleByDay, setStudioLiveScheduleByDay] = useState({});
   const [previousScheduleByDay, setPreviousScheduleByDay] = useState(null);
   const [validationReport, setValidationReport] = useState(null);
   const [activeDay, setActiveDay] = useState('L');
@@ -1848,6 +1861,7 @@ function App() {
     setRoutes(Array.isArray(routePayload) ? routePayload : []);
     setParseReport(workingVersion?.parse_report || null);
     setScheduleByDay(normalizedSchedule);
+    setStudioLiveScheduleByDay({});
     setValidationReport(workingVersion?.validation_report || null);
     setActiveDay(preferredDay);
     setWorkspaceMode(detail?.status === 'active' ? 'edit' : 'optimize');
@@ -1931,8 +1945,31 @@ function App() {
     };
   }, [openWorkspaceById, refreshWorkspaces]);
 
+  const buildEffectiveScheduleByDay = useCallback((baseScheduleByDay = {}, liveOverrides = {}) => {
+    const normalizedBase = normalizeWorkspaceScheduleByDay(baseScheduleByDay);
+    const nextScheduleByDay = { ...normalizedBase };
+
+    for (const day of ALL_DAYS) {
+      const overrideBuses = liveOverrides?.[day];
+      if (!Array.isArray(overrideBuses)) continue;
+      const currentDay = normalizedBase?.[day] || buildDayScheduleData();
+      nextScheduleByDay[day] = buildDayScheduleData({
+        buses: overrideBuses,
+        metadata: currentDay?.metadata || {},
+        unassignedRoutes: currentDay?.unassigned_routes || [],
+      });
+    }
+
+    return nextScheduleByDay;
+  }, []);
+
+  const effectiveScheduleByDay = useMemo(
+    () => buildEffectiveScheduleByDay(scheduleByDay, studioLiveScheduleByDay),
+    [buildEffectiveScheduleByDay, scheduleByDay, studioLiveScheduleByDay]
+  );
+
   // Current day's data
-  const currentDayData = scheduleByDay?.[activeDay] || null;
+  const currentDayData = effectiveScheduleByDay?.[activeDay] || null;
   const schedule = currentDayData?.schedule || [];
   const optimizationStats = currentDayData?.stats || null;
 
@@ -1945,8 +1982,8 @@ function App() {
   }, [routes, studioSetRoutes]);
 
   useEffect(() => {
-    studioSetScheduleByDay(scheduleByDay);
-  }, [scheduleByDay, studioSetScheduleByDay]);
+    studioSetScheduleByDay(effectiveScheduleByDay);
+  }, [effectiveScheduleByDay, studioSetScheduleByDay]);
 
   useEffect(() => {
     studioSetActiveDay(activeDay);
@@ -1990,6 +2027,7 @@ function App() {
     }
 
     setScheduleByDay(normalizedResult);
+    setStudioLiveScheduleByDay({});
     setValidationReport(pipelineResult?.validation_report || null);
     setShowComparison(true);
     setViewMode('studio');
@@ -2132,6 +2170,7 @@ function App() {
     setRoutes(uploadedRoutes);
     setParseReport(uploadReport);
     setScheduleByDay(createEmptyScheduleByDay());
+    setStudioLiveScheduleByDay({});
     setValidationReport(null);
     setSelectedBusId(null);
     setSelectedRouteId(null);
@@ -2225,6 +2264,7 @@ function App() {
       setRoutes([]);
       setParseReport(null);
       setScheduleByDay(createEmptyScheduleByDay());
+      setStudioLiveScheduleByDay({});
       setPreviousScheduleByDay(null);
       setValidationReport(null);
       setShowComparison(false);
@@ -2388,6 +2428,113 @@ function App() {
     setSelectedRouteId(routeId);
   }, []);
 
+  const handleStudioLiveScheduleChange = useCallback((day, buses) => {
+    const normalizedDay = ALL_DAYS.includes(day) ? day : activeDay;
+    const safeBuses = Array.isArray(buses) ? buses : [];
+    setStudioLiveScheduleByDay((prev) => ({
+      ...prev,
+      [normalizedDay]: safeBuses,
+    }));
+  }, [activeDay]);
+
+  const publishWorkspaceSnapshot = useCallback(async (
+    snapshotPayload,
+    {
+      previewDay = activeDay,
+      successTitle = 'Version publicada',
+      successMessage = 'La planificacion ya esta activa en Panel',
+    } = {},
+  ) => {
+    if (!activeWorkspaceId) {
+      throw new Error('No hay workspace activo para publicar');
+    }
+
+    const fleetPreview = await getWorkspaceFleetPreview(activeWorkspaceId, previewDay).catch(() => null);
+    if (fleetPreview?.blocked && Array.isArray(fleetPreview?.conflicts) && fleetPreview.conflicts.length > 0) {
+      setFleetConflictModal({
+        open: true,
+        conflicts: fleetPreview.conflicts,
+      });
+      throw new Error('Publicacion bloqueada por conflictos de flota');
+    }
+
+    const resolvedPolicy = String(
+      fleetPreview?.virtual_publish_policy
+      || activeOptimizationOptions?.virtual_bus_publish_policy
+      || 'allow'
+    ).toLowerCase();
+
+    if (
+      resolvedPolicy === 'block'
+      && Number(fleetPreview?.virtual_created || 0) > 0
+    ) {
+      const pendingItems = Array.isArray(fleetPreview?.reconciliation?.items)
+        ? fleetPreview.reconciliation.items
+        : [];
+      setFleetReconciliationModal({
+        open: true,
+        items: pendingItems,
+        companyMix: fleetPreview?.reconciliation?.company_mix || null,
+        requiredBusCount: Number(fleetPreview?.reconciliation?.required_bus_count || pendingItems.length || 0),
+        realBoundCount: Number(fleetPreview?.reconciliation?.real_bound_count || 0),
+        pendingRealReconciliationCount: Number(fleetPreview?.reconciliation?.pending_real_reconciliation_count || pendingItems.length || 0),
+        availableRealVehicleCount: Number(fleetPreview?.scope_vehicle_count || 0),
+        companiesAvailable: Number(fleetPreview?.reconciliation?.company_mix?.companies_with_options || 0),
+        estimatedVirtualRemaining: Number(fleetPreview?.reconciliation?.company_mix?.uncovered_buses || 0),
+        reconciliationSnapshot: fleetPreview?.reconciliation_snapshot || null,
+        dayLabel: DAY_LABELS[previewDay] || previewDay,
+        scopeLabel: fleetPreview?.scope_label || '',
+        scopeVehicleCount: Number(fleetPreview?.scope_vehicle_count || 0),
+        scopeMode: String(fleetPreview?.scope_mode || 'company'),
+        busId: null,
+        applying: false,
+      });
+      throw new Error('Publicacion bloqueada: hay buses ficticios pendientes de reconciliar');
+    }
+
+    try {
+      await publishWorkspaceVersion(activeWorkspaceId, snapshotPayload);
+    } catch (error) {
+      const detail = error?.payload?.detail;
+      const publication = detail?.fleet_publication;
+      const isReconciliationBlocked = String(
+        detail?.reason
+        || publication?.reason
+        || ''
+      ).toLowerCase() === 'virtual_reconciliation_required';
+      if (isReconciliationBlocked) {
+        setFleetReconciliationModal({
+          open: true,
+          items: Array.isArray(publication?.reconciliation?.items)
+            ? publication.reconciliation.items
+            : [],
+          companyMix: publication?.reconciliation?.company_mix || null,
+          requiredBusCount: Number(publication?.reconciliation?.required_bus_count || 0),
+          realBoundCount: Number(publication?.reconciliation?.real_bound_count || 0),
+          pendingRealReconciliationCount: Number(publication?.reconciliation?.pending_real_reconciliation_count || 0),
+          availableRealVehicleCount: Number(publication?.scope_vehicle_count || 0),
+          companiesAvailable: Number(publication?.reconciliation?.company_mix?.companies_with_options || 0),
+          estimatedVirtualRemaining: Number(publication?.reconciliation?.company_mix?.uncovered_buses || 0),
+          reconciliationSnapshot: publication?.reconciliation_snapshot || null,
+          dayLabel: DAY_LABELS[previewDay] || previewDay,
+          scopeLabel: publication?.scope_label || '',
+          scopeVehicleCount: Number(publication?.scope_vehicle_count || 0),
+          scopeMode: String(publication?.scope_mode || 'company'),
+          busId: null,
+          applying: false,
+        });
+      } else if (publication?.blocked) {
+        setFleetConflictModal({
+          open: true,
+          conflicts: Array.isArray(publication?.conflicts) ? publication.conflicts : [],
+        });
+      }
+      throw error;
+    }
+
+    notifications.success(successTitle, successMessage);
+  }, [activeDay, activeOptimizationOptions?.virtual_bus_publish_policy, activeWorkspaceId]);
+
   const handleSaveManualSchedule = async (scheduleData, intent = 'save') => {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
     const payload = {
@@ -2433,16 +2580,18 @@ function App() {
         throw new Error(`Horario invalido (${conflictCount} conflictos, ${errorCount} errores).`);
       }
 
-      const mergedScheduleByDay = {
-        ...(scheduleByDay && typeof scheduleByDay === 'object' ? scheduleByDay : createEmptyScheduleByDay()),
-        [payload.day]: buildDayScheduleData({
-          buses: payload.buses,
-          metadata: payload.metadata,
-          unassignedRoutes: payload.unassigned_routes,
-        }),
-      };
+      const mergedScheduleByDay = buildEffectiveScheduleByDay(
+        scheduleByDay,
+        {
+          [payload.day]: payload.buses,
+        }
+      );
 
       setScheduleByDay(mergedScheduleByDay);
+      setStudioLiveScheduleByDay((prev) => ({
+        ...prev,
+        [payload.day]: payload.buses,
+      }));
       setActiveDay(payload.day || 'L');
       const requestedMode = payload?.metadata?.mode;
       const nextMode = requestedMode === 'optimize' ? 'optimize' : 'edit';
@@ -2463,89 +2612,14 @@ function App() {
           summary_metrics: mergedScheduleByDay?.[payload.day]?.stats || {},
         };
         if (intent === 'publish') {
-          const fleetPreview = await getWorkspaceFleetPreview(activeWorkspaceId, payload.day).catch(() => null);
-          if (fleetPreview?.blocked && Array.isArray(fleetPreview?.conflicts) && fleetPreview.conflicts.length > 0) {
-            setFleetConflictModal({
-              open: true,
-              conflicts: fleetPreview.conflicts,
-            });
-            throw new Error('Publicacion bloqueada por conflictos de flota');
-          }
-          const resolvedPolicy = String(
-            fleetPreview?.virtual_publish_policy
-            || activeOptimizationOptions?.virtual_bus_publish_policy
-            || 'allow'
-          ).toLowerCase();
-          if (
-            resolvedPolicy === 'block'
-            && Number(fleetPreview?.virtual_created || 0) > 0
-          ) {
-            const pendingItems = Array.isArray(fleetPreview?.reconciliation?.items)
-              ? fleetPreview.reconciliation.items
-              : [];
-            setFleetReconciliationModal({
-              open: true,
-              items: pendingItems,
-              companyMix: fleetPreview?.reconciliation?.company_mix || null,
-              requiredBusCount: Number(fleetPreview?.reconciliation?.required_bus_count || pendingItems.length || 0),
-              realBoundCount: Number(fleetPreview?.reconciliation?.real_bound_count || 0),
-              pendingRealReconciliationCount: Number(fleetPreview?.reconciliation?.pending_real_reconciliation_count || pendingItems.length || 0),
-              availableRealVehicleCount: Number(fleetPreview?.scope_vehicle_count || 0),
-              companiesAvailable: Number(fleetPreview?.reconciliation?.company_mix?.companies_with_options || 0),
-              estimatedVirtualRemaining: Number(fleetPreview?.reconciliation?.company_mix?.uncovered_buses || 0),
-              reconciliationSnapshot: fleetPreview?.reconciliation_snapshot || null,
-              dayLabel: DAY_LABELS[payload.day || activeDay] || payload.day || activeDay,
-              scopeLabel: fleetPreview?.scope_label || '',
-              scopeVehicleCount: Number(fleetPreview?.scope_vehicle_count || 0),
-              scopeMode: String(fleetPreview?.scope_mode || 'company'),
-              busId: null,
-              applying: false,
-            });
-            throw new Error('Publicacion bloqueada: hay buses ficticios pendientes de reconciliar');
-          }
-          try {
-            await publishWorkspaceVersion(activeWorkspaceId, snapshotPayload);
-          } catch (error) {
-            const detail = error?.payload?.detail;
-            const publication = detail?.fleet_publication;
-            const isReconciliationBlocked = String(
-              detail?.reason
-              || publication?.reason
-              || ''
-            ).toLowerCase() === 'virtual_reconciliation_required';
-            if (isReconciliationBlocked) {
-              setFleetReconciliationModal({
-                open: true,
-                items: Array.isArray(publication?.reconciliation?.items)
-                  ? publication.reconciliation.items
-                  : [],
-                companyMix: publication?.reconciliation?.company_mix || null,
-                requiredBusCount: Number(publication?.reconciliation?.required_bus_count || 0),
-                realBoundCount: Number(publication?.reconciliation?.real_bound_count || 0),
-                pendingRealReconciliationCount: Number(publication?.reconciliation?.pending_real_reconciliation_count || 0),
-                availableRealVehicleCount: Number(publication?.scope_vehicle_count || 0),
-                companiesAvailable: Number(publication?.reconciliation?.company_mix?.companies_with_options || 0),
-                estimatedVirtualRemaining: Number(publication?.reconciliation?.company_mix?.uncovered_buses || 0),
-                reconciliationSnapshot: publication?.reconciliation_snapshot || null,
-                dayLabel: DAY_LABELS[payload.day || activeDay] || payload.day || activeDay,
-                scopeLabel: publication?.scope_label || '',
-                scopeVehicleCount: Number(publication?.scope_vehicle_count || 0),
-                scopeMode: String(publication?.scope_mode || 'company'),
-                busId: null,
-                applying: false,
-              });
-            } else if (publication?.blocked) {
-              setFleetConflictModal({
-                open: true,
-                conflicts: Array.isArray(publication?.conflicts) ? publication.conflicts : [],
-              });
-            }
-            throw error;
-          }
-          notifications.success('Version publicada', 'La planificacion ya esta activa en Panel');
+          await publishWorkspaceSnapshot(snapshotPayload, {
+            previewDay: payload.day || activeDay,
+            successTitle: 'Version publicada',
+            successMessage: 'La planificacion ya esta activa en Panel',
+          });
         } else {
           await saveWorkspaceVersion(activeWorkspaceId, snapshotPayload);
-          notifications.success('Version guardada', 'Checkpoint guardado');
+          notifications.success('Dia guardado', `${DAY_LABELS[payload.day] || payload.day} guardado en la semana`);
         }
         await refreshWorkspaces();
         if (activeWorkspaceId) {
@@ -2561,6 +2635,58 @@ function App() {
 
     throw lastError || new Error('No se pudo guardar el horario manual');
   };
+
+  const handlePublishWholeWorkspace = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+
+    const effectiveWeekSchedule = buildEffectiveScheduleByDay(scheduleByDay, studioLiveScheduleByDay);
+    const weekHasRoutes = ALL_DAYS.some((day) => Array.isArray(effectiveWeekSchedule?.[day]?.schedule) && effectiveWeekSchedule[day].schedule.length > 0);
+    if (!weekHasRoutes) {
+      notifications.warning('No hay nada que publicar', 'La semana no tiene buses asignados');
+      return;
+    }
+
+    const promptResult = await openTextInputModal({
+      title: 'Publicar semana completa',
+      description: 'Opcional: nombre para esta publicacion de los 5 dias',
+      placeholder: 'Ej: Operativo final semana 12',
+      confirmLabel: 'Publicar semana',
+      cancelLabel: 'Cancelar',
+      allowEmpty: true,
+      defaultValue: '',
+    });
+    if (!promptResult?.confirmed) return;
+
+    const checkpointName = String(promptResult?.value || '').trim();
+    const snapshotPayload = {
+      checkpoint_name: checkpointName || `publish-week-${new Date().toISOString().slice(0, 19)}`,
+      routes_payload: routes,
+      schedule_by_day: effectiveWeekSchedule,
+      parse_report: parseReport || null,
+      validation_report: validationReport || null,
+      summary_metrics: effectiveWeekSchedule?.[activeDay]?.stats || {},
+    };
+
+    const loadingToast = notifications.loading('Publicando semana completa...');
+    try {
+      await publishWorkspaceSnapshot(snapshotPayload, {
+        previewDay: activeDay,
+        successTitle: 'Semana publicada',
+        successMessage: 'Los 5 dias ya estan activos en Panel',
+      });
+      setScheduleByDay(effectiveWeekSchedule);
+      await refreshWorkspaces();
+      const freshDetail = await getWorkspace(activeWorkspaceId).catch(() => null);
+      if (freshDetail) {
+        setActiveWorkspaceDetail(freshDetail);
+      }
+      studioMarkSaved();
+    } catch (error) {
+      notifications.error('No se pudo publicar la semana', error?.message || 'Error publicando la semana completa');
+    } finally {
+      notifications.dismiss(loadingToast);
+    }
+  }, [activeDay, activeWorkspaceId, buildEffectiveScheduleByDay, openTextInputModal, parseReport, publishWorkspaceSnapshot, refreshWorkspaces, routes, scheduleByDay, studioLiveScheduleByDay, studioMarkSaved, validationReport]);
 
   const handlePipelineProgress = useCallback((progressState) => {
     setPipelineStatus('running');
@@ -2803,6 +2929,7 @@ function App() {
 
       if (result?.schedule_by_day && typeof result.schedule_by_day === 'object') {
         setScheduleByDay(normalizeWorkspaceScheduleByDay(result.schedule_by_day));
+        setStudioLiveScheduleByDay({});
       }
       await refreshWorkspaces();
       const freshDetail = await getWorkspace(activeWorkspaceId).catch(() => null);
@@ -2851,7 +2978,7 @@ function App() {
   return (
     <Layout
       stats={calculateStats()}
-      scheduleByDay={scheduleByDay}
+      scheduleByDay={effectiveScheduleByDay}
       activeDay={activeDay}
       onDayChange={handleDayChange}
       viewMode={viewMode}
@@ -2995,12 +3122,14 @@ function App() {
                   workspace={activeWorkspaceSummary}
                   activeDay={activeDay}
                   stats={calculateStats()}
-                  scheduleByDay={scheduleByDay}
+                  scheduleByDay={effectiveScheduleByDay}
                   onOpenReconciliation={() => openFleetReconciliationCenter()}
                   onOpenRules={() => openLoadOptionsModal({
                     workspaceId: activeWorkspaceId,
                     workspaceName: activeWorkspaceSummary?.name || '',
                   })}
+                  onPublishWeek={handlePublishWholeWorkspace}
+                  publishDisabled={!activeWorkspaceId || !ALL_DAYS.some((day) => Array.isArray(effectiveScheduleByDay?.[day]?.schedule) && effectiveScheduleByDay[day].schedule.length > 0)}
                   optimizationOptions={activeOptimizationOptions}
                   workspaceCompanies={fleetCompanies}
                 />
@@ -3012,17 +3141,17 @@ function App() {
                     <OptimizationStudio
                       workspaceMode={workspaceMode}
                       routes={routes}
-                      scheduleByDay={scheduleByDay}
+                      scheduleByDay={effectiveScheduleByDay}
                       activeDay={activeDay}
                       onDayChange={handleDayChange}
                       validationReport={validationReport}
                       onValidationReportChange={setValidationReport}
                       onSave={async (data) => {
                         const promptResult = await openTextInputModal({
-                          title: 'Guardar version',
-                          description: 'Opcional: nombre de este guardado',
+                          title: `Guardar ${DAY_LABELS[activeDay] || activeDay}`,
+                          description: 'Opcional: nombre para el guardado del dia activo',
                           placeholder: 'Ej: Ajuste buses lunes',
-                          confirmLabel: 'Guardar',
+                          confirmLabel: 'Guardar dia',
                           cancelLabel: 'Cancelar',
                           allowEmpty: true,
                           defaultValue: '',
@@ -3030,20 +3159,6 @@ function App() {
                         if (!promptResult?.confirmed) return;
                         const checkpointName = String(promptResult?.value || '').trim();
                         await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'save');
-                      }}
-                      onPublish={async (data) => {
-                        const promptResult = await openTextInputModal({
-                          title: 'Publicar version',
-                          description: 'Opcional: nombre para esta publicacion',
-                          placeholder: 'Ej: Operativo final semana',
-                          confirmLabel: 'Publicar',
-                          cancelLabel: 'Cancelar',
-                          allowEmpty: true,
-                          defaultValue: '',
-                        });
-                        if (!promptResult?.confirmed) return;
-                        const checkpointName = String(promptResult?.value || '').trim();
-                        await handleSaveManualSchedule({ ...data, checkpoint_name: checkpointName || undefined }, 'publish');
                       }}
                       selectedBusId={selectedBusId}
                       selectedRouteId={selectedRouteId}
@@ -3053,6 +3168,7 @@ function App() {
                       pinnedBusIds={pinnedBusesByDay?.[activeDay] || []}
                       onTogglePinBus={handleTogglePinBus}
                       onOpenReconciliation={openFleetReconciliationCenter}
+                      onStudioLiveScheduleChange={handleStudioLiveScheduleChange}
                     />
                   </StudioErrorBoundary>
                 </div>
