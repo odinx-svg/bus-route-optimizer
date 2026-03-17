@@ -3141,7 +3141,7 @@ function App() {
                     <OptimizationStudio
                       workspaceMode={workspaceMode}
                       routes={routes}
-                      scheduleByDay={effectiveScheduleByDay}
+                      scheduleByDay={scheduleByDay}
                       activeDay={activeDay}
                       onDayChange={handleDayChange}
                       validationReport={validationReport}
