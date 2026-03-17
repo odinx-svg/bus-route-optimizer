@@ -1050,21 +1050,34 @@ export function TimelineBusRow({
     >
       {/* Info del Bus - cabecero grande sin icono */}
       <div className={`
-        w-[118px] flex-shrink-0 flex flex-col justify-center px-2 py-2
+        w-[164px] flex-shrink-0 flex flex-col justify-center px-3 py-2
         border-r border-slate-700/40
         ${isActive ? 'bg-[#102030]/65' : ''}
       `}>
-        {/* ID del bus - grande y prominente */}
-        <div className="flex items-center gap-2">
-          <div className={`
-            ${showingAssignedVehicle ? 'text-[15px]' : 'text-[29px]'} font-semibold tracking-tight leading-none tabular-nums data-mono truncate
-            ${isActive ? 'text-cyan-300' : 'text-slate-100'}
-          `}
-            title={[primaryBusLabel, companyBusLabel, referenceBusLabel].filter(Boolean).join(' · ')}
-          >
-            {primaryBusLabel}
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div
+              className={`
+                ${showingAssignedVehicle ? 'text-[18px]' : 'text-[28px]'} font-semibold tracking-tight leading-none tabular-nums data-mono truncate
+                ${isActive ? 'text-cyan-300' : 'text-slate-100'}
+              `}
+              title={[primaryBusLabel, companyBusLabel, referenceBusLabel].filter(Boolean).join(' · ')}
+            >
+              {primaryBusLabel}
+            </div>
+            {companyBusLabel ? (
+              <div className="mt-1 truncate text-[10px] font-medium uppercase tracking-[0.08em] text-cyan-200/85">
+                {companyBusLabel}
+              </div>
+            ) : null}
+            {referenceBusLabel ? (
+              <div className="mt-0.5 truncate text-[10px] text-slate-500">
+                {referenceBusLabel}
+              </div>
+            ) : null}
           </div>
 
+          <div className="flex items-center gap-1 flex-shrink-0">
           {typeof onTogglePin === 'function' && (
             <button
               onClick={(e) => {
@@ -1178,20 +1191,11 @@ export function TimelineBusRow({
               )}
             </button>
           )}
+          </div>
         </div>
-        {companyBusLabel ? (
-          <div className="mt-1 truncate text-[9px] font-medium uppercase tracking-[0.08em] text-cyan-200/85">
-            {companyBusLabel}
-          </div>
-        ) : null}
-        {referenceBusLabel ? (
-          <div className="mt-0.5 truncate text-[9px] text-slate-500">
-            {referenceBusLabel}
-          </div>
-        ) : null}
         
         {/* Stats */}
-        <div className="mt-1.5 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5">
           {stats ? (
             <>
               <span className="text-[11px] text-slate-400 uppercase tracking-wide">{stats.count} rutas</span>
@@ -1202,7 +1206,7 @@ export function TimelineBusRow({
                 {stats.efficiency}%
               </span>
               {stats.minSeats > 0 && (
-                <span className="text-[10px] text-cyan-300 tabular-nums uppercase tracking-wide">
+                <span className="text-[11px] text-cyan-300 tabular-nums uppercase tracking-wide">
                   {stats.minSeats} plazas
                 </span>
               )}

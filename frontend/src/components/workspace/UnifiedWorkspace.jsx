@@ -73,7 +73,7 @@ const DAY_LABELS = {
   X: 'Jueves',
   V: 'Viernes',
 };
-const TIMELINE_BUS_INFO_WIDTH = 118;
+const TIMELINE_BUS_INFO_WIDTH = 164;
 const CRITICAL_GLOBAL_ISSUE_TYPES = new Set(['INSUFFICIENT_TIME', 'OVERLAPPING_ROUTES', 'INVALID_TIME_RANGE']);
 const CRITICAL_LOCAL_ISSUE_TYPES = new Set(['positioning_infeasible', 'overlap']);
 
