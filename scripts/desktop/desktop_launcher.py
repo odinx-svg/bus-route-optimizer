@@ -40,6 +40,8 @@ DESKTOP_OSRM_BASE_URL = "http://187.77.33.218:5000"
 DESKTOP_OSRM_ROUTE_URL = f"{DESKTOP_OSRM_BASE_URL}/route/v1/driving"
 DESKTOP_OSRM_TABLE_URL = f"{DESKTOP_OSRM_BASE_URL}/table/v1/driving"
 CHECKSUM_ASSET_NAME = "checksums-sha256.txt"
+SINGLE_INSTANCE_MUTEX_NAME = "Global\\TUTTI_DESKTOP_SINGLE_INSTANCE"
+_SINGLE_INSTANCE_HANDLE = None
 
 try:
     from desktop_version import (  # type: ignore
@@ -74,6 +76,12 @@ def _resolve_update_log_path() -> Path:
     log_dir = Path.home() / "AppData" / "Local" / "Tutti" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir / "desktop-updater.log"
+
+
+def _resolve_launcher_log_path() -> Path:
+    log_dir = Path.home() / "AppData" / "Local" / "Tutti" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir / "desktop-launcher.log"
 
 
 def _resolve_persistent_data_dir() -> Path:
@@ -136,6 +144,16 @@ def _log_update(message: str) -> None:
         pass
 
 
+def _log_launcher(message: str) -> None:
+    try:
+        log_path = _resolve_launcher_log_path()
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}Z] {message}\n")
+    except Exception:
+        pass
+
+
 def _log_update_event(event_code: str, **fields: object) -> None:
     """
     Write a structured updater event line.
@@ -195,6 +213,41 @@ def _message_box(text: str, title: str, kind: str = "info") -> bool:
     style = mb_ok | (mb_icon_warn if kind == "warn" else mb_icon_info)
     ctypes.windll.user32.MessageBoxW(None, text, title, style)
     return False
+
+
+def _acquire_single_instance() -> bool:
+    global _SINGLE_INSTANCE_HANDLE
+    if os.name != "nt":
+        return True
+
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX_NAME)
+    if not handle:
+        _log_launcher("CreateMutexW failed; continuing without single-instance guard")
+        return True
+
+    _SINGLE_INSTANCE_HANDLE = handle
+    error_code = kernel32.GetLastError()
+    if error_code == 183:  # ERROR_ALREADY_EXISTS
+        _log_launcher("Second instance blocked by mutex")
+        return False
+
+    _log_launcher("Single-instance mutex acquired")
+    return True
+
+
+def _release_single_instance() -> None:
+    global _SINGLE_INSTANCE_HANDLE
+    if os.name != "nt" or not _SINGLE_INSTANCE_HANDLE:
+        return
+    try:
+        kernel32 = ctypes.windll.kernel32
+        kernel32.ReleaseMutex(_SINGLE_INSTANCE_HANDLE)
+        kernel32.CloseHandle(_SINGLE_INSTANCE_HANDLE)
+    except Exception:
+        pass
+    finally:
+        _SINGLE_INSTANCE_HANDLE = None
 
 
 def _fetch_latest_release(repo_slug: str) -> dict:
@@ -1325,6 +1378,14 @@ def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "--run-backend":
         return _run_backend_process_mode()
 
+    if not _acquire_single_instance():
+        _message_box(
+            "TUTTI ya esta abierto o arrancando en segundo plano.\n\nCierra la instancia anterior y vuelve a intentarlo.",
+            "TUTTI",
+            kind="warn",
+        )
+        return 0
+
     # Check for updates in the foreground only when TUTTI_DESKTOP_UPDATE_BLOCKING=1,
     # otherwise the check runs in background while the app boots.
     blocking_update = _env_flag("TUTTI_DESKTOP_UPDATE_BLOCKING", "0")
@@ -1368,6 +1429,7 @@ def main() -> int:
 
     def _safe_shutdown(*_args: object) -> None:
         runtime.stop_backend()
+        _release_single_instance()
 
     atexit.register(_safe_shutdown)
     signal.signal(signal.SIGTERM, _safe_shutdown)
@@ -1407,7 +1469,7 @@ def main() -> int:
             runtime.stop_backend()
             return 0
 
-    default_fullscreen = "1" if getattr(sys, "frozen", False) else "0"
+    default_fullscreen = "0"
     start_fullscreen = _env_flag("TUTTI_DESKTOP_START_FULLSCREEN", default_fullscreen)
     frameless_window = _env_flag("TUTTI_DESKTOP_FRAMELESS", "0")
 
@@ -1425,16 +1487,29 @@ def main() -> int:
         window_options["easy_drag"] = True
 
     desktop_bridge = DesktopBridge()
-    window = webview.create_window(
-        "TUTTI Fleet Control Center",
-        APP_URL,
-        js_api=desktop_bridge,
-        **window_options,
-    )
-    desktop_bridge.bind_window(window)
-    window.events.closed += _safe_shutdown
-    webview.start(debug=False)
-    return 0
+    try:
+        _log_launcher(f"Creating desktop window | fullscreen={start_fullscreen} maximized={window_options.get('maximized', False)}")
+        window = webview.create_window(
+            "TUTTI Fleet Control Center",
+            APP_URL,
+            js_api=desktop_bridge,
+            **window_options,
+        )
+        desktop_bridge.bind_window(window)
+        window.events.closed += _safe_shutdown
+        _log_launcher("Starting webview event loop")
+        webview.start(debug=False)
+        _log_launcher("webview.start returned cleanly")
+        return 0
+    except Exception as exc:
+        _log_launcher(f"Desktop window startup failed: {exc!r}")
+        runtime.stop_backend()
+        _message_box(
+            "No se pudo abrir la ventana principal de TUTTI.\n\nRevisa AppData\\\\Local\\\\Tutti\\\\logs\\\\desktop-launcher.log",
+            "TUTTI - Error de arranque",
+            kind="warn",
+        )
+        return 1
 
 
 if __name__ == "__main__":

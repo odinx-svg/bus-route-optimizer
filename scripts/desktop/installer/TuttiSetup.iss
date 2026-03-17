@@ -54,6 +54,9 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Dirs]
 Name: "{localappdata}\TuttiRuntime"
 
+[InstallDelete]
+Type: filesandordirs; Name: "{autopf}\Tutti"
+
 [Icons]
 Name: "{autoprograms}\TUTTI"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\TUTTI"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
