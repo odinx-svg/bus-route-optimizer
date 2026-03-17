@@ -57,7 +57,6 @@ import { downloadIncidentsAsCsv, downloadIncidentsAsJson } from '../../utils/inc
 import { buildRouteCapacityMap, getItemCapacityNeeded } from '../../utils/capacity';
 import { RouteEditModal } from './RouteEditModal';
 import { TimelineBusRow, TimelineScale, TimelineControls, calculateTimelineCompression } from './TimelineBusRow';
-import { TransferZone } from './TransferZone';
 
 // ============================================================================
 // CONSTANTES
@@ -2614,24 +2613,6 @@ export function UnifiedWorkspace({
 
         {/* Contenido principal */}
         <div className="flex-1 flex overflow-hidden" style={{ minHeight: 0 }}>
-          {/* Panel izquierdo: Zona de Transferencia */}
-          <div 
-            className={`
-              flex-shrink-0 flex flex-col border-r border-[#2a3f54] bg-[#0b141f] transition-all duration-300
-              ${transferRoutes.length > 0 ? 'w-56' : 'w-16'}
-            `}
-          >
-            <div className="flex-1 overflow-y-auto p-2">
-              <TransferZone 
-                routes={transferRoutes}
-                isDragging={isDraggingRoute}
-                onRouteRemove={(routeId) => {
-                  setTransferRoutes(prev => prev.filter(r => r.id !== routeId));
-                }}
-              />
-            </div>
-          </div>
-
           {/* Area central: Workspace */}
           <div className="flex-1 p-3 overflow-hidden relative" style={{ minWidth: 0 }}>
               <WorkspaceArea isOverWorkspace={isOverWorkspace}>

@@ -4,9 +4,9 @@ import BusListPanel from './BusListPanel';
 import { UnifiedWorkspace } from './workspace';
 
 const STUDIO_TABS = [
-  { id: 'mixed', label: 'Mapa + horario' },
-  { id: 'map', label: 'Mapa' },
   { id: 'workspace', label: 'Horario' },
+  { id: 'map', label: 'Mapa' },
+  { id: 'mixed', label: 'Mapa + horario' },
 ];
 
 export default function OptimizationStudio({
@@ -28,7 +28,7 @@ export default function OptimizationStudio({
   onOpenReconciliation = null,
   onStudioLiveScheduleChange = null,
 }) {
-  const [studioTab, setStudioTab] = useState('mixed');
+  const [studioTab, setStudioTab] = useState('workspace');
   const [splitPercent, setSplitPercent] = useState(40);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [liveScheduleByDay, setLiveScheduleByDay] = useState({});
