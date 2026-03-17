@@ -746,6 +746,82 @@ border-radius:9px;transition:width .3s}
 </body></html>"""
 
 
+def _make_boot_window_html() -> str:
+    """Return a minimal startup shell shown before the backend is ready."""
+    return """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;background:#0a1324;color:#e2e8f0;font-family:'Segoe UI',sans-serif;
+display:flex;align-items:center;justify-content:center;height:100vh}
+.shell{width:min(560px,88vw);padding:32px 36px;border:1px solid rgba(56,189,248,.22);
+background:linear-gradient(180deg,rgba(15,23,42,.98),rgba(10,19,36,.98));border-radius:22px;
+box-shadow:0 24px 80px rgba(0,0,0,.35)}
+.eyebrow{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:#22d3ee;margin-bottom:10px}
+h1{font-size:34px;line-height:1.05;margin:0 0 10px;font-weight:700}
+p{margin:0;color:#9fb0c8;font-size:16px;line-height:1.5}
+.meter{margin-top:24px;height:12px;border-radius:999px;background:#162235;overflow:hidden}
+.bar{height:100%;width:38%;border-radius:999px;background:linear-gradient(90deg,#22d3ee,#3b82f6);
+animation:slide 1.4s ease-in-out infinite}
+.status{margin-top:16px;font-size:13px;color:#7dd3fc}
+.hint{margin-top:10px;font-size:12px;color:#64748b}
+@keyframes slide{
+  0%{transform:translateX(-24%) scaleX(.75)}
+  50%{transform:translateX(82%) scaleX(1)}
+  100%{transform:translateX(-24%) scaleX(.75)}
+}
+</style></head><body>
+<div class="shell">
+  <div class="eyebrow">TUTTI</div>
+  <h1>Iniciando centro operativo</h1>
+  <p id="boot-copy">Preparando backend local y cargando la interfaz.</p>
+  <div class="meter"><div class="bar"></div></div>
+  <div id="boot-status" class="status">Conectando con el sistema...</div>
+  <div class="hint">Si tarda demasiado, TUTTI mostrara el motivo en esta misma ventana.</div>
+</div>
+</body></html>"""
+
+
+def _set_window_boot_status(window: object, message: str, detail: Optional[str] = None) -> None:
+    safe_message = json.dumps(message, ensure_ascii=False)
+    safe_detail = json.dumps(detail or "", ensure_ascii=False)
+    script = (
+        f"document.getElementById('boot-status').textContent = {safe_message};"
+        f"document.getElementById('boot-copy').textContent = {safe_detail} || document.getElementById('boot-copy').textContent;"
+    )
+    try:
+        window.evaluate_js(script)
+    except Exception:
+        pass
+
+
+def _load_app_when_ready(window: object, runtime: "DesktopRuntime") -> None:
+    """Wait for backend readiness after the desktop shell is visible."""
+    _log_launcher("Boot shell created; waiting for backend readiness")
+    _set_window_boot_status(window, "Arrancando backend local...", "Preparando servicios internos.")
+    if not _wait_backend_ready(timeout_sec=90):
+        _log_launcher("Backend readiness timeout; showing startup error in shell")
+        _set_window_boot_status(
+            window,
+            "No se pudo arrancar el backend local.",
+            "Revisa AppData\\\\Local\\\\Tutti\\\\logs\\\\desktop-backend.log y desktop-launcher.log",
+        )
+        return
+
+    _log_launcher("Backend ready; navigating desktop shell to APP_URL")
+    _set_window_boot_status(window, "Cargando interfaz...", "El backend ya responde. Abriendo Tutti.")
+    try:
+        if hasattr(window, "load_url"):
+            window.load_url(APP_URL)
+        else:
+            window.evaluate_js(f"window.location.href = {json.dumps(APP_URL)};")
+    except Exception as exc:
+        _log_launcher(f"APP_URL navigation failed: {exc!r}")
+        _set_window_boot_status(
+            window,
+            "No se pudo abrir la interfaz principal.",
+            "Revisa AppData\\\\Local\\\\Tutti\\\\logs\\\\desktop-launcher.log",
+        )
+
+
 class _ProgressReporter:
     """Bridges download progress to the progress WebView window."""
 
@@ -1378,6 +1454,7 @@ def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "--run-backend":
         return _run_backend_process_mode()
 
+    _log_launcher("Desktop launcher main entry")
     if not _acquire_single_instance():
         _message_box(
             "TUTTI ya esta abierto o arrancando en segundo plano.\n\nCierra la instancia anterior y vuelve a intentarlo.",
@@ -1425,6 +1502,7 @@ def main() -> int:
         _check_update_background(_on_update_result)
 
     runtime_root = _resolve_runtime_root()
+    _log_launcher(f"Resolved runtime root: {runtime_root}")
     runtime = DesktopRuntime(runtime_root)
 
     def _safe_shutdown(*_args: object) -> None:
@@ -1436,19 +1514,16 @@ def main() -> int:
     signal.signal(signal.SIGINT, _safe_shutdown)
 
     if not runtime.frontend_dist.joinpath("index.html").exists():
+        _log_launcher(f"Frontend dist missing at: {runtime.frontend_dist}")
         print("[Desktop] Frontend build not found. Run: npm run build (frontend)")
         return 1
 
+    _log_launcher("Starting backend subprocess")
     runtime.start_backend()
-    if not _wait_backend_ready(timeout_sec=60):
-        runtime.stop_backend()
-        print("[Desktop] Backend did not become ready in time.")
-        return 1
+    _log_launcher("Backend subprocess launched")
 
-    # Update prompt gate:
-    # - If background check already found update -> prompt now.
-    # - If background check is still running (race) -> run foreground check
-    #   once to avoid missing available updates.
+    # Do not block the desktop window on startup checks. Showing the shell first
+    # is safer than waiting here and leaving the user with no visible app.
     if not blocking_update:
         wait_timeout_raw = os.environ.get("TUTTI_DESKTOP_BG_UPDATE_WAIT_SEC", "4")
         try:
@@ -1457,17 +1532,11 @@ def main() -> int:
             wait_timeout = 4.0
 
         background_finished = _background_update_done.wait(timeout=wait_timeout)
-        should_check_foreground = bool(_pending_update.get("release")) or (not background_finished)
-
         if not background_finished:
             _log_update(
                 "Background update check did not finish before startup gate; "
-                "running foreground update check"
+                "continuing boot without blocking window"
             )
-
-        if should_check_foreground and _check_and_apply_update_if_available():
-            runtime.stop_backend()
-            return 0
 
     default_fullscreen = "0"
     start_fullscreen = _env_flag("TUTTI_DESKTOP_START_FULLSCREEN", default_fullscreen)
@@ -1488,17 +1557,20 @@ def main() -> int:
 
     desktop_bridge = DesktopBridge()
     try:
-        _log_launcher(f"Creating desktop window | fullscreen={start_fullscreen} maximized={window_options.get('maximized', False)}")
+        _log_launcher(
+            "Creating desktop window shell | "
+            f"fullscreen={start_fullscreen} maximized={window_options.get('maximized', False)}"
+        )
         window = webview.create_window(
             "TUTTI Fleet Control Center",
-            APP_URL,
+            html=_make_boot_window_html(),
             js_api=desktop_bridge,
             **window_options,
         )
         desktop_bridge.bind_window(window)
         window.events.closed += _safe_shutdown
         _log_launcher("Starting webview event loop")
-        webview.start(debug=False)
+        webview.start(func=lambda: _load_app_when_ready(window, runtime), debug=False)
         _log_launcher("webview.start returned cleanly")
         return 0
     except Exception as exc:
