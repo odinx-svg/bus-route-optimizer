@@ -141,15 +141,17 @@ const getBusPrimaryLabel = (bus = {}) => {
   return plate || code || fallback;
 };
 
-const getBusSecondaryLabel = (bus = {}) => {
+const getBusCompanyLabel = (bus = {}) => {
+  return String(bus?.assigned_company_name || '').trim();
+};
+
+const getBusReferenceLabel = (bus = {}) => {
   const internalId = String(bus?.id || bus?.bus_id || '').trim();
   const plate = String(bus?.assigned_vehicle_plate || '').trim();
   const code = String(bus?.assigned_vehicle_code || '').trim();
-  const company = String(bus?.assigned_company_name || '').trim();
   const parts = [];
   if (internalId && (plate || code)) parts.push(`Plan ${internalId}`);
   if (code && plate && code !== plate) parts.push(code);
-  if (company) parts.push(company);
   return parts.join(' · ');
 };
 
@@ -954,7 +956,8 @@ export function TimelineBusRow({
   onTogglePin = null,
 }) {
   const primaryBusLabel = getBusPrimaryLabel(bus);
-  const secondaryBusLabel = getBusSecondaryLabel(bus);
+  const companyBusLabel = getBusCompanyLabel(bus);
+  const referenceBusLabel = getBusReferenceLabel(bus);
   const showingAssignedVehicle = primaryBusLabel !== String(bus?.id || '').trim();
   const { isOver, setNodeRef } = useDroppable({ 
     id: `bus-${bus.id}`,
@@ -1054,9 +1057,11 @@ export function TimelineBusRow({
         {/* ID del bus - grande y prominente */}
         <div className="flex items-center gap-2">
           <div className={`
-            ${showingAssignedVehicle ? 'text-[20px]' : 'text-[29px]'} font-semibold tracking-tight leading-none tabular-nums data-mono truncate
+            ${showingAssignedVehicle ? 'text-[15px]' : 'text-[29px]'} font-semibold tracking-tight leading-none tabular-nums data-mono truncate
             ${isActive ? 'text-cyan-300' : 'text-slate-100'}
-          `}>
+          `}
+            title={[primaryBusLabel, companyBusLabel, referenceBusLabel].filter(Boolean).join(' · ')}
+          >
             {primaryBusLabel}
           </div>
 
@@ -1174,9 +1179,14 @@ export function TimelineBusRow({
             </button>
           )}
         </div>
-        {secondaryBusLabel ? (
-          <div className="mt-1 truncate text-[9px] text-slate-500">
-            {secondaryBusLabel}
+        {companyBusLabel ? (
+          <div className="mt-1 truncate text-[9px] font-medium uppercase tracking-[0.08em] text-cyan-200/85">
+            {companyBusLabel}
+          </div>
+        ) : null}
+        {referenceBusLabel ? (
+          <div className="mt-0.5 truncate text-[9px] text-slate-500">
+            {referenceBusLabel}
           </div>
         ) : null}
         
