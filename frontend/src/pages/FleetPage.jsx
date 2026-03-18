@@ -1,19 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, Bus, Download, FileText, MapPin, Pencil, Phone, Plus, Save, Trash2, Upload, User, X } from 'lucide-react';
+import { ArrowLeft, Building2, Bus, Download, FileText, MapPin, Pencil, Phone, Plus, Save, Search, Trash2, Upload, User, X } from 'lucide-react';
+
 import { notifications } from '../services/notifications';
 import {
   commitFleetImport,
   createFleetDriver,
   createFleetVehicle,
   deleteFleetDriver,
-  fetchFleetDrivers,
   deleteFleetVehicle,
-  fetchVehicleWeeklyPlan,
+  fetchFleetDrivers,
   fetchFleetVehicles,
+  fetchVehicleWeeklyPlan,
   previewFleetImport,
   updateFleetDriver,
-  updateVehicleDriverAssignments,
   updateFleetVehicle,
+  updateVehicleDriverAssignments,
 } from '../services/fleetService';
 
 const EMPTY_FORM = {
@@ -34,18 +35,6 @@ const EMPTY_FORM = {
   documents: [],
 };
 
-const STATUS_LABEL = { active: 'Activo', maintenance: 'Taller', inactive: 'Inactivo' };
-const DETAIL_TABS = [
-  { id: 'data', label: 'Datos' },
-  { id: 'drivers', label: 'Conductores' },
-  { id: 'documents', label: 'Documentos' },
-  { id: 'gps', label: 'GPS' },
-  { id: 'weekly_plan', label: 'Plan semanal' },
-];
-
-const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
-const DRIVER_CHANNEL_LABELS = { manual: 'Manual', whatsapp: 'WhatsApp', telegram: 'Telegram', call: 'Llamada' };
-const DRIVER_DAY_ORDER = ['default', 'L', 'M', 'Mc', 'X', 'V'];
 const EMPTY_DRIVER_FORM = {
   full_name: '',
   phone: '',
@@ -57,24 +46,23 @@ const EMPTY_DRIVER_FORM = {
   notes: '',
 };
 
+const STATUS_LABEL = { active: 'Activo', maintenance: 'Taller', inactive: 'Inactivo' };
+const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
+const DRIVER_CHANNEL_LABELS = { manual: 'Manual', whatsapp: 'WhatsApp', telegram: 'Telegram', call: 'Llamada' };
+const DRIVER_DAY_ORDER = ['default', 'L', 'M', 'Mc', 'X', 'V'];
+const DETAIL_TABS = [
+  { id: 'weekly_plan', label: 'Servicios' },
+  { id: 'data', label: 'Datos' },
+  { id: 'drivers', label: 'Conductores' },
+  { id: 'documents', label: 'Documentacion' },
+  { id: 'gps', label: 'GPS' },
+];
+
 const minuteToLabel = (value) => {
   const safe = Number(value || 0);
   const hours = Math.floor(safe / 60);
   const minutes = safe % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-};
-
-const buildDriverAssignmentDraft = (vehicle) => {
-  const mapping = { default_driver_id: '', days: { L: '', M: '', Mc: '', X: '', V: '' } };
-  (vehicle?.driver_assignments || []).forEach((assignment) => {
-    const dayCode = String(assignment?.day_code || '').trim();
-    if (dayCode === 'default') {
-      mapping.default_driver_id = String(assignment?.driver_id || '').trim();
-    } else if (mapping.days[dayCode] !== undefined) {
-      mapping.days[dayCode] = String(assignment?.driver_id || '').trim();
-    }
-  });
-  return mapping;
 };
 
 const toPayload = (form) => ({
@@ -122,9 +110,27 @@ const fromVehicle = (vehicle) => ({
   documents: Array.isArray(vehicle?.documents) ? vehicle.documents : [],
 });
 
+const buildDriverAssignmentDraft = (vehicle) => {
+  const mapping = { default_driver_id: '', days: { L: '', M: '', Mc: '', X: '', V: '' } };
+  (vehicle?.driver_assignments || []).forEach((assignment) => {
+    const dayCode = String(assignment?.day_code || '').trim();
+    if (dayCode === 'default') {
+      mapping.default_driver_id = String(assignment?.driver_id || '').trim();
+    } else if (mapping.days[dayCode] !== undefined) {
+      mapping.days[dayCode] = String(assignment?.driver_id || '').trim();
+    }
+  });
+  return mapping;
+};
+
 const hasGpsLink = (vehicle) => Boolean(String(vehicle?.gps_provider || '').trim() || String(vehicle?.gps_external_id || '').trim());
 const hasPendingDocuments = (vehicle) => !Array.isArray(vehicle?.documents) || vehicle.documents.length === 0;
 const filterChipClass = (active) => (active ? 'border-cyan-400/55 bg-cyan-500/12 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.05]');
+const statusBadgeClass = (status) => {
+  if (status === 'active') return 'bg-emerald-500/[0.16] text-emerald-200';
+  if (status === 'maintenance') return 'bg-amber-500/[0.16] text-amber-200';
+  return 'bg-slate-500/[0.18] text-slate-200';
+};
 
 function SectionTitle({ eyebrow, title, description }) {
   return (
@@ -138,21 +144,32 @@ function SectionTitle({ eyebrow, title, description }) {
   );
 }
 
+function StatCard({ label, value, tone = 'text-white' }) {
+  return (
+    <div className="rounded-[16px] border border-[#304a62] bg-[#0b141f] p-3">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">{label}</p>
+      <p className={`mt-1 text-[24px] font-semibold data-mono ${tone}`}>{value}</p>
+    </div>
+  );
+}
+
 export default function FleetPage() {
   const [vehicles, setVehicles] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [screenMode, setScreenMode] = useState('garage');
   const [query, setQuery] = useState('');
   const [companyFilter, setCompanyFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [assetFilter, setAssetFilter] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [detailTab, setDetailTab] = useState('data');
+  const [detailTab, setDetailTab] = useState('weekly_plan');
   const [collapsedCompanies, setCollapsedCompanies] = useState({});
   const [form, setForm] = useState(EMPTY_FORM);
   const [importFile, setImportFile] = useState(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [importPreviewData, setImportPreviewData] = useState(null);
   const [importSummary, setImportSummary] = useState(null);
   const [primarySheetName, setPrimarySheetName] = useState('');
@@ -168,6 +185,17 @@ export default function FleetPage() {
   const [driverSaving, setDriverSaving] = useState(false);
   const [driverAssignmentsDraft, setDriverAssignmentsDraft] = useState({ default_driver_id: '', days: { L: '', M: '', Mc: '', X: '', V: '' } });
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+
+  const selectedVehicle = useMemo(() => vehicles.find((vehicle) => String(vehicle.id) === String(selectedId)) || null, [selectedId, vehicles]);
+  const isEditing = Boolean(editingId);
+  const activeForm = isEditing ? form : (selectedVehicle ? fromVehicle(selectedVehicle) : EMPTY_FORM);
+  const selectedWeeklyPlan = selectedVehicle ? weeklyPlanCache[String(selectedVehicle.id)] || null : null;
+  const selectedVehicleDrivers = selectedVehicle ? (driversByCompany[String(selectedVehicle.company_id || '').trim()] || []) : [];
+  const selectedVehicleServiceCount = Number(selectedWeeklyPlan?.total_assignments || 0);
+  const selectedVehicleDaysWithService = Number(selectedWeeklyPlan?.total_days_with_service || 0);
+  const selectedVehicleHasGps = selectedVehicle ? hasGpsLink(selectedVehicle) : false;
+  const selectedVehicleHasPendingDocs = selectedVehicle ? hasPendingDocuments(selectedVehicle) : false;
+  const selectedVehicleDriverName = selectedWeeklyPlan?.default_driver_name || selectedVehicle?.default_driver_name || 'Sin asignar';
 
   const loadFleet = async () => {
     setLoading(true);
@@ -262,7 +290,15 @@ export default function FleetPage() {
       const companyId = String(vehicle?.company_id || '').trim() || 'company_unassigned';
       const companyName = String(vehicle?.company_name || '').trim() || 'Sin empresa';
       if (!groups.has(companyId)) {
-        groups.set(companyId, { companyId, companyName, vehicles: [], totalSeatsMax: 0, activeCount: 0, maintenanceCount: 0, inactiveCount: 0 });
+        groups.set(companyId, {
+          companyId,
+          companyName,
+          vehicles: [],
+          totalSeatsMax: 0,
+          activeCount: 0,
+          maintenanceCount: 0,
+          inactiveCount: 0,
+        });
       }
       const group = groups.get(companyId);
       group.vehicles.push(vehicle);
@@ -271,6 +307,7 @@ export default function FleetPage() {
       if (vehicle?.status === 'maintenance') group.maintenanceCount += 1;
       if (vehicle?.status === 'inactive') group.inactiveCount += 1;
     }
+
     const result = Array.from(groups.values());
     result.sort((a, b) => a.companyName.localeCompare(b.companyName, 'es', { sensitivity: 'base' }));
     result.forEach((group) => {
@@ -293,36 +330,24 @@ export default function FleetPage() {
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
   }, [vehicles]);
 
+  const garageStats = useMemo(() => ({
+    total: Number(summary?.total ?? vehicles.length),
+    active: Number(summary?.active ?? vehicles.filter((vehicle) => vehicle?.status === 'active').length),
+    maintenance: vehicles.filter((vehicle) => vehicle?.status === 'maintenance').length,
+    totalSeatsMax: Number(summary?.total_seats_max ?? vehicles.reduce((acc, vehicle) => acc + Number(vehicle?.seats_max || 0), 0)),
+  }), [summary, vehicles]);
+
+  const visibleGarageVehicles = useMemo(() => filteredVehicles.slice(0, 18), [filteredVehicles]);
+
   useEffect(() => {
     setCollapsedCompanies((prev) => {
       const next = { ...prev };
-      const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === String(selectedId));
-      const selectedCompanyId = String(selectedVehicle?.company_id || '').trim() || 'company_unassigned';
       groupedVehicles.forEach((group) => {
-        if (next[group.companyId] === undefined) next[group.companyId] = true;
+        if (next[group.companyId] === undefined) next[group.companyId] = false;
       });
-      if (selectedVehicle && next[selectedCompanyId]) next[selectedCompanyId] = false;
       return next;
     });
-  }, [groupedVehicles, selectedId, vehicles]);
-
-  const selectedVehicle = useMemo(() => vehicles.find((vehicle) => String(vehicle.id) === String(selectedId)) || null, [selectedId, vehicles]);
-  const isEditing = Boolean(editingId);
-  const activeForm = isEditing ? form : (selectedVehicle ? fromVehicle(selectedVehicle) : EMPTY_FORM);
-  const selectedWeeklyPlan = selectedVehicle ? weeklyPlanCache[String(selectedVehicle.id)] || null : null;
-  const selectedVehicleDrivers = selectedVehicle
-    ? (driversByCompany[String(selectedVehicle.company_id || '').trim()] || [])
-    : [];
-
-  const invalidateWeeklyPlan = (vehicleId) => {
-    const key = String(vehicleId || '').trim();
-    if (!key) return;
-    setWeeklyPlanCache((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
+  }, [groupedVehicles]);
 
   const loadVehicleWeeklyPlan = async (vehicleId, { force = false } = {}) => {
     const key = String(vehicleId || '').trim();
@@ -345,6 +370,29 @@ export default function FleetPage() {
     if (!selectedVehicle || isEditing || detailTab !== 'weekly_plan') return;
     loadVehicleWeeklyPlan(selectedVehicle.id);
   }, [detailTab, isEditing, selectedVehicle]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const missingVehicles = visibleGarageVehicles.filter((vehicle) => !weeklyPlanCache[String(vehicle.id)]);
+    if (missingVehicles.length === 0) return undefined;
+
+    const prefetchPlans = async () => {
+      for (const vehicle of missingVehicles) {
+        try {
+          const data = await fetchVehicleWeeklyPlan(String(vehicle.id));
+          if (cancelled) return;
+          setWeeklyPlanCache((prev) => (prev[String(vehicle.id)] ? prev : { ...prev, [String(vehicle.id)]: data }));
+        } catch (error) {
+          // Silent prefetch for garage cards.
+        }
+      }
+    };
+
+    prefetchPlans();
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleGarageVehicles, weeklyPlanCache]);
 
   const loadCompanyDrivers = async (companyId, { force = false } = {}) => {
     const key = String(companyId || '').trim();
@@ -371,6 +419,134 @@ export default function FleetPage() {
     setDriverForm(EMPTY_DRIVER_FORM);
   }, [detailTab, selectedVehicle]);
 
+  const invalidateWeeklyPlan = (vehicleId) => {
+    const key = String(vehicleId || '').trim();
+    if (!key) return;
+    setWeeklyPlanCache((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const openVehicleScreen = (vehicle, nextTab = 'weekly_plan') => {
+    if (!vehicle) return;
+    setSelectedId(vehicle.id);
+    setDetailTab(nextTab);
+    setScreenMode('vehicle');
+    if (!isEditing) {
+      setForm(fromVehicle(vehicle));
+    }
+    if (nextTab === 'weekly_plan') {
+      loadVehicleWeeklyPlan(vehicle.id);
+    }
+  };
+
+  const handleBackToGarage = () => {
+    setEditingId(null);
+    setDetailTab('weekly_plan');
+    setForm(selectedVehicle ? fromVehicle(selectedVehicle) : { ...EMPTY_FORM });
+    setScreenMode('garage');
+  };
+
+  const startCreate = () => {
+    setEditingId('new');
+    setSelectedId(null);
+    setDetailTab('data');
+    setForm({ ...EMPTY_FORM });
+    setScreenMode('vehicle');
+  };
+
+  const startEdit = (vehicle) => {
+    setEditingId(vehicle.id);
+    setSelectedId(vehicle.id);
+    setDetailTab('data');
+    setForm(fromVehicle(vehicle));
+    setScreenMode('vehicle');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(selectedVehicle ? fromVehicle(selectedVehicle) : { ...EMPTY_FORM });
+    if (!selectedVehicle) {
+      setScreenMode('garage');
+    }
+  };
+
+  const handleSave = async () => {
+    const payload = toPayload(form);
+    if (!payload.vehicle_code || !payload.plate) {
+      notifications.warning('Datos incompletos', 'Codigo y matricula son obligatorios');
+      return;
+    }
+    if (!payload.seats_min || !payload.seats_max) {
+      notifications.warning('Datos incompletos', 'Define el rango de plazas');
+      return;
+    }
+    if (payload.seats_min > payload.seats_max) {
+      notifications.warning('Rango invalido', 'Plazas minimas no puede ser mayor que maximas');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (editingId === 'new') {
+        const created = await createFleetVehicle(payload);
+        notifications.success('Vehiculo creado', `${created.vehicle_code} registrado`);
+        setSelectedId(created.id);
+      } else if (editingId) {
+        const updated = await updateFleetVehicle(editingId, payload);
+        notifications.success('Vehiculo actualizado', `${updated.vehicle_code} guardado`);
+        setSelectedId(updated.id);
+      }
+      setEditingId(null);
+      setScreenMode('vehicle');
+      await loadFleet();
+    } catch (error) {
+      notifications.error('No se pudo guardar', error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (vehicle) => {
+    if (!vehicle) return;
+    if (!window.confirm(`Eliminar ${vehicle.vehicle_code} (${vehicle.plate})?`)) return;
+
+    try {
+      await deleteFleetVehicle(vehicle.id);
+      notifications.success('Vehiculo eliminado', vehicle.vehicle_code);
+      setEditingId(null);
+      setScreenMode('garage');
+      await loadFleet();
+    } catch (error) {
+      notifications.error('No se pudo eliminar', error.message);
+    }
+  };
+
+  const addDocument = () => {
+    setForm((prev) => ({
+      ...prev,
+      documents: [...(prev.documents || []), { doc_type: '', reference: '', issue_date: '', expiry_date: '', notes: '' }],
+    }));
+  };
+
+  const updateDocument = (index, key, value) => {
+    setForm((prev) => {
+      const documents = [...(prev.documents || [])];
+      documents[index] = { ...(documents[index] || {}), [key]: value };
+      return { ...prev, documents };
+    });
+  };
+
+  const removeDocument = (index) => {
+    setForm((prev) => {
+      const documents = [...(prev.documents || [])];
+      documents.splice(index, 1);
+      return { ...prev, documents };
+    });
+  };
+
   const handleSaveDriver = async () => {
     if (!selectedVehicle?.company_id) {
       notifications.warning('Empresa requerida', 'Selecciona primero un vehiculo con empresa');
@@ -380,6 +556,7 @@ export default function FleetPage() {
       notifications.warning('Nombre requerido', 'Indica el nombre del conductor');
       return;
     }
+
     setDriverSaving(true);
     try {
       const payload = {
@@ -393,9 +570,8 @@ export default function FleetPage() {
         status: driverForm.status || 'active',
         notes: String(driverForm.notes || '').trim() || null,
       };
-      const saved = driverEditingId
-        ? await updateFleetDriver(driverEditingId, payload)
-        : await createFleetDriver(payload);
+
+      const saved = driverEditingId ? await updateFleetDriver(driverEditingId, payload) : await createFleetDriver(payload);
       notifications.success('Conductor guardado', saved.full_name);
       await loadCompanyDrivers(selectedVehicle.company_id, { force: true });
       setDriverEditingId(null);
@@ -424,6 +600,7 @@ export default function FleetPage() {
   const handleDeleteDriver = async (driver) => {
     if (!driver) return;
     if (!window.confirm(`Eliminar conductor ${driver.full_name}?`)) return;
+
     try {
       await deleteFleetDriver(driver.id);
       notifications.success('Conductor eliminado', driver.full_name);
@@ -444,6 +621,7 @@ export default function FleetPage() {
 
   const handleSaveDriverAssignments = async () => {
     if (!selectedVehicle) return;
+
     setAssignmentSaving(true);
     try {
       const payload = {
@@ -454,7 +632,7 @@ export default function FleetPage() {
         })),
       };
       await updateVehicleDriverAssignments(selectedVehicle.id, payload);
-      notifications.success('Conductores asignados', 'La ficha del vehiculo ya refleja el reparto semanal');
+      notifications.success('Conductores asignados', 'La unidad ya refleja el reparto semanal');
       await loadFleet();
       invalidateWeeklyPlan(selectedVehicle.id);
       if (detailTab === 'weekly_plan') {
@@ -467,99 +645,9 @@ export default function FleetPage() {
     }
   };
 
-  const startCreate = () => {
-    setEditingId('new');
-    setSelectedId(null);
-    setDetailTab('data');
-    setForm({ ...EMPTY_FORM });
-  };
-
-  const startEdit = (vehicle) => {
-    setEditingId(vehicle.id);
-    setSelectedId(vehicle.id);
-    setDetailTab('data');
-    setForm(fromVehicle(vehicle));
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setForm(selectedVehicle ? fromVehicle(selectedVehicle) : { ...EMPTY_FORM });
-  };
-
-  const handleSave = async () => {
-    const payload = toPayload(form);
-    if (!payload.vehicle_code || !payload.plate) {
-      notifications.warning('Datos incompletos', 'Codigo y matricula son obligatorios');
-      return;
-    }
-    if (!payload.seats_min || !payload.seats_max) {
-      notifications.warning('Datos incompletos', 'Define el rango de plazas');
-      return;
-    }
-    if (payload.seats_min > payload.seats_max) {
-      notifications.warning('Rango invalido', 'Plazas minimas no puede ser mayor que maximas');
-      return;
-    }
-    setSaving(true);
-    try {
-      if (editingId === 'new') {
-        const created = await createFleetVehicle(payload);
-        notifications.success('Vehiculo creado', `${created.vehicle_code} registrado`);
-        setSelectedId(created.id);
-        setEditingId(null);
-      } else if (editingId) {
-        const updated = await updateFleetVehicle(editingId, payload);
-        notifications.success('Vehiculo actualizado', `${updated.vehicle_code} guardado`);
-        setSelectedId(updated.id);
-        setEditingId(null);
-      }
-      await loadFleet();
-    } catch (error) {
-      notifications.error('No se pudo guardar', error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (vehicle) => {
-    if (!vehicle) return;
-    const ok = window.confirm(`Eliminar ${vehicle.vehicle_code} (${vehicle.plate})?`);
-    if (!ok) return;
-    try {
-      await deleteFleetVehicle(vehicle.id);
-      notifications.success('Vehiculo eliminado', vehicle.vehicle_code);
-      setEditingId(null);
-      await loadFleet();
-    } catch (error) {
-      notifications.error('No se pudo eliminar', error.message);
-    }
-  };
-
-  const addDocument = () => {
-    setForm((prev) => ({ ...prev, documents: [...(prev.documents || []), { doc_type: '', reference: '', issue_date: '', expiry_date: '', notes: '' }] }));
-  };
-
-  const updateDocument = (index, key, value) => {
-    setForm((prev) => {
-      const documents = [...(prev.documents || [])];
-      documents[index] = { ...(documents[index] || {}), [key]: value };
-      return { ...prev, documents };
-    });
-  };
-
-  const removeDocument = (index) => {
-    setForm((prev) => {
-      const documents = [...(prev.documents || [])];
-      documents.splice(index, 1);
-      return { ...prev, documents };
-    });
-  };
-
   const downloadWeeklyPlanCsv = () => {
     if (!selectedVehicle || !selectedWeeklyPlan) return;
-    const lines = [
-      ['Dia', 'Hora inicio', 'Hora fin', 'Ruta', 'Workspace', 'Bus plan', 'Empresa', 'Conductor', 'Telefono', 'Tipo'],
-    ];
+    const lines = [['Dia', 'Hora inicio', 'Hora fin', 'Ruta', 'Workspace', 'Bus plan', 'Empresa', 'Conductor', 'Telefono', 'Tipo']];
     (selectedWeeklyPlan.days || []).forEach((day) => {
       (day.assignments || []).forEach((assignment) => {
         lines.push([
@@ -588,159 +676,175 @@ export default function FleetPage() {
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="h-full min-h-0 overflow-auto rounded-[18px] control-panel p-4 md:p-5 space-y-4">
-      <div className="rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <SectionTitle
-            eyebrow="Flota"
-            title="Catalogo operativo de vehiculos"
-            description="Organiza la flota por empresa, importa desde Excel y revisa cada vehiculo sin mezclar tareas."
-          />
-          <button
-            type="button"
-            onClick={startCreate}
-            className="px-3 py-1.5 control-btn-primary rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Nuevo bus
-          </button>
-        </div>
+  const renderImportModal = () => {
+    if (!isImportOpen) return null;
+    return (
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#071019]/84 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-3xl rounded-[22px] border border-[#35536d] bg-[#0b141f] shadow-[0_30px_90px_rgba(0,0,0,0.45)]">
+          <div className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10">
+                <Upload className="h-5 w-5 text-cyan-200" />
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">GARAGE / Importar</p>
+                <h3 className="mt-1 text-[20px] font-semibold text-white">Carga masiva de flota</h3>
+                <p className="mt-1 text-[12px] text-slate-400">El asistente vive aparte para que el garage siga entrando siempre por la lista.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsImportOpen(false)}
+              className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-slate-300 hover:bg-white/[0.06]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Vehiculos</p>
-            <p className="mt-1 text-[24px] font-semibold data-mono text-white">{summary?.total ?? 0}</p>
-          </div>
-          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Empresas</p>
-            <p className="mt-1 text-[24px] font-semibold data-mono text-cyan-300">{companyFilterOptions.length}</p>
-          </div>
-          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Activos</p>
-            <p className="mt-1 text-[24px] font-semibold data-mono text-emerald-300">{summary?.active ?? 0}</p>
-          </div>
-          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Plazas maximas</p>
-            <p className="mt-1 text-[24px] font-semibold data-mono text-amber-200">{summary?.total_seats_max ?? 0}</p>
+          <div className="space-y-4 px-5 py-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div className="space-y-4">
+                <label className="block rounded-[18px] border border-white/10 bg-white/[0.03] p-4">
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">1. Elegir archivo</span>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xlsm,.xls"
+                    onChange={(event) => {
+                      setImportFile(event.target.files?.[0] || null);
+                      resetImportWorkflow();
+                    }}
+                    className="mt-3 w-full text-[11px] text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-500/20 file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-cyan-200"
+                  />
+                </label>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    disabled={!importFile || previewingImport}
+                    onClick={handlePreviewImport}
+                    className="rounded-md border border-cyan-500/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-200 hover:bg-cyan-500/10 disabled:opacity-50"
+                  >
+                    {previewingImport ? 'Analizando...' : '2. Analizar archivo'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!primarySheetName || committingImport}
+                    onClick={handleCommitImport}
+                    className="rounded-md border border-emerald-500/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
+                  >
+                    {committingImport ? 'Importando...' : '3. Confirmar carga'}
+                  </button>
+                </div>
+
+                {importPreviewData && (
+                  <div className="rounded-[18px] border border-white/10 bg-[#09111b] p-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-3 text-[11px]">
+                      <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3">
+                        <p className="text-slate-400">Empresas detectadas</p>
+                        <p className="mt-1 font-semibold text-white">{importPreviewData.sheet_names?.length || 0}</p>
+                      </div>
+                      <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3">
+                        <p className="text-slate-400">Advertencias</p>
+                        <p className="mt-1 font-semibold text-amber-200">{importPreviewData.warnings?.length || 0}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="block">
+                        <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Empresa principal</span>
+                        <select
+                          value={primarySheetName}
+                          onChange={(event) => setPrimarySheetName(event.target.value)}
+                          className="mt-1 w-full rounded-md border border-white/10 bg-[#0b141f] px-3 py-2 text-[12px] text-white"
+                        >
+                          {(importPreviewData.sheet_names || []).map((name) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="block">
+                        <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Nombre de UTE</span>
+                        <input
+                          value={uteName}
+                          onChange={(event) => setUteName(event.target.value)}
+                          placeholder="UTE Operativa"
+                          className="mt-1 w-full rounded-md border border-white/10 bg-[#0b141f] px-3 py-2 text-[12px] text-white"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="space-y-1 max-h-[220px] overflow-auto">
+                      {(importPreviewData.sheets || []).map((sheet) => (
+                        <div key={sheet.sheet_name} className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px]">
+                          <p className="font-semibold text-slate-100">{sheet.sheet_name}</p>
+                          <p className="mt-0.5 text-slate-400">Validas {sheet.valid_rows || 0} | Invalidas {sheet.invalid_rows || 0}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-[18px] border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Resumen</p>
+                  <p className="mt-2 text-[24px] font-semibold text-white data-mono">{importPreviewData?.sheet_names?.length || 0}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">hangars detectados en el Excel</p>
+                </div>
+
+                {importSummary && (
+                  <div className="rounded-[18px] border border-emerald-500/25 bg-emerald-500/[0.08] p-4 text-[11px] text-emerald-100">
+                    <p className="font-semibold">Importacion completada</p>
+                    <p className="mt-1">Principal: {importSummary.primary_company_id}</p>
+                    <p>UTE: {importSummary.ute_name} ({importSummary.ute_id})</p>
+                    <p className="mt-1">Creados {importSummary.total_created || 0} | Actualizados {importSummary.total_updated || 0} | Invalidos {importSummary.total_invalid || 0}</p>
+                  </div>
+                )}
+
+                <div className="rounded-[18px] border border-white/10 bg-white/[0.03] p-4 text-[11px] text-slate-400">
+                  Flujo reservado para altas masivas. La operacion diaria entra por la lista del GARAGE.
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+    );
+  };
 
-      <div className="grid min-h-0 grid-cols-[420px_1fr] gap-4">
-        <aside className="min-h-0 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4 space-y-4 overflow-y-auto">
-          <div className="rounded-[16px] border border-[#304a62] bg-[#0b141f] p-3 space-y-3">
-            <div className="flex items-center gap-2">
-              <Upload className="h-4 w-4 text-cyan-300" />
-              <div>
-                <p className="text-[12px] font-semibold text-white">Importar Excel de flota</p>
-                <p className="text-[11px] text-slate-400">Asistente claro para empresa unica o UTE.</p>
-              </div>
-            </div>
-
-            <label className="block rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">1. Elegir archivo</span>
+  const renderGarage = () => (
+    <>
+      <section className="rounded-[20px] border border-[#304a62] bg-[#0d1623]/95 p-4">
+        <div className="flex flex-col gap-4">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input
-                type="file"
-                accept=".xlsx,.xlsm,.xls"
-                onChange={(event) => {
-                  setImportFile(event.target.files?.[0] || null);
-                  resetImportWorkflow();
-                }}
-                className="mt-2 w-full text-[11px] text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-500/20 file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-cyan-200"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar por codigo, matricula, modelo o empresa"
+                className="w-full rounded-[16px] border border-white/10 bg-[#0b141f] py-3 pl-10 pr-4 text-[13px] text-white outline-none transition focus:border-cyan-500/40"
               />
             </label>
 
             <button
               type="button"
-              disabled={!importFile || previewingImport}
-              onClick={handlePreviewImport}
-              className="w-full rounded-md border border-cyan-500/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-200 hover:bg-cyan-500/10 disabled:opacity-50"
+              onClick={() => {
+                setQuery('');
+                setCompanyFilter('all');
+                setStatusFilter('all');
+                setAssetFilter('all');
+              }}
+              className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-200 hover:bg-white/[0.06]"
             >
-              {previewingImport ? 'Analizando...' : '2. Analizar archivo'}
+              Limpiar filtros
             </button>
-
-            {importPreviewData && (
-              <div className="rounded-xl border border-white/10 bg-[#09111b] p-3 space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2">
-                    <p className="text-slate-400">Empresas detectadas</p>
-                    <p className="mt-1 font-semibold text-white">{importPreviewData.sheet_names?.length || 0}</p>
-                  </div>
-                  <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2">
-                    <p className="text-slate-400">Advertencias</p>
-                    <p className="mt-1 font-semibold text-amber-200">{importPreviewData.warnings?.length || 0}</p>
-                  </div>
-                </div>
-
-                <label className="block">
-                  <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">3. Empresa principal</span>
-                  <select
-                    value={primarySheetName}
-                    onChange={(event) => setPrimarySheetName(event.target.value)}
-                    className="mt-1 w-full rounded-md border border-white/10 bg-[#0b141f] px-3 py-2 text-[12px] text-white"
-                  >
-                    {(importPreviewData.sheet_names || []).map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="block">
-                  <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Nombre de UTE</span>
-                  <input
-                    value={uteName}
-                    onChange={(event) => setUteName(event.target.value)}
-                    placeholder="UTE Operativa"
-                    className="mt-1 w-full rounded-md border border-white/10 bg-[#0b141f] px-3 py-2 text-[12px] text-white"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  disabled={!primarySheetName || committingImport}
-                  onClick={handleCommitImport}
-                  className="w-full rounded-md border border-emerald-500/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-200 hover:bg-emerald-500/10 disabled:opacity-50"
-                >
-                  {committingImport ? 'Importando...' : '4. Confirmar carga'}
-                </button>
-
-                <div className="space-y-1 max-h-[160px] overflow-auto">
-                  {(importPreviewData.sheets || []).map((sheet) => (
-                    <div key={sheet.sheet_name} className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2 text-[11px]">
-                      <p className="font-semibold text-slate-100">{sheet.sheet_name}</p>
-                      <p className="mt-0.5 text-slate-400">Validas {sheet.valid_rows || 0} | Invalidas {sheet.invalid_rows || 0}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {importSummary && (
-              <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.08] p-3 text-[11px] text-emerald-100">
-                <p className="font-semibold">Importacion completada</p>
-                <p className="mt-1">Principal: {importSummary.primary_company_id}</p>
-                <p>UTE: {importSummary.ute_name} ({importSummary.ute_id})</p>
-                <p className="mt-1">Creados {importSummary.total_created || 0} | Actualizados {importSummary.total_updated || 0} | Invalidos {importSummary.total_invalid || 0}</p>
-              </div>
-            )}
           </div>
 
-          <div className="rounded-[16px] border border-[#304a62] bg-[#0b141f] p-3 space-y-3">
-            <div>
-              <p className="text-[12px] font-semibold text-white">Catalogo de flota</p>
-              <p className="text-[11px] text-slate-400">Filtra por empresa, estado o integraciones.</p>
-            </div>
-
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar por codigo, matricula o empresa"
-              className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] outline-none focus:border-cyan-500/40"
-            />
-
+          <div className="grid gap-4 lg:grid-cols-3">
             <div className="space-y-2">
-              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Empresa</p>
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Hangar / empresa</p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => setCompanyFilter('all')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(companyFilter === 'all')}`}>Todas</button>
                 {companyFilterOptions.map((company) => (
@@ -763,628 +867,647 @@ export default function FleetPage() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Atajos</p>
+              <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Atajos operativos</p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => setAssetFilter('all')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'all')}`}>Todos</button>
                 <button type="button" onClick={() => setAssetFilter('with_gps')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'with_gps')}`}>Con GPS</button>
                 <button type="button" onClick={() => setAssetFilter('without_gps')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'without_gps')}`}>Sin GPS</button>
-                <button type="button" onClick={() => setAssetFilter('pending_documents')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'pending_documents')}`}>Documentos pendientes</button>
+                <button type="button" onClick={() => setAssetFilter('pending_documents')} className={`rounded-full border px-3 py-1.5 text-[10px] ${filterChipClass(assetFilter === 'pending_documents')}`}>Docs pendientes</button>
               </div>
             </div>
           </div>
-
-          <div className="space-y-3">
-            {loading && <p className="text-[12px] text-slate-500">Cargando flota...</p>}
-            {!loading && groupedVehicles.length === 0 && (
-              <div className="rounded-[16px] border border-[#304a62] bg-[#0b141f] p-6 text-center">
-                <Bus className="mx-auto h-6 w-6 text-slate-500" />
-                <p className="mt-2 text-[12px] text-slate-300">No hay vehiculos para el filtro actual.</p>
-              </div>
-            )}
-
-            {groupedVehicles.map((group) => {
-              const isCollapsed = collapsedCompanies[group.companyId] !== false;
-              return (
-                <div key={group.companyId} className="rounded-[16px] border border-[#304a62] bg-[#0b141f] overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setCollapsedCompanies((prev) => ({ ...prev, [group.companyId]: !isCollapsed }))}
-                    className="w-full px-3 py-3 text-left bg-white/[0.03] hover:bg-white/[0.05] transition"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-cyan-300 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-[12px] font-semibold text-white truncate">{group.companyName}</p>
-                          <p className="text-[10px] text-slate-400">{group.vehicles.length} buses | {group.totalSeatsMax} plazas maximas</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 text-[9px] data-mono">
-                        <span className="rounded bg-emerald-500/[0.16] px-1.5 py-0.5 text-emerald-200">{group.activeCount} A</span>
-                        <span className="rounded bg-amber-500/[0.16] px-1.5 py-0.5 text-amber-200">{group.maintenanceCount} T</span>
-                        <span className="rounded bg-slate-500/[0.16] px-1.5 py-0.5 text-slate-200">{group.inactiveCount} I</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  {!isCollapsed && (
-                    <div className="p-3 space-y-2">
-                      {group.vehicles.map((vehicle) => {
-                        const selected = String(vehicle.id) === String(selectedId);
-                        return (
-                          <button
-                            key={vehicle.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedId(vehicle.id);
-                              setDetailTab('data');
-                              if (!isEditing) setForm(fromVehicle(vehicle));
-                            }}
-                            className={`w-full rounded-[14px] border p-3 text-left transition ${
-                              selected ? 'border-cyan-400/60 bg-cyan-500/[0.12]' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.05]'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="text-[13px] font-semibold text-white data-mono">{vehicle.vehicle_code}</p>
-                                <p className="mt-1 text-[11px] text-slate-300 data-mono">{vehicle.plate}</p>
-                              </div>
-                              <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${
-                                vehicle.status === 'active'
-                                  ? 'bg-emerald-500/[0.16] text-emerald-200'
-                                  : vehicle.status === 'maintenance'
-                                    ? 'bg-amber-500/[0.16] text-amber-200'
-                                    : 'bg-slate-500/[0.18] text-slate-200'
-                              }`}>
-                                {STATUS_LABEL[vehicle.status] || vehicle.status}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
-                              <span className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-1">{vehicle.seats_min}-{vehicle.seats_max} plazas</span>
-                              {hasGpsLink(vehicle) && <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">GPS</span>}
-                              {hasPendingDocuments(vehicle) && <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-100">Doc pendiente</span>}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        </div>
+      </section>
+      <section className="min-h-0 rounded-[20px] border border-[#304a62] bg-[#0d1623]/95 p-4">
+        <div className="flex items-center justify-between gap-3 border-b border-white/8 pb-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">GARAGE / Hall</p>
+            <h3 className="mt-1 text-[20px] font-semibold text-white">Lista viva de unidades</h3>
+            <p className="mt-1 text-[12px] text-slate-400">Cada tarjeta funciona como plaza operativa. Desde aqui entras a la unidad y ves su actividad real o provisional.</p>
           </div>
-        </aside>
+          <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-slate-300 data-mono">
+            {filteredVehicles.length} visibles
+          </div>
+        </div>
 
-        <section className="min-h-0 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4 overflow-y-auto">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">Detalle</p>
-              <h3 className="mt-1 text-[20px] font-semibold text-white">
-                {isEditing ? (editingId === 'new' ? 'Nuevo vehiculo' : 'Edicion de vehiculo') : (selectedVehicle?.vehicle_code || 'Selecciona un vehiculo')}
-              </h3>
-              <p className="mt-1 text-[12px] text-slate-400">
-                {isEditing
-                  ? 'Completa datos, documentos y vinculacion GPS sin salir de la ficha.'
-                  : 'Consulta informacion operativa, documentacion y telematica de cada unidad.'}
-              </p>
+        <div className="mt-4 space-y-4">
+          {loading && <p className="text-[12px] text-slate-500">Cargando garage...</p>}
+          {!loading && groupedVehicles.length === 0 && (
+            <div className="rounded-[16px] border border-dashed border-white/12 bg-[#0b141f] p-8 text-center">
+              <Bus className="mx-auto h-7 w-7 text-slate-500" />
+              <p className="mt-3 text-[14px] font-medium text-slate-200">No hay unidades para este filtro</p>
+              <p className="mt-1 text-[12px] text-slate-400">Ajusta empresa, estado o atajos operativos para recuperar la vista del garage.</p>
             </div>
+          )}
 
-            <div className="flex items-center gap-2">
-              {selectedVehicle && !isEditing && detailTab === 'weekly_plan' && (
-                <button onClick={downloadWeeklyPlanCsv} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
-                  <Download size={12} />
-                  Descargar CSV
+          {groupedVehicles.map((group) => {
+            const isCollapsed = collapsedCompanies[group.companyId] === true;
+            return (
+              <div key={group.companyId} className="overflow-hidden rounded-[20px] border border-[#304a62] bg-[#0b141f]">
+                <button
+                  type="button"
+                  onClick={() => setCollapsedCompanies((prev) => ({ ...prev, [group.companyId]: !isCollapsed }))}
+                  className="w-full bg-[linear-gradient(90deg,rgba(34,211,238,0.10),transparent)] px-4 py-4 text-left hover:bg-[linear-gradient(90deg,rgba(34,211,238,0.14),transparent)]"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/15 bg-cyan-500/10">
+                        <Building2 className="h-5 w-5 text-cyan-200" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[14px] font-semibold text-white">{group.companyName}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">{group.vehicles.length} unidades | {group.totalSeatsMax} plazas maximas</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] data-mono">
+                      <span className="rounded-md bg-emerald-500/[0.16] px-2 py-1 text-emerald-200">{group.activeCount} A</span>
+                      <span className="rounded-md bg-amber-500/[0.16] px-2 py-1 text-amber-200">{group.maintenanceCount} T</span>
+                      <span className="rounded-md bg-slate-500/[0.16] px-2 py-1 text-slate-200">{group.inactiveCount} I</span>
+                    </div>
+                  </div>
                 </button>
-              )}
-              {selectedVehicle && !isEditing && (
-                <>
-                  <button onClick={() => startEdit(selectedVehicle)} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
-                    <Pencil size={12} />
-                    Editar
-                  </button>
-                  <button onClick={() => handleDelete(selectedVehicle)} className="px-3 py-1.5 rounded-md text-[11px] border border-red-500/35 text-red-300 hover:bg-red-500/[0.08] flex items-center gap-1.5">
-                    <Trash2 size={12} />
-                    Eliminar
-                  </button>
-                </>
-              )}
-              {isEditing && (
-                <>
-                  <button onClick={cancelEdit} className="px-3 py-1.5 rounded-md text-[11px] border border-white/[0.2] text-slate-300 hover:bg-white/[0.06] flex items-center gap-1.5">
-                    <X size={12} />
-                    Cancelar
-                  </button>
-                  <button onClick={handleSave} disabled={saving} className="control-btn-primary px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5 disabled:opacity-50">
-                    <Save size={12} />
-                    {saving ? 'Guardando...' : 'Guardar'}
-                  </button>
-                </>
-              )}
-            </div>
+
+                {!isCollapsed && (
+                  <div className="grid gap-3 p-3 lg:grid-cols-2 2xl:grid-cols-3">
+                    {group.vehicles.map((vehicle) => {
+                      const selected = String(vehicle.id) === String(selectedId);
+                      const weeklyPlan = weeklyPlanCache[String(vehicle.id)] || null;
+                      const serviceCount = Number(weeklyPlan?.total_assignments || 0);
+                      const daysWithService = Number(weeklyPlan?.total_days_with_service || 0);
+                      return (
+                        <div
+                          key={vehicle.id}
+                          className={`rounded-[18px] border p-4 transition ${
+                            selected
+                              ? 'border-cyan-400/70 bg-cyan-500/[0.10] shadow-[inset_0_0_0_1px_rgba(34,211,238,0.16)]'
+                              : 'border-white/10 bg-white/[0.03] hover:border-cyan-500/25 hover:bg-white/[0.05]'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[16px] font-semibold text-white data-mono">{vehicle.vehicle_code}</p>
+                              <p className="mt-1 text-[12px] text-slate-300 data-mono">{vehicle.plate}</p>
+                              <p className="mt-2 truncate text-[11px] text-slate-500">{vehicle.brand || 'Marca sin definir'} {vehicle.model || ''}</p>
+                            </div>
+                            <span className={`rounded-md px-2.5 py-1 text-[10px] font-semibold ${statusBadgeClass(vehicle.status)}`}>
+                              {STATUS_LABEL[vehicle.status] || vehicle.status}
+                            </span>
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap gap-2 text-[10px]">
+                            <span className="rounded-md border border-white/5 bg-white/[0.03] px-2.5 py-1 text-slate-300">
+                              {vehicle.seats_min}-{vehicle.seats_max} plazas
+                            </span>
+                            <span className={`rounded-md border px-2.5 py-1 ${serviceCount > 0 ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-100' : 'border-white/5 bg-white/[0.03] text-slate-400'}`}>
+                              {weeklyPlan ? (serviceCount > 0 ? `${serviceCount} servicios / ${daysWithService} dias` : 'Sin servicio publicado') : 'Cargando actividad'}
+                            </span>
+                            <span className={`rounded-md border px-2.5 py-1 ${hasPendingDocuments(vehicle) ? 'border-amber-500/20 bg-amber-500/10 text-amber-100' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100'}`}>
+                              {hasPendingDocuments(vehicle) ? 'Docs pendientes' : 'Docs al dia'}
+                            </span>
+                            <span className={`rounded-md border px-2.5 py-1 ${hasGpsLink(vehicle) ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-100' : 'border-white/5 bg-white/[0.03] text-slate-400'}`}>
+                              {hasGpsLink(vehicle) ? 'GPS' : 'Sin GPS'}
+                            </span>
+                          </div>
+
+                          <div className="mt-4 flex items-center justify-between gap-3">
+                            <p className="truncate text-[11px] text-slate-500">{weeklyPlan?.default_driver_name || vehicle.default_driver_name || 'Sin conductor habitual'}</p>
+                            <button
+                              type="button"
+                              onClick={() => openVehicleScreen(vehicle, 'weekly_plan')}
+                              className="inline-flex items-center gap-1 rounded-md border border-cyan-500/25 bg-cyan-500/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/15"
+                            >
+                              Entrar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </>
+  );
+
+  const renderVehicleDetail = () => (
+    <section className="min-h-0 rounded-[20px] border border-[#304a62] bg-[#0d1623]/95 p-4 overflow-y-auto">
+      <div className="flex flex-col gap-4 border-b border-white/8 pb-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={handleBackToGarage}
+            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-200 hover:bg-white/[0.06]"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Volver al GARAGE
+          </button>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">
+              GARAGE {selectedVehicle && !isEditing ? `> ${selectedVehicle.vehicle_code || selectedVehicle.plate}` : '> unidad'}
+            </p>
+            <h3 className="mt-1 text-[24px] font-semibold text-white">
+              {isEditing ? (editingId === 'new' ? 'Nueva unidad' : `Editar ${selectedVehicle?.vehicle_code || 'vehiculo'}`) : (selectedVehicle?.vehicle_code || 'Selecciona una unidad')}
+            </h3>
+            <p className="mt-1 text-[12px] text-slate-400">
+              {isEditing ? 'La edicion vive dentro de la unidad. Guardas y vuelves a operacion sin perder contexto.' : 'La unidad abre por servicios. Despues puedes bajar a datos, conductores, documentacion y GPS.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedVehicle && !isEditing && detailTab === 'weekly_plan' && (
+            <button onClick={downloadWeeklyPlanCsv} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
+              <Download size={12} />
+              Descargar CSV
+            </button>
+          )}
+          {selectedVehicle && !isEditing && (
+            <>
+              <button onClick={() => startEdit(selectedVehicle)} className="control-btn px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5">
+                <Pencil size={12} />
+                Editar
+              </button>
+              <button onClick={() => handleDelete(selectedVehicle)} className="px-3 py-1.5 rounded-md text-[11px] border border-red-500/35 text-red-300 hover:bg-red-500/[0.08] flex items-center gap-1.5">
+                <Trash2 size={12} />
+                Eliminar
+              </button>
+            </>
+          )}
+          {isEditing && (
+            <>
+              <button onClick={cancelEdit} className="px-3 py-1.5 rounded-md text-[11px] border border-white/[0.2] text-slate-300 hover:bg-white/[0.06] flex items-center gap-1.5">
+                <X size={12} />
+                Cancelar
+              </button>
+              <button onClick={handleSave} disabled={saving} className="control-btn-primary px-3 py-1.5 rounded-md text-[11px] flex items-center gap-1.5 disabled:opacity-50">
+                <Save size={12} />
+                {saving ? 'Guardando...' : 'Guardar'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {!selectedVehicle && !isEditing ? (
+        <div className="mt-6 flex h-[60vh] items-center justify-center rounded-[16px] border border-dashed border-white/[0.12]">
+          <div className="max-w-sm text-center">
+            <Bus className="mx-auto h-7 w-7 text-slate-500" />
+            <p className="mt-3 text-[14px] font-medium text-slate-200">Abre una unidad desde el garage</p>
+            <p className="mt-1 text-[12px] text-slate-400">La lista principal es el acceso al detalle operativo. Desde ahi entras a servicios, datos, documentacion y GPS.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 space-y-4">
+          {!isEditing && selectedVehicle && (
+            <>
+              <div className="rounded-[20px] border border-[#304a62] bg-[linear-gradient(135deg,rgba(34,211,238,0.10),transparent_45%),#0b141f] p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[20px] font-semibold text-white data-mono">{selectedVehicle.vehicle_code}</p>
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${statusBadgeClass(selectedVehicle.status)}`}>
+                        {STATUS_LABEL[selectedVehicle.status] || selectedVehicle.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[13px] text-slate-300 data-mono">{selectedVehicle.plate}</p>
+                    <p className="mt-2 text-[12px] text-slate-400">{selectedVehicle.company_name || selectedVehicle.company_id || 'Sin empresa'} | {selectedVehicle.brand || 'Marca sin definir'} {selectedVehicle.model || ''}</p>
+                  </div>
+                  <div className="rounded-[16px] border border-white/10 bg-white/[0.03] px-4 py-3 text-right">
+                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Resumen operativo</p>
+                    <p className="mt-1 text-[18px] font-semibold text-white">{selectedVehicleServiceCount} servicios</p>
+                    <p className="mt-1 text-[11px] text-slate-400">{selectedVehicleDaysWithService} dias con actividad publicada</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+                <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Servicios</p>
+                  <p className="mt-1 text-[18px] font-semibold text-white data-mono">{selectedVehicleServiceCount}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{selectedVehicleDaysWithService} dias activos</p>
+                </div>
+                <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Documentacion</p>
+                  <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicleHasPendingDocs ? 'Pendiente' : 'Al dia'}</p>
+                </div>
+                <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">GPS</p>
+                  <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicleHasGps ? 'Vinculado' : 'No vinculado'}</p>
+                </div>
+                <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductor</p>
+                  <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicleDriverName}</p>
+                </div>
+                <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Plazas</p>
+                  <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicle.seats_min}-{selectedVehicle.seats_max}</p>
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            {DETAIL_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setDetailTab(tab.id)}
+                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
+                  detailTab === tab.id ? 'border-cyan-400/55 bg-cyan-500/12 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.05]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {!selectedVehicle && !isEditing ? (
-            <div className="mt-6 flex h-[60vh] items-center justify-center rounded-[16px] border border-dashed border-white/[0.12]">
-              <div className="max-w-sm text-center">
-                <Bus className="mx-auto h-7 w-7 text-slate-500" />
-                <p className="mt-3 text-[14px] font-medium text-slate-200">Todavia no hay un vehiculo seleccionado</p>
-                <p className="mt-1 text-[12px] text-slate-400">Elige un bus del catalogo o crea uno nuevo para revisar datos, documentos y GPS.</p>
-                <div className="mt-4 flex items-center justify-center gap-2">
-                  <button type="button" onClick={startCreate} className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]">
-                    Nuevo bus
-                  </button>
+          {detailTab === 'weekly_plan' && (
+            <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[12px] font-semibold text-white">Servicios publicados de la unidad</p>
+                  <p className="text-[11px] text-slate-400">Que hace, en que horario, desde que workspace y con que tipo de asignacion.</p>
                 </div>
+                <button type="button" onClick={() => selectedVehicle && loadVehicleWeeklyPlan(selectedVehicle.id, { force: true })} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                  {weeklyPlanLoading ? 'Actualizando...' : 'Actualizar'}
+                </button>
               </div>
-            </div>
-          ) : (
-            <div className="mt-5 space-y-4">
-              {!isEditing && selectedVehicle && (
-                <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
-                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Empresa</p>
-                    <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicle.company_name || selectedVehicle.company_id || 'Sin empresa'}</p>
+              {!selectedVehicle ? null : weeklyPlanLoading && !selectedWeeklyPlan ? (
+                <div className="rounded-xl border border-white/10 bg-[#0f1723] p-4 text-[12px] text-slate-300">Cargando plan semanal...</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                    <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Servicios</p>
+                      <p className="mt-1 text-[20px] font-semibold data-mono text-white">{selectedWeeklyPlan?.total_assignments ?? 0}</p>
+                    </div>
+                    <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Dias con servicio</p>
+                      <p className="mt-1 text-[20px] font-semibold data-mono text-cyan-300">{selectedWeeklyPlan?.total_days_with_service ?? 0}</p>
+                    </div>
+                    <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Workspaces</p>
+                      <p className="mt-1 text-[20px] font-semibold data-mono text-amber-200">{selectedWeeklyPlan?.total_workspaces ?? 0}</p>
+                    </div>
+                    <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Vehiculo</p>
+                      <p className="mt-1 text-[13px] font-semibold text-white data-mono">{selectedVehicle.plate || selectedVehicle.vehicle_code}</p>
+                    </div>
                   </div>
-                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
-                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Estado</p>
-                    <p className="mt-1 text-[13px] font-semibold text-white">{STATUS_LABEL[selectedVehicle.status] || selectedVehicle.status}</p>
-                  </div>
-                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
-                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Plazas</p>
-                    <p className="mt-1 text-[13px] font-semibold text-white data-mono">{selectedVehicle.seats_min}-{selectedVehicle.seats_max}</p>
-                  </div>
-                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
-                    <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">GPS</p>
-                    <p className="mt-1 text-[13px] font-semibold text-white">{hasGpsLink(selectedVehicle) ? 'Vinculado' : 'Pendiente'}</p>
-                  </div>
-                  <div className="rounded-[14px] border border-white/5 bg-white/[0.03] p-3">
+
+                  <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
                     <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductor habitual</p>
-                    <p className="mt-1 text-[13px] font-semibold text-white">{selectedVehicle.default_driver_name || 'Sin asignar'}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2">
-                {DETAIL_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setDetailTab(tab.id)}
-                    className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
-                      detailTab === tab.id ? 'border-cyan-400/55 bg-cyan-500/12 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.05]'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {detailTab === 'data' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Codigo</span>
-                      <input value={activeForm.vehicle_code} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, vehicle_code: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Matricula</span>
-                      <input value={activeForm.plate} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, plate: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70 data-mono" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Marca</span>
-                      <input value={activeForm.brand} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, brand: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Modelo</span>
-                      <input value={activeForm.model} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, model: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Ano</span>
-                      <input type="number" value={activeForm.year} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, year: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Estado</span>
-                      <select value={activeForm.status} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70">
-                        <option value="active">Activo</option>
-                        <option value="maintenance">Taller</option>
-                        <option value="inactive">Inactivo</option>
-                      </select>
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Plazas minimas</span>
-                      <input type="number" value={activeForm.seats_min} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, seats_min: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Plazas maximas</span>
-                      <input type="number" value={activeForm.seats_max} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, seats_max: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Combustible</span>
-                      <input value={activeForm.fuel_type} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, fuel_type: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Kilometraje</span>
-                      <input type="number" value={activeForm.mileage_km} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, mileage_km: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
+                    <p className="mt-1 text-[13px] font-semibold text-white">{selectedWeeklyPlan?.default_driver_name || selectedVehicle.default_driver_name || 'Sin asignar'}</p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {selectedWeeklyPlan?.default_driver_phone || selectedVehicle.default_driver_phone || 'Sin telefono'} | {DRIVER_CHANNEL_LABELS[selectedWeeklyPlan?.default_driver_channel || selectedVehicle.default_driver_channel] || 'Manual'}
+                    </p>
                   </div>
 
-                  <label className="flex items-center gap-2 text-[12px] text-slate-300">
-                    <input type="checkbox" checked={!!activeForm.accessibility} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, accessibility: event.target.checked }))} />
-                    Accesible PMR
-                  </label>
-
-                  <label className="block space-y-1">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Notas operativas</span>
-                    <textarea value={activeForm.notes || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} rows={4} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                  </label>
-
-                  {!isEditing && selectedVehicle && (
-                    <div className="text-[11px] text-slate-500 data-mono">
-                      <span className="mr-3">Edad: {selectedVehicle.age_years ?? '-'} anos</span>
-                      <span>Actualizado: {selectedVehicle.updated_at?.slice(0, 19).replace('T', ' ') || '-'}</span>
+                  {(selectedWeeklyPlan?.days || []).length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-[#0f1723] p-5 text-[12px] text-slate-300">
+                      Esta unidad no tiene servicio publicado. Sigue quedando visible su estado documental, GPS y disponibilidad.
                     </div>
-                  )}
-                </div>
-              )}
+                  ) : (
+                    <div className="space-y-3">
+                      {(selectedWeeklyPlan?.days || []).map((day) => (
+                        <div key={day.day} className="rounded-[14px] border border-white/10 bg-[#0f1723] overflow-hidden">
+                          <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-white/[0.03] px-3 py-2">
+                            <div>
+                              <p className="text-[12px] font-semibold text-white">{day.day_label || DAY_LABELS[day.day] || day.day}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {day.route_count || 0} servicios
+                                {day.first_start_minute != null && day.last_end_minute != null ? ` | ${minuteToLabel(day.first_start_minute)} - ${minuteToLabel(day.last_end_minute)}` : ''}
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] text-slate-300 data-mono">{day.route_count || 0}</span>
+                          </div>
 
-              {detailTab === 'drivers' && selectedVehicle && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
-                    <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3 xl:col-span-2">
-                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductor habitual</p>
-                      <p className="mt-1 text-[16px] font-semibold text-white">{selectedVehicle.default_driver_name || 'Sin asignar'}</p>
-                      <p className="mt-1 text-[11px] text-slate-400">{selectedVehicle.default_driver_phone || 'Sin telefono registrado'}</p>
-                    </div>
-                    <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3">
-                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductores de empresa</p>
-                      <p className="mt-1 text-[20px] font-semibold data-mono text-cyan-300">{selectedVehicleDrivers.length}</p>
-                    </div>
-                    <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3">
-                      <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Dias configurados</p>
-                      <p className="mt-1 text-[20px] font-semibold data-mono text-amber-200">
-                        {Object.values(driverAssignmentsDraft.days || {}).filter(Boolean).length}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-cyan-300" />
-                        <div>
-                          <p className="text-[12px] font-semibold text-white">Asignacion semanal de conductores</p>
-                          <p className="text-[11px] text-slate-400">Define quien usa este autobus habitualmente y quien lo lleva cada dia si rota.</p>
+                          {(day.assignments || []).length === 0 ? (
+                            <div className="px-3 py-3 text-[11px] text-slate-500">Sin servicio publicado para este dia.</div>
+                          ) : (
+                            <div className="divide-y divide-white/5">
+                              {(day.assignments || []).map((assignment, index) => (
+                                <div key={`${day.day}-${assignment.route_id}-${index}`} className="grid grid-cols-1 gap-3 px-3 py-3 text-[11px] xl:grid-cols-[120px_1fr_180px_180px_110px]">
+                                  <div className="text-slate-200 data-mono">{assignment.start_time || minuteToLabel(assignment.start_minute)} - {assignment.end_time || minuteToLabel(assignment.end_minute)}</div>
+                                  <div className="min-w-0">
+                                    <p className="truncate font-semibold text-white data-mono">{assignment.route_id}</p>
+                                    <p className="truncate text-slate-400">{assignment.workspace_name || assignment.workspace_id}</p>
+                                  </div>
+                                  <div className="min-w-0 text-slate-300">
+                                    <p className="truncate">Plan {assignment.bus_id}</p>
+                                    <p className="truncate text-slate-500">{assignment.company_name || assignment.company_id || 'Sin empresa'}</p>
+                                  </div>
+                                  <div className="min-w-0 text-slate-300">
+                                    <p className="truncate">{assignment.driver_name || selectedWeeklyPlan?.default_driver_name || 'Sin conductor'}</p>
+                                    <p className="truncate text-slate-500">
+                                      {assignment.driver_phone || selectedWeeklyPlan?.default_driver_phone || 'Sin telefono'}
+                                      {assignment.preferred_channel ? ` | ${DRIVER_CHANNEL_LABELS[assignment.preferred_channel] || assignment.preferred_channel}` : ''}
+                                    </p>
+                                  </div>
+                                  <div className="text-left xl:text-right">
+                                    <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${assignment.assignment_type === 'real' ? 'bg-emerald-500/[0.16] text-emerald-200' : 'bg-amber-500/[0.16] text-amber-200'}`}>
+                                      {assignment.assignment_type === 'real' ? 'REAL' : 'PROVISIONAL'}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleSaveDriverAssignments}
-                        disabled={assignmentSaving || driversLoading}
-                        className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] disabled:opacity-60"
-                      >
-                        {assignmentSaving ? 'Guardando...' : 'Guardar asignacion'}
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                      <label className="space-y-1">
-                        <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Conductor habitual</span>
-                        <select
-                          value={driverAssignmentsDraft.default_driver_id}
-                          onChange={(event) => setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: event.target.value }))}
-                          className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]"
-                        >
-                          <option value="">Sin asignar</option>
-                          {selectedVehicleDrivers.map((driver) => (
-                            <option key={driver.id} value={driver.id}>
-                              {driver.full_name} {driver.phone ? `· ${driver.phone}` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3 text-[11px] text-slate-400">
-                        Si un dia no tiene conductor propio, el sistema usara el habitual como referencia operativa y futura base de envio.
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-                      {Object.entries(DAY_LABELS).map(([dayCode, dayLabel]) => (
-                        <label key={dayCode} className="space-y-1 rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
-                          <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">{dayLabel}</span>
-                          <select
-                            value={driverAssignmentsDraft.days?.[dayCode] || ''}
-                            onChange={(event) => setDriverAssignmentsDraft((prev) => ({
-                              ...prev,
-                              days: { ...(prev.days || {}), [dayCode]: event.target.value },
-                            }))}
-                            className="w-full rounded-md border border-white/10 bg-[#09111b] px-3 py-2 text-[12px]"
-                          >
-                            <option value="">Usar habitual</option>
-                            {selectedVehicleDrivers.map((driver) => (
-                              <option key={driver.id} value={driver.id}>
-                                {driver.full_name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
                       ))}
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-[420px_1fr]">
-                    <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-cyan-300" />
-                        <div>
-                          <p className="text-[12px] font-semibold text-white">{driverEditingId ? 'Editar conductor' : 'Nuevo conductor'}</p>
-                          <p className="text-[11px] text-slate-400">Prepara ya la ficha para futuras comunicaciones automaticas.</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3">
-                        <input value={driverForm.full_name} onChange={(event) => setDriverForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Nombre completo" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
-                        <input value={driverForm.phone} onChange={(event) => setDriverForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Telefono" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
-                        <input value={driverForm.email} onChange={(event) => setDriverForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
-                        <div className="grid grid-cols-2 gap-3">
-                          <select value={driverForm.preferred_channel} onChange={(event) => setDriverForm((prev) => ({ ...prev, preferred_channel: event.target.value }))} className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]">
-                            {Object.entries(DRIVER_CHANNEL_LABELS).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
-                          <select value={driverForm.status} onChange={(event) => setDriverForm((prev) => ({ ...prev, status: event.target.value }))} className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]">
-                            <option value="active">Activo</option>
-                            <option value="inactive">Inactivo</option>
-                          </select>
-                        </div>
-                        <input value={driverForm.whatsapp_phone} onChange={(event) => setDriverForm((prev) => ({ ...prev, whatsapp_phone: event.target.value }))} placeholder="WhatsApp (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
-                        <input value={driverForm.telegram_chat_id} onChange={(event) => setDriverForm((prev) => ({ ...prev, telegram_chat_id: event.target.value }))} placeholder="Telegram chat id (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
-                        <textarea value={driverForm.notes} onChange={(event) => setDriverForm((prev) => ({ ...prev, notes: event.target.value }))} rows={3} placeholder="Notas" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={handleSaveDriver} disabled={driverSaving} className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] disabled:opacity-60">
-                          {driverSaving ? 'Guardando...' : (driverEditingId ? 'Guardar conductor' : 'Crear conductor')}
-                        </button>
-                        {driverEditingId && (
-                          <button type="button" onClick={() => { setDriverEditingId(null); setDriverForm(EMPTY_DRIVER_FORM); }} className="control-btn rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]">
-                            Cancelar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[12px] font-semibold text-white">Conductores disponibles</p>
-                          <p className="text-[11px] text-slate-400">Solo se muestran los conductores de la empresa propietaria del autobus.</p>
-                        </div>
-                        <button type="button" onClick={() => loadCompanyDrivers(selectedVehicle.company_id, { force: true })} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
-                          {driversLoading ? 'Cargando...' : 'Actualizar'}
-                        </button>
-                      </div>
-
-                      {selectedVehicleDrivers.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-white/10 p-4 text-[12px] text-slate-400">
-                          Todavia no hay conductores cargados para esta empresa.
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {selectedVehicleDrivers.map((driver) => (
-                            <div key={driver.id} className="flex items-start justify-between gap-3 rounded-[14px] border border-white/10 bg-[#0f1723] p-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-[13px] font-semibold text-white">{driver.full_name}</p>
-                                <p className="truncate text-[11px] text-slate-400">{driver.phone || 'Sin telefono'} · {DRIVER_CHANNEL_LABELS[driver.preferred_channel] || driver.preferred_channel}</p>
-                                <p className="truncate text-[10px] text-slate-500">{driver.status === 'active' ? 'Activo' : 'Inactivo'}</p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button type="button" onClick={() => setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: driver.id }))} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
-                                  Habitual
-                                </button>
-                                <button type="button" onClick={() => handleEditDriver(driver)} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
-                                  Editar
-                                </button>
-                                <button type="button" onClick={() => handleDeleteDriver(driver)} className="rounded-md border border-red-500/35 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-300 hover:bg-red-500/10">
-                                  Borrar
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
+            </div>
+          )}
+          {detailTab === 'data' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Codigo</span>
+                  <input value={activeForm.vehicle_code} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, vehicle_code: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Matricula</span>
+                  <input value={activeForm.plate} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, plate: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70 data-mono" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Marca</span>
+                  <input value={activeForm.brand} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, brand: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Modelo</span>
+                  <input value={activeForm.model} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, model: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Ano</span>
+                  <input type="number" value={activeForm.year} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, year: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Estado</span>
+                  <select value={activeForm.status} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70">
+                    <option value="active">Activo</option>
+                    <option value="maintenance">Taller</option>
+                    <option value="inactive">Inactivo</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Plazas minimas</span>
+                  <input type="number" value={activeForm.seats_min} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, seats_min: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Plazas maximas</span>
+                  <input type="number" value={activeForm.seats_max} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, seats_max: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Combustible</span>
+                  <input value={activeForm.fuel_type} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, fuel_type: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Kilometraje</span>
+                  <input type="number" value={activeForm.mileage_km} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, mileage_km: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+              </div>
+              <label className="flex items-center gap-2 text-[12px] text-slate-300">
+                <input type="checkbox" checked={!!activeForm.accessibility} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, accessibility: event.target.checked }))} />
+                Accesible PMR
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Notas operativas</span>
+                <textarea value={activeForm.notes || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} rows={4} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+              </label>
+            </div>
+          )}
 
-              {detailTab === 'documents' && (
-                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-cyan-300" />
-                      <div>
-                        <p className="text-[12px] font-semibold text-white">Documentacion</p>
-                        <p className="text-[11px] text-slate-400">ITV, seguros y referencias basicas del vehiculo.</p>
-                      </div>
+          {detailTab === 'drivers' && selectedVehicle && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
+                <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3 xl:col-span-2">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductor habitual</p>
+                  <p className="mt-1 text-[16px] font-semibold text-white">{selectedVehicle.default_driver_name || 'Sin asignar'}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{selectedVehicle.default_driver_phone || 'Sin telefono registrado'}</p>
+                </div>
+                <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductores de empresa</p>
+                  <p className="mt-1 text-[20px] font-semibold data-mono text-cyan-300">{selectedVehicleDrivers.length}</p>
+                </div>
+                <div className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3">
+                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Dias configurados</p>
+                  <p className="mt-1 text-[20px] font-semibold data-mono text-amber-200">{Object.values(driverAssignmentsDraft.days || {}).filter(Boolean).length}</p>
+                </div>
+              </div>
+
+              <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-cyan-300" />
+                    <div>
+                      <p className="text-[12px] font-semibold text-white">Asignacion semanal de conductores</p>
+                      <p className="text-[11px] text-slate-400">Define quien usa este autobus habitualmente y quien lo lleva cada dia si rota.</p>
                     </div>
-                    {isEditing && (
-                      <button onClick={addDocument} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
-                        Anadir documento
+                  </div>
+                  <button type="button" onClick={handleSaveDriverAssignments} disabled={assignmentSaving || driversLoading} className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] disabled:opacity-60">
+                    {assignmentSaving ? 'Guardando...' : 'Guardar asignacion'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Conductor habitual</span>
+                    <select value={driverAssignmentsDraft.default_driver_id} onChange={(event) => setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]">
+                      <option value="">Sin asignar</option>
+                      {selectedVehicleDrivers.map((driver) => (
+                        <option key={driver.id} value={driver.id}>{driver.full_name} {driver.phone ? `| ${driver.phone}` : ''}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3 text-[11px] text-slate-400">Si un dia no tiene conductor propio, el sistema usa el habitual como referencia operativa.</div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {Object.entries(DAY_LABELS).map(([dayCode, dayLabel]) => (
+                    <label key={dayCode} className="space-y-1 rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
+                      <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">{dayLabel}</span>
+                      <select value={driverAssignmentsDraft.days?.[dayCode] || ''} onChange={(event) => setDriverAssignmentsDraft((prev) => ({ ...prev, days: { ...(prev.days || {}), [dayCode]: event.target.value } }))} className="w-full rounded-md border border-white/10 bg-[#09111b] px-3 py-2 text-[12px]">
+                        <option value="">Usar habitual</option>
+                        {selectedVehicleDrivers.map((driver) => (
+                          <option key={driver.id} value={driver.id}>{driver.full_name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[420px_1fr]">
+                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-cyan-300" />
+                    <div>
+                      <p className="text-[12px] font-semibold text-white">{driverEditingId ? 'Editar conductor' : 'Nuevo conductor'}</p>
+                      <p className="text-[11px] text-slate-400">Ficha base para futuras comunicaciones automaticas.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
+                    <input value={driverForm.full_name} onChange={(event) => setDriverForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Nombre completo" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                    <input value={driverForm.phone} onChange={(event) => setDriverForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Telefono" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                    <input value={driverForm.email} onChange={(event) => setDriverForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <select value={driverForm.preferred_channel} onChange={(event) => setDriverForm((prev) => ({ ...prev, preferred_channel: event.target.value }))} className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]">
+                        {Object.entries(DRIVER_CHANNEL_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                      <select value={driverForm.status} onChange={(event) => setDriverForm((prev) => ({ ...prev, status: event.target.value }))} className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]">
+                        <option value="active">Activo</option>
+                        <option value="inactive">Inactivo</option>
+                      </select>
+                    </div>
+                    <input value={driverForm.whatsapp_phone} onChange={(event) => setDriverForm((prev) => ({ ...prev, whatsapp_phone: event.target.value }))} placeholder="WhatsApp (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                    <input value={driverForm.telegram_chat_id} onChange={(event) => setDriverForm((prev) => ({ ...prev, telegram_chat_id: event.target.value }))} placeholder="Telegram chat id (opcional)" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                    <textarea value={driverForm.notes} onChange={(event) => setDriverForm((prev) => ({ ...prev, notes: event.target.value }))} rows={3} placeholder="Notas" className="rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px]" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={handleSaveDriver} disabled={driverSaving} className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] disabled:opacity-60">
+                      {driverSaving ? 'Guardando...' : (driverEditingId ? 'Guardar conductor' : 'Crear conductor')}
+                    </button>
+                    {driverEditingId && (
+                      <button type="button" onClick={() => { setDriverEditingId(null); setDriverForm(EMPTY_DRIVER_FORM); }} className="control-btn rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]">
+                        Cancelar
                       </button>
                     )}
                   </div>
+                </div>
 
-                  {(activeForm.documents || []).length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
-                      <p className="text-[12px] text-slate-300">Todavia no hay documentos cargados.</p>
-                      <p className="mt-1 text-[11px] text-slate-500">Puedes completarlos manualmente cuando lo necesites.</p>
+                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[12px] font-semibold text-white">Conductores disponibles</p>
+                      <p className="text-[11px] text-slate-400">Solo se muestran los conductores de la empresa propietaria del autobus.</p>
+                    </div>
+                    <button type="button" onClick={() => loadCompanyDrivers(selectedVehicle.company_id, { force: true })} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                      {driversLoading ? 'Cargando...' : 'Actualizar'}
+                    </button>
+                  </div>
+
+                  {selectedVehicleDrivers.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-white/10 p-4 text-[12px] text-slate-400">
+                      Todavia no hay conductores cargados para esta empresa.
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {(activeForm.documents || []).map((doc, index) => (
-                        <div key={`${doc.id || 'doc'}-${index}`} className="grid grid-cols-[1fr_1fr_140px_140px_40px] gap-2 rounded-xl border border-white/10 bg-[#0f1723] p-2">
-                          <input value={doc.doc_type || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'doc_type', event.target.value)} placeholder="Tipo" className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
-                          <input value={doc.reference || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'reference', event.target.value)} placeholder="Referencia" className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
-                          <input type="date" value={doc.issue_date || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'issue_date', event.target.value)} className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
-                          <input type="date" value={doc.expiry_date || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'expiry_date', event.target.value)} className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
-                          <button disabled={!isEditing} onClick={() => removeDocument(index)} className="rounded-md border border-red-500/35 text-red-300 hover:bg-red-500/10 disabled:opacity-40">
-                            <Trash2 size={12} className="mx-auto" />
-                          </button>
+                      {selectedVehicleDrivers.map((driver) => (
+                        <div key={driver.id} className="flex items-start justify-between gap-3 rounded-[14px] border border-white/10 bg-[#0f1723] p-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-white">{driver.full_name}</p>
+                            <p className="truncate text-[11px] text-slate-400">{driver.phone || 'Sin telefono'} | {DRIVER_CHANNEL_LABELS[driver.preferred_channel] || driver.preferred_channel}</p>
+                            <p className="truncate text-[10px] text-slate-500">{driver.status === 'active' ? 'Activo' : 'Inactivo'}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: driver.id }))} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                              Habitual
+                            </button>
+                            <button type="button" onClick={() => handleEditDriver(driver)} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+                              Editar
+                            </button>
+                            <button type="button" onClick={() => handleDeleteDriver(driver)} className="rounded-md border border-red-500/35 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-red-300 hover:bg-red-500/10">
+                              Borrar
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              )}
+              </div>
+            </div>
+          )}
 
-              {detailTab === 'gps' && (
-                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-cyan-300" />
-                    <div>
-                      <p className="text-[12px] font-semibold text-white">Vinculacion GPS</p>
-                      <p className="text-[11px] text-slate-400">Base preparada para integrar el proveedor externo de telematica.</p>
-                    </div>
+          {detailTab === 'documents' && (
+            <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-cyan-300" />
+                  <div>
+                    <p className="text-[12px] font-semibold text-white">Documentacion</p>
+                    <p className="text-[11px] text-slate-400">ITV, seguros y referencias basicas del vehiculo.</p>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Proveedor</span>
-                      <input value={activeForm.gps_provider || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, gps_provider: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">ID externo</span>
-                      <input value={activeForm.gps_external_id || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, gps_external_id: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70 data-mono" />
-                    </label>
-                  </div>
-
-                  {!isEditing && selectedVehicle && (
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <div className="rounded-xl border border-white/5 bg-[#0f1723] p-3">
-                        <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Ultima lectura</p>
-                        <p className="mt-1 text-[12px] text-slate-200">{selectedVehicle.gps_last_seen_at || 'Sin datos'}</p>
-                      </div>
-                      <div className="rounded-xl border border-white/5 bg-[#0f1723] p-3">
-                        <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Ultima posicion</p>
-                        <p className="mt-1 text-[12px] text-slate-200">
-                          {selectedVehicle.gps_last_position ? `${selectedVehicle.gps_last_position.lat}, ${selectedVehicle.gps_last_position.lon}` : 'Sin posicion registrada'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              )}
-
-              {detailTab === 'weekly_plan' && (
-                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[12px] font-semibold text-white">Plan semanal publicado</p>
-                      <p className="text-[11px] text-slate-400">Muestra la agenda operativa real del vehiculo segun las optimizaciones ya publicadas.</p>
+                {isEditing && <button onClick={addDocument} className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]">Anadir documento</button>}
+              </div>
+              {(activeForm.documents || []).length === 0 ? (
+                <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
+                  <p className="text-[12px] text-slate-300">Todavia no hay documentos cargados.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(activeForm.documents || []).map((doc, index) => (
+                    <div key={`${doc.id || 'doc'}-${index}`} className="grid grid-cols-1 gap-2 rounded-xl border border-white/10 bg-[#0f1723] p-2 xl:grid-cols-[1fr_1fr_140px_140px_40px]">
+                      <input value={doc.doc_type || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'doc_type', event.target.value)} placeholder="Tipo" className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
+                      <input value={doc.reference || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'reference', event.target.value)} placeholder="Referencia" className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
+                      <input type="date" value={doc.issue_date || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'issue_date', event.target.value)} className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
+                      <input type="date" value={doc.expiry_date || ''} disabled={!isEditing} onChange={(event) => updateDocument(index, 'expiry_date', event.target.value)} className="rounded-md border border-white/10 bg-[#09111b] px-2 py-1.5 text-[11px]" />
+                      <button disabled={!isEditing} onClick={() => removeDocument(index)} className="rounded-md border border-red-500/35 text-red-300 hover:bg-red-500/10 disabled:opacity-40">
+                        <Trash2 size={12} className="mx-auto" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => selectedVehicle && loadVehicleWeeklyPlan(selectedVehicle.id, { force: true })}
-                      className="control-btn rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
-                    >
-                      {weeklyPlanLoading ? 'Actualizando...' : 'Actualizar'}
-                    </button>
-                  </div>
-
-                  {!selectedVehicle ? null : weeklyPlanLoading && !selectedWeeklyPlan ? (
-                    <div className="rounded-xl border border-white/10 bg-[#0f1723] p-4 text-[12px] text-slate-300">
-                      Cargando plan semanal...
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                        <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
-                          <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Servicios</p>
-                          <p className="mt-1 text-[20px] font-semibold data-mono text-white">{selectedWeeklyPlan?.total_assignments ?? 0}</p>
-                        </div>
-                        <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
-                          <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Dias con servicio</p>
-                          <p className="mt-1 text-[20px] font-semibold data-mono text-cyan-300">{selectedWeeklyPlan?.total_days_with_service ?? 0}</p>
-                        </div>
-                        <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
-                          <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Workspaces</p>
-                          <p className="mt-1 text-[20px] font-semibold data-mono text-amber-200">{selectedWeeklyPlan?.total_workspaces ?? 0}</p>
-                        </div>
-                        <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
-                          <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Vehiculo</p>
-                          <p className="mt-1 text-[13px] font-semibold text-white data-mono">{selectedVehicle.plate || selectedVehicle.vehicle_code}</p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-[14px] border border-white/5 bg-[#0f1723] p-3">
-                        <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Conductor habitual</p>
-                        <p className="mt-1 text-[13px] font-semibold text-white">{selectedWeeklyPlan?.default_driver_name || selectedVehicle.default_driver_name || 'Sin asignar'}</p>
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          {selectedWeeklyPlan?.default_driver_phone || selectedVehicle.default_driver_phone || 'Sin telefono'}
-                          {' · '}
-                          {DRIVER_CHANNEL_LABELS[selectedWeeklyPlan?.default_driver_channel || selectedVehicle.default_driver_channel] || 'Manual'}
-                        </p>
-                      </div>
-
-                      <div className="space-y-3">
-                        {(selectedWeeklyPlan?.days || []).map((day) => (
-                          <div key={day.day} className="rounded-[14px] border border-white/10 bg-[#0f1723] overflow-hidden">
-                            <div className="flex items-center justify-between gap-3 border-b border-white/5 bg-white/[0.03] px-3 py-2">
-                              <div>
-                                <p className="text-[12px] font-semibold text-white">{day.day_label || DAY_LABELS[day.day] || day.day}</p>
-                                <p className="text-[10px] text-slate-400">
-                                  {day.route_count || 0} servicios
-                                  {day.first_start_minute != null && day.last_end_minute != null
-                                    ? ` · ${minuteToLabel(day.first_start_minute)} - ${minuteToLabel(day.last_end_minute)}`
-                                    : ''}
-                                </p>
-                              </div>
-                              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] text-slate-300 data-mono">
-                                {day.route_count || 0}
-                              </span>
-                            </div>
-
-                            {(day.assignments || []).length === 0 ? (
-                              <div className="px-3 py-3 text-[11px] text-slate-500">Sin servicio publicado para este dia.</div>
-                            ) : (
-                              <div className="divide-y divide-white/5">
-                                {(day.assignments || []).map((assignment, index) => (
-                                  <div key={`${day.day}-${assignment.route_id}-${index}`} className="grid grid-cols-[110px_1fr_180px_180px_110px] gap-3 px-3 py-2 text-[11px]">
-                                    <div className="text-slate-200 data-mono">
-                                      {assignment.start_time || minuteToLabel(assignment.start_minute)} - {assignment.end_time || minuteToLabel(assignment.end_minute)}
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className="truncate font-semibold text-white data-mono">{assignment.route_id}</p>
-                                      <p className="truncate text-slate-400">{assignment.workspace_name || assignment.workspace_id}</p>
-                                    </div>
-                                    <div className="min-w-0 text-slate-300">
-                                      <p className="truncate">Plan {assignment.bus_id}</p>
-                                      <p className="truncate text-slate-500">{assignment.company_name || assignment.company_id || 'Sin empresa'}</p>
-                                    </div>
-                                    <div className="min-w-0 text-slate-300">
-                                      <p className="truncate">{assignment.driver_name || selectedWeeklyPlan?.default_driver_name || 'Sin conductor'}</p>
-                                      <p className="truncate text-slate-500">
-                                        {assignment.driver_phone || selectedWeeklyPlan?.default_driver_phone || 'Sin telefono'}
-                                        {assignment.preferred_channel ? ` · ${DRIVER_CHANNEL_LABELS[assignment.preferred_channel] || assignment.preferred_channel}` : ''}
-                                      </p>
-                                    </div>
-                                    <div className="text-right">
-                                      <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${assignment.assignment_type === 'real' ? 'bg-emerald-500/[0.16] text-emerald-200' : 'bg-amber-500/[0.16] text-amber-200'}`}>
-                                        {assignment.assignment_type === 'real' ? 'REAL' : 'PROVISIONAL'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
           )}
-        </section>
+
+          {detailTab === 'gps' && (
+            <div className="rounded-[16px] border border-white/10 bg-white/[0.03] p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-cyan-300" />
+                <div>
+                  <p className="text-[12px] font-semibold text-white">Vinculacion GPS</p>
+                  <p className="text-[11px] text-slate-400">Base preparada para integrar el proveedor externo de telematica.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">Proveedor</span>
+                  <input value={activeForm.gps_provider || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, gps_provider: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70" />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-[0.08em]">ID externo</span>
+                  <input value={activeForm.gps_external_id || ''} disabled={!isEditing} onChange={(event) => setForm((prev) => ({ ...prev, gps_external_id: event.target.value }))} className="w-full rounded-md border border-white/10 bg-[#0f1723] px-3 py-2 text-[12px] disabled:opacity-70 data-mono" />
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+
+  return (
+    <div className="relative h-full min-h-0 overflow-auto rounded-[18px] control-panel p-4 md:p-5 space-y-4">
+      {renderImportModal()}
+      <div className="rounded-[22px] border border-[#304a62] bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,rgba(11,20,31,0.96),rgba(10,16,24,0.98))] p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <SectionTitle eyebrow="GARAGE" title="Garage virtual de flota" description="La entrada es la playa de vehiculos. Filtra por hangar, entra en una unidad y revisa primero sus servicios publicados." />
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={loadFleet} className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-200 hover:bg-white/[0.06]">Actualizar</button>
+            <button type="button" onClick={() => setIsImportOpen(true)} className="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/15">Importar</button>
+            <button type="button" onClick={startCreate} className="control-btn-primary rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" />
+              Nuevo vehiculo
+            </button>
+          </div>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-5">
+          <StatCard label="Unidades" value={garageStats.total} />
+          <StatCard label="Activas" value={garageStats.active} tone="text-emerald-300" />
+          <StatCard label="Taller" value={garageStats.maintenance} tone="text-amber-200" />
+          <StatCard label="Plazas maximas" value={garageStats.totalSeatsMax} tone="text-cyan-300" />
+          <StatCard label="Hangars" value={companyFilterOptions.length} />
+        </div>
       </div>
+      {screenMode === 'garage' && !isEditing ? renderGarage() : renderVehicleDetail()}
     </div>
   );
 }

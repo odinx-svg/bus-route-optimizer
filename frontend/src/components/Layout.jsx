@@ -5,7 +5,7 @@ import tuttiSymbol from '../assets/tutti-symbol.svg';
 const ViewTabs = ({ viewMode, setViewMode, hasStudioAccess }) => {
   const tabs = [
     { id: 'dashboard', label: 'Panel', icon: Gauge, requiresSchedule: false },
-    { id: 'fleet', label: 'Flota', icon: Bus, requiresSchedule: false },
+    { id: 'fleet', label: 'GARAGE', icon: Bus, requiresSchedule: false },
     { id: 'studio', label: 'Planificacion', icon: LayoutGrid, requiresSchedule: false },
   ];
 
