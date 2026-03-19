@@ -1501,6 +1501,23 @@ def main() -> int:
 
         _check_update_background(_on_update_result)
 
+        def _prompt_background_update_when_ready() -> None:
+            _background_update_done.wait()
+            release = _pending_update.get("release")
+            tag = _pending_update.get("tag")
+            if not release or not tag:
+                return
+
+            # Let the shell appear first so the app does not feel frozen while
+            # the updater dialog is about to open.
+            time.sleep(2.0)
+            _log_update(
+                f"Background update ready; prompting user | current_version={APP_VERSION} | latest_tag={tag}"
+            )
+            _check_and_apply_update_if_available()
+
+        threading.Thread(target=_prompt_background_update_when_ready, daemon=True).start()
+
     runtime_root = _resolve_runtime_root()
     _log_launcher(f"Resolved runtime root: {runtime_root}")
     runtime = DesktopRuntime(runtime_root)
