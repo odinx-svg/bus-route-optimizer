@@ -793,18 +793,67 @@ def _set_window_boot_status(window: object, message: str, detail: Optional[str] 
         pass
 
 
+def _show_backend_boot_error(window: object, message: str, detail: str) -> None:
+    _set_window_boot_status(window, message, detail)
+
+
+def _backend_exit_code(runtime: "DesktopRuntime") -> Optional[int]:
+    if not runtime.backend_proc:
+        return None
+    try:
+        return runtime.backend_proc.poll()
+    except Exception:
+        return None
+
+
 def _load_app_when_ready(window: object, runtime: "DesktopRuntime") -> None:
     """Wait for backend readiness after the desktop shell is visible."""
     _log_launcher("Boot shell created; waiting for backend readiness")
     _set_window_boot_status(window, "Arrancando backend local...", "Preparando servicios internos.")
-    if not _wait_backend_ready(timeout_sec=90):
-        _log_launcher("Backend readiness timeout; showing startup error in shell")
+    if not _wait_backend_ready(timeout_sec=90, runtime=runtime):
+        exit_code = _backend_exit_code(runtime)
+        if exit_code is not None:
+            _log_launcher(f"Backend process exited before readiness | exit_code={exit_code}")
+            _show_backend_boot_error(
+                window,
+                "El backend local se cerro al arrancar.",
+                (
+                    f"Codigo de salida: {exit_code}. "
+                    "Revisa AppData\\\\Local\\\\Tutti\\\\logs\\\\desktop-backend.log y desktop-launcher.log"
+                ),
+            )
+            return
+
+        _log_launcher("Backend readiness timeout; entering extended grace wait")
         _set_window_boot_status(
             window,
-            "No se pudo arrancar el backend local.",
-            "Revisa AppData\\\\Local\\\\Tutti\\\\logs\\\\desktop-backend.log y desktop-launcher.log",
+            "El arranque esta tardando mas de lo normal.",
+            "Seguimos esperando al backend local. TUTTI abrira la interfaz en cuanto responda.",
         )
-        return
+        if not _wait_backend_ready(timeout_sec=120, runtime=runtime):
+            exit_code = _backend_exit_code(runtime)
+            if exit_code is not None:
+                _log_launcher(f"Backend process exited during grace wait | exit_code={exit_code}")
+                _show_backend_boot_error(
+                    window,
+                    "El backend local no pudo completar el arranque.",
+                    (
+                        f"Codigo de salida: {exit_code}. "
+                        "Revisa AppData\\\\Local\\\\Tutti\\\\logs\\\\desktop-backend.log y desktop-launcher.log"
+                    ),
+                )
+                return
+
+            _log_launcher("Backend still not ready after extended grace wait")
+            _show_backend_boot_error(
+                window,
+                "El backend local sigue sin responder.",
+                (
+                    "El proceso sigue abierto pero no responde en el puerto local. "
+                    "Revisa AppData\\\\Local\\\\Tutti\\\\logs\\\\desktop-backend.log y desktop-launcher.log"
+                ),
+            )
+            return
 
     _log_launcher("Backend ready; navigating desktop shell to APP_URL")
     _set_window_boot_status(window, "Cargando interfaz...", "El backend ya responde. Abriendo Tutti.")
@@ -1221,7 +1270,7 @@ def _run_backend_process_mode() -> int:
     return 0
 
 
-def _wait_backend_ready(timeout_sec: int = 60) -> bool:
+def _wait_backend_ready(timeout_sec: int = 60, runtime: Optional["DesktopRuntime"] = None) -> bool:
     deadline = time.time() + timeout_sec
     while time.time() < deadline:
         try:
@@ -1229,6 +1278,10 @@ def _wait_backend_ready(timeout_sec: int = 60) -> bool:
                 if response.status == 200:
                     return True
         except (urllib.error.URLError, TimeoutError, OSError):
+            if runtime is not None:
+                exit_code = _backend_exit_code(runtime)
+                if exit_code is not None:
+                    return False
             time.sleep(1)
     return False
 
