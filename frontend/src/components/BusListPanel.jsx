@@ -381,10 +381,23 @@ const BusCard = ({ bus, isSelected, isExpanded, onToggle, selectedRouteId, onRou
 
 const DAY_LABELS = { L: 'Lunes', M: 'Martes', Mc: 'Miercoles', X: 'Jueves', V: 'Viernes' };
 
-const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, selectedRouteId, onRouteSelect, onExport, activeDay, onScheduleChange, onOpenReconciliation }) => {
+const BusListPanel = ({
+  schedule = [],
+  routes = [],
+  onBusSelect,
+  selectedBusId,
+  selectedRouteId,
+  onRouteSelect,
+  onExport,
+  activeDay,
+  onScheduleChange,
+  onOpenReconciliation,
+  allowBoardView = true,
+  compact = false,
+}) => {
   const [expandedBus, setExpandedBus] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'board'
+  const [viewMode, setViewMode] = useState('list');
 
   const toggleExpand = (busId) => {
     const newBusId = expandedBus === busId ? null : busId;
@@ -417,6 +430,10 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
   }, [schedule, searchQuery]);
 
   const routeCapacityById = useMemo(() => buildRouteCapacityMap(routes), [routes]);
+  const selectedBus = useMemo(
+    () => filteredSchedule.find((bus) => String(getBusId(bus)) === String(selectedBusId || '')) || null,
+    [filteredSchedule, selectedBusId]
+  );
 
   const handleConnectionSelect = (connectionId, busId) => {
     if (onBusSelect && busId) onBusSelect(busId);
@@ -425,9 +442,9 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
 
   if (!schedule || schedule.length === 0) {
     return (
-      <aside className="w-[320px] h-full min-h-0 gt-sidebar rounded-2xl flex items-center justify-center flex-shrink-0">
+      <aside className="h-full min-h-0 flex items-center justify-center flex-shrink-0">
         <div className="text-center px-6">
-          <p className="text-[13px] text-gt-text-muted font-medium">Horario de Flota</p>
+          <p className="text-[13px] text-gt-text-muted font-medium">Inspector de flota</p>
           <p className="text-[11px] text-gt-text-muted/60 mt-1">Los resultados aparecerán tras la optimización</p>
         </div>
       </aside>
@@ -435,8 +452,8 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
   }
 
   return (
-    <aside className={`h-full min-h-0 gt-sidebar rounded-2xl flex flex-col flex-shrink-0 overflow-hidden transition-all duration-300 ${viewMode === 'board' ? 'flex-1 w-full' : 'w-[320px]'}`}>
-      <div className="p-4 gt-border-b space-y-3">
+    <aside className="h-full min-h-0 flex flex-col overflow-hidden">
+      <div className={`${compact ? 'p-3' : 'p-4'} gt-border-b space-y-3`}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[13px] font-medium text-gt-text">
@@ -445,22 +462,24 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
             <p className="text-[10px] text-gt-text-muted">{schedule.length} buses</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gt-glass rounded-lg p-0.5">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-gt-accent text-white shadow-gt-glow' : 'text-gt-text-muted hover:text-gt-text'}`}
-                title="Vista lista"
-              >
-                <List size={14} />
-              </button>
-              <button
-                onClick={() => setViewMode('board')}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === 'board' ? 'bg-gt-accent text-white shadow-gt-glow' : 'text-gt-text-muted hover:text-gt-text'}`}
-                title="Vista tablero (Drag & Drop)"
-              >
-                <LayoutGrid size={14} />
-              </button>
-            </div>
+            {allowBoardView ? (
+              <div className="flex items-center gt-glass rounded-lg p-0.5">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-gt-accent text-white shadow-gt-glow' : 'text-gt-text-muted hover:text-gt-text'}`}
+                  title="Vista lista"
+                >
+                  <List size={14} />
+                </button>
+                <button
+                  onClick={() => setViewMode('board')}
+                  className={`p-1.5 rounded-md transition-colors ${viewMode === 'board' ? 'bg-gt-accent text-white shadow-gt-glow' : 'text-gt-text-muted hover:text-gt-text'}`}
+                  title="Vista tablero (Drag & Drop)"
+                >
+                  <LayoutGrid size={14} />
+                </button>
+              </div>
+            ) : null}
             <button
               onClick={onExport}
               className="text-gt-text-muted hover:text-gt-accent transition-colors p-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-gt-border"
@@ -470,6 +489,25 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
             </button>
           </div>
         </div>
+
+        {selectedBus ? (
+          <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/8 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.1em] text-cyan-200">Bus seleccionado</p>
+            <p className="mt-1 text-[13px] font-semibold text-white">
+              {selectedBus.assigned_vehicle_code || selectedBus.assigned_vehicle_plate || getBusId(selectedBus)}
+            </p>
+            <p className="mt-1 text-[10px] text-slate-400">
+              {getBusItems(selectedBus).length} rutas · usa la lista para centrar el mapa o revisar la secuencia
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.1em] text-slate-500">Inspector</p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Selecciona un bus o una ruta en el mapa para ver su secuencia y conflictos.
+            </p>
+          </div>
+        )}
 
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gt-text-muted" />
@@ -492,7 +530,7 @@ const BusListPanel = ({ schedule = [], routes = [], onBusSelect, selectedBusId, 
       </div>
 
       {viewMode === 'list' ? (
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1.5">
+        <div className={`flex-1 min-h-0 overflow-y-auto space-y-1.5 ${compact ? 'p-2.5' : 'p-3'}`}>
           {filteredSchedule.map((bus, idx) => {
             const busId = getBusId(bus) || `bus-${idx}`;
             return (

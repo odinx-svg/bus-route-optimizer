@@ -7,7 +7,6 @@ import FleetConflictModal from './components/FleetConflictModal';
 import FleetReconciliationModal from './components/FleetReconciliationModal';
 import FleetScopeChoiceModal from './components/FleetScopeChoiceModal';
 import LoadOptionsModal from './components/LoadOptionsModal';
-import PlanningOverviewBar from './components/PlanningOverviewBar';
 import PreOptimizeRestrictionsModal from './components/PreOptimizeRestrictionsModal';
 import ConfirmDialog from './components/ui/ConfirmDialog';
 import TextInputDialog from './components/ui/TextInputDialog';
@@ -1685,21 +1684,6 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
               )}
               {viewMode === 'studio' && (
                 <div className="h-full min-h-0 flex flex-col">
-                  <PlanningOverviewBar
-                    workspace={activeWorkspaceSummary}
-                    activeDay={activeDay}
-                    stats={calculateStats()}
-                    scheduleByDay={effectiveScheduleByDay}
-                    onOpenReconciliation={() => openFleetReconciliationCenter()}
-                    onOpenRules={() => openLoadOptionsModal({
-                      workspaceId: activeWorkspaceId,
-                      workspaceName: activeWorkspaceSummary?.name || '',
-                    })}
-                    onPublishWeek={handlePublishWholeWorkspace}
-                    publishDisabled={!activeWorkspaceId || !ALL_DAYS.some((day) => Array.isArray(effectiveScheduleByDay?.[day]?.schedule) && effectiveScheduleByDay[day].schedule.length > 0)}
-                    optimizationOptions={activeOptimizationOptions}
-                    workspaceCompanies={fleetCompanies}
-                  />
                   <div className="flex-1 min-h-0">
                     <StudioErrorBoundary
                       resetKey={`${activeWorkspaceId || ''}:${activeDay}:${routes.length}:${schedule.length}`}
@@ -1736,6 +1720,16 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
                         onTogglePinBus={handleTogglePinBus}
                         onOpenReconciliation={openFleetReconciliationCenter}
                         onStudioLiveScheduleChange={handleStudioLiveScheduleChange}
+                        workspace={activeWorkspaceSummary}
+                        stats={calculateStats()}
+                        onOpenRules={() => openLoadOptionsModal({
+                          workspaceId: activeWorkspaceId,
+                          workspaceName: activeWorkspaceSummary?.name || '',
+                        })}
+                        onPublishWeek={handlePublishWholeWorkspace}
+                        publishDisabled={!activeWorkspaceId || !ALL_DAYS.some((day) => Array.isArray(effectiveScheduleByDay?.[day]?.schedule) && effectiveScheduleByDay[day].schedule.length > 0)}
+                        optimizationOptions={activeOptimizationOptions}
+                        workspaceCompanies={fleetCompanies}
                       />
                     </StudioErrorBoundary>
                   </div>

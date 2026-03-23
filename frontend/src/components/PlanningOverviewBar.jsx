@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { DAY_LABELS } from '../utils/days';
 import {
@@ -16,7 +17,7 @@ import {
   getWorkspaceReadinessConfig,
 } from '../utils/workspaceStatus';
 
-function PublicationStatusCard({ title, value, tone = 'neutral', helper = '', compact = false }) {
+function PublicationStatusCard({ title, value, tone = 'neutral', helper = '' }) {
   const toneClass = {
     success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
     warning: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
@@ -25,29 +26,27 @@ function PublicationStatusCard({ title, value, tone = 'neutral', helper = '', co
   }[tone] || 'border-white/10 bg-white/[0.03] text-slate-100';
 
   return (
-    <div className={`rounded-xl border ${compact ? 'px-3 py-2.5' : 'px-3 py-3'} ${toneClass}`}>
+    <div className={`rounded-xl border px-3 py-2.5 ${toneClass}`}>
       <p className="text-[10px] uppercase tracking-[0.1em] opacity-80">{title}</p>
-      <p className={`mt-1 font-semibold data-mono ${compact ? 'text-[16px]' : 'text-[18px]'}`}>{value}</p>
-      {helper ? <p className={`mt-1 opacity-80 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{helper}</p> : null}
+      <p className="mt-1 text-[16px] font-semibold data-mono">{value}</p>
+      {helper ? <p className="mt-1 text-[10px] opacity-80">{helper}</p> : null}
     </div>
   );
 }
 
-export default function PlanningOverviewBar({
+export function PlanningDetailPanel({
   workspace = null,
   activeDay = 'L',
   stats = null,
   scheduleByDay = null,
-  onOpenReconciliation,
-  onOpenRules,
-  onPublishWeek,
-  publishDisabled = false,
   optimizationOptions = null,
   workspaceCompanies = [],
+  onOpenReconciliation,
+  onOpenRules,
+  onClose,
 }) {
   if (!workspace) return null;
 
-  const [isExpanded, setIsExpanded] = useState(false);
   const readiness = getWorkspaceReadinessConfig(workspace.readiness_state);
   const pendingLabel = getWorkspacePendingLabel(workspace);
   const nextActionLabel = getNextActionLabel(workspace.next_recommended_action);
@@ -96,99 +95,232 @@ export default function PlanningOverviewBar({
     && currentCompany
     && Number(currentCompany.active_vehicle_count || 0) === 0
   );
-  const primaryPendingText = blockingText
-    || (fleetVirtual > 0
-      ? 'Todavia quedan buses provisionales. Reconciliar ahora evita problemas al publicar.'
-      : companyScopeWithoutFleet
-        ? 'La empresa principal no tiene buses activos. Ajusta el ambito de flota antes de seguir.'
-        : `Pendiente principal: ${pendingLabel.toLowerCase()}.`);
-
-  const nextActionTone = hasConflict
-    ? 'danger'
-    : fleetVirtual > 0
-      ? 'warning'
-      : readiness.tone === 'ready' || workspace?.status === 'active'
-        ? 'success'
-        : 'info';
-
-  const nextActionClass = {
-    danger: 'border-rose-500/25 bg-rose-500/10 text-rose-100',
-    warning: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
-    success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
-    info: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100',
-  }[nextActionTone];
 
   return (
-    <div className="mb-2 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 px-3 py-2">
-      <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Planificacion</p>
-            <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${readiness.chipClass}`}>
-              {readiness.label}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-200">
-              {scopeLabel}
-            </span>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.14em] text-cyan-300/90 data-mono">Detalle operativo</p>
+          <p className="mt-1 text-[16px] font-semibold text-white">{workspace.name || 'Optimizacion activa'}</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            {scopeLabel} · {DAY_LABELS[activeDay] || activeDay} · {readiness.label}
+          </p>
+        </div>
+        {typeof onClose === 'function' ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-200 hover:bg-white/5"
+          >
+            Cerrar
+          </button>
+        ) : null}
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {stageItems.map((item) => (
+            <div
+              key={item.key}
+              className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                item.done
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                  : item.active
+                    ? 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100'
+                    : 'border-white/10 bg-white/[0.03] text-slate-400'
+              }`}
+            >
+              {item.label}
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+          <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Estado principal</p>
+          <p className="mt-1 text-[14px] font-semibold text-white">{nextActionLabel}</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            {blockingText || `Pendientes: ${pendingLabel}.`}
+          </p>
+        </div>
+
+        {blockingIssues.length > 0 && (
+          <div className="space-y-2">
+            {blockingIssues.map((issue, index) => (
+              <div key={`${issue?.type || 'blocking'}-${index}`} className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-100">
+                {issue?.message || 'Hay un bloqueo operativo pendiente de resolver.'}
+              </div>
+            ))}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
-            <span className="text-[18px] font-semibold leading-none text-white xl:text-[20px]" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
-              {workspace.name || 'Optimizacion activa'}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
-              {DAY_LABELS[activeDay] || activeDay}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
-              {stats?.buses ?? 0} buses
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
-              {stats?.routes ?? 0} rutas
-            </span>
-            <span className={`rounded-full border px-2.5 py-1 ${fleetVirtual > 0 ? 'border-amber-500/25 bg-amber-500/10 text-amber-100' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'}`}>
-              {fleetVirtual} provisionales hoy
-            </span>
-            {hasConflict ? (
-              <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-100">
-                {workspace?.conflict_count ?? 0} conflictos
-              </span>
-            ) : null}
-            {overCapacity > 0 ? (
-              <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-100">
-                {overCapacity} cortos de plazas
-              </span>
-            ) : null}
-            {tightCapacity > 0 ? (
-              <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-amber-100">
-                {tightCapacity} justos
-              </span>
-            ) : null}
+        )}
+
+        {operationalWarnings.length > 0 && (
+          <div className="space-y-2">
+            {operationalWarnings.map((issue, index) => (
+              <div key={`${issue?.type || 'warning'}-${index}`} className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
+                {issue?.message || 'Hay una advertencia operativa que conviene revisar.'}
+              </div>
+            ))}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
-            <span className={`rounded-full border px-2.5 py-1 ${nextActionClass}`}>
-              Siguiente: {nextActionLabel}
+        )}
+
+        {companyScopeWithoutFleet ? (
+          <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
+            La empresa principal actual es <span className="font-semibold">{currentCompany?.name}</span> y tiene 0 buses activos. Cambia la empresa principal o usa modo UTE para que la flota real aparezca en la asignacion.
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <PublicationStatusCard title="Buses hoy" value={stats?.buses ?? 0} helper={`${stats?.routes ?? 0} rutas en el dia activo`} />
+          <PublicationStatusCard title="Flota real hoy" value={fleetReal} tone="success" helper="Vehiculos reales asignados al dia." />
+          <PublicationStatusCard title="Provisionales hoy" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={weekFleetVirtual > fleetVirtual ? `Semana completa: ${weekFleetVirtual}` : 'Sin pendientes relevantes.'} />
+          <PublicationStatusCard title="Conflictos reales" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} helper={hasConflict ? 'Hay conflictos reales detectados.' : 'No hay bloqueos detectados.'} />
+          <PublicationStatusCard title="Buses cortos" value={overCapacity} tone={overCapacity > 0 ? 'danger' : 'success'} helper={overCapacity > 0 ? 'Deficit de plazas en vehiculo real.' : 'No hay deficit detectado.'} />
+          <PublicationStatusCard title="Buses justos" value={tightCapacity} tone={tightCapacity > 0 ? 'warning' : 'success'} helper={tightCapacity > 0 ? 'Conviene revisar antes de publicar.' : 'Hay margen razonable.'} />
+          <PublicationStatusCard title="Sin vehiculo/cap." value={missingVehicle} tone={missingVehicle > 0 ? 'warning' : 'success'} helper={missingVehicle > 0 ? 'Falta reconciliar o completar capacidad.' : 'Todo visible.'} />
+          <PublicationStatusCard title="Solver activo" value={selectedSolverLabel} tone={selectedSolver === 'cp_sat' ? 'warning' : 'neutral'} helper={requestedSolver === selectedSolver ? `Pedido: ${requestedSolverLabel}` : `Pedido: ${requestedSolverLabel} -> activo: ${selectedSolverLabel}`} />
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-[#0d1623]/70 p-3">
+          <p className="text-[10px] uppercase tracking-[0.1em] text-slate-500">Reglas activas</p>
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+              Ambito: {optimizationOptions?.fleet_scope_mode === 'ute' ? 'UTE' : 'Empresa'}
             </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
-              Solver: {selectedSolverLabel}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
+            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
               Objetivo: {objectiveLabel}
             </span>
-            {routeRulesCount > 0 ? (
-              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
-                Ventanas: {routeRulesCount}
-              </span>
+            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+              Solver pedido: {requestedSolverLabel}
+            </span>
+            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+              Solver activo: {selectedSolverLabel}
+            </span>
+            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+              Balanceo: {optimizationOptions?.balance_load === false ? 'Flexible' : 'Activo'}
+            </span>
+            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+              Diferencia max: {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
+            </span>
+            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+              Ventanas: {routeRulesCount}
+            </span>
+            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
+              Publicacion: {optimizationOptions?.virtual_bus_publish_policy === 'block' ? 'Bloquear provisionales' : 'Permitir con aviso'}
+            </span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+          <p className="text-[10px] uppercase tracking-[0.1em] text-slate-500">Diagnostico motor</p>
+          <div className="mt-2 grid grid-cols-1 gap-3 xl:grid-cols-2">
+            <PublicationStatusCard title="Decision motor" value={solverReason || 'Sin detalle'} helper={solverReasonDetail} />
+            <PublicationStatusCard title="Pendiente actual" value={pendingLabel} helper={blockingText || 'Sin bloqueos adicionales.'} />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenRules}
+            className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
+          >
+            Reglas
+          </button>
+          {fleetVirtual > 0 ? (
+            <button
+              type="button"
+              onClick={onOpenReconciliation}
+              className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
+            >
+              Reconciliar flota
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PlanningOverviewBar({
+  workspace = null,
+  activeDay = 'L',
+  stats = null,
+  scheduleByDay = null,
+  onOpenReconciliation,
+  onOpenRules,
+  onPublishWeek,
+  publishDisabled = false,
+  optimizationOptions = null,
+  studioTab = 'map',
+  inspectorOpen = true,
+  detailOpen = false,
+  onToggleInspector,
+  onToggleDetail,
+}) {
+  if (!workspace) return null;
+
+  const readiness = getWorkspaceReadinessConfig(workspace.readiness_state);
+  const nextActionLabel = getNextActionLabel(workspace.next_recommended_action);
+  const activeDaySchedule = Array.isArray(scheduleByDay?.[activeDay]?.schedule)
+    ? scheduleByDay[activeDay].schedule
+    : [];
+  const fleetVirtual = activeDaySchedule.filter((bus) => String(bus?.fleet_assignment_type || '').toLowerCase() !== 'real').length;
+  const hasConflict = Number(workspace?.conflict_count || 0) > 0;
+  const stageToneClass = hasConflict
+    ? 'border-rose-500/25 bg-rose-500/10 text-rose-100'
+    : fleetVirtual > 0
+      ? 'border-amber-500/25 bg-amber-500/10 text-amber-100'
+      : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100';
+  const modeLabel = {
+    map: 'Mapa',
+    mixed: 'Mixto',
+    workspace: 'Timeline',
+  }[studioTab] || 'Mapa';
+
+  return (
+    <div className="rounded-[16px] border border-[#2a4057] bg-[#0a1420]/92 px-3 py-2 shadow-[0_14px_34px_rgba(2,6,23,0.22)]">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-[18px] font-semibold text-white xl:text-[19px]" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+              {workspace.name || 'Optimizacion activa'}
+            </p>
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${readiness.chipClass}`}>
+              {readiness.label}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-slate-300">
+              {DAY_LABELS[activeDay] || activeDay}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-slate-300">
+              {modeLabel}
+            </span>
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] ${stageToneClass}`}>
+              {nextActionLabel}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+            <span>{getScopeLabel(workspace.scope_summary)}</span>
+            <span className="text-slate-600">•</span>
+            <span>{stats?.buses ?? 0} buses</span>
+            <span className="text-slate-600">•</span>
+            <span>{stats?.routes ?? 0} rutas</span>
+            {fleetVirtual > 0 ? (
+              <>
+                <span className="text-slate-600">•</span>
+                <span className="text-amber-200">{fleetVirtual} provisionales</span>
+              </>
             ) : null}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 xl:max-w-[42rem] xl:justify-end">
+        <div className="flex flex-wrap items-center gap-1.5 xl:justify-end">
           {fleetVirtual > 0 ? (
             <button
               type="button"
               onClick={onOpenReconciliation}
               className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
             >
-              Reconciliar flota
+              Reconciliar
             </button>
           ) : null}
           <button
@@ -196,7 +328,30 @@ export default function PlanningOverviewBar({
             onClick={onOpenRules}
             className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
           >
-            Abrir reglas
+            Reglas
+          </button>
+          <button
+            type="button"
+            onClick={onToggleInspector}
+            className={`rounded-md border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+              inspectorOpen
+                ? 'border-white/10 bg-white/[0.05] text-slate-100'
+                : 'border-white/10 bg-white/[0.02] text-slate-300'
+            }`}
+          >
+            {inspectorOpen ? <ChevronRight className="mr-1 inline h-3.5 w-3.5" /> : <ChevronLeft className="mr-1 inline h-3.5 w-3.5" />}
+            Inspector
+          </button>
+          <button
+            type="button"
+            onClick={onToggleDetail}
+            className={`rounded-md border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+              detailOpen
+                ? 'border-cyan-500/35 bg-cyan-500/10 text-cyan-100'
+                : 'border-white/10 text-slate-100 hover:bg-white/5'
+            }`}
+          >
+            Detalle
           </button>
           <button
             type="button"
@@ -204,204 +359,10 @@ export default function PlanningOverviewBar({
             disabled={publishDisabled}
             className="rounded-md bg-cyan-400 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Publicar semana
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsExpanded((prev) => !prev)}
-            className="rounded-md border border-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-100 hover:bg-white/5"
-          >
-            {isExpanded ? 'Ocultar' : 'Detalle'}
+            Publicar
           </button>
         </div>
       </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
-        <span className={`rounded-full border px-2.5 py-1 ${nextActionClass}`}>
-          {nextActionLabel}
-        </span>
-        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
-          Pendientes: {pendingLabel}
-        </span>
-        <span className={`rounded-full border px-2.5 py-1 ${fleetVirtual > 0 ? 'border-amber-500/25 bg-amber-500/10 text-amber-100' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'}`}>
-          Provisionales hoy: {fleetVirtual}
-        </span>
-        {weekFleetVirtual > fleetVirtual ? (
-          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
-            Semana provisional: {weekFleetVirtual}
-          </span>
-        ) : null}
-        {hasConflict ? (
-          <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-100">
-            Conflictos reales: {workspace?.conflict_count ?? 0}
-          </span>
-        ) : null}
-        {overCapacity > 0 ? (
-          <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-100">
-            Cortos: {overCapacity}
-          </span>
-        ) : null}
-        {tightCapacity > 0 ? (
-          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-amber-100">
-            Justos: {tightCapacity}
-          </span>
-        ) : null}
-        {missingVehicle > 0 ? (
-          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-amber-100">
-            Sin vehiculo/cap.: {missingVehicle}
-          </span>
-        ) : null}
-      </div>
-
-      <p className="mt-1.5 truncate text-[11px] text-slate-400">
-        {primaryPendingText}
-      </p>
-
-      {isExpanded && (
-        <div className="mt-3 max-h-[34vh] space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-[#09111b] p-3 pr-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {stageItems.map((item) => (
-              <div
-                key={item.key}
-                className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
-                  item.done
-                    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
-                    : item.active
-                      ? 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100'
-                      : 'border-white/10 bg-white/[0.03] text-slate-400'
-                }`}
-              >
-                {item.label}
-              </div>
-            ))}
-          </div>
-
-          <div className={`rounded-xl border px-3 py-2.5 ${nextActionClass}`}>
-            <p className="text-[10px] uppercase tracking-[0.12em] opacity-80">Siguiente accion recomendada</p>
-            <p className="mt-1 text-[13px] font-semibold">{nextActionLabel}</p>
-            <p className="mt-1 text-[11px] opacity-90">{primaryPendingText}</p>
-          </div>
-
-          {blockingText ? (
-            <p className="text-[12px] text-amber-100">{blockingText}</p>
-          ) : null}
-          {blockingIssues.length > 0 && (
-            <div className="space-y-2">
-              {blockingIssues.map((issue, index) => (
-                <div key={`${issue?.type || 'blocking'}-${index}`} className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-100">
-                  {issue?.message || 'Hay un bloqueo operativo pendiente de resolver.'}
-                </div>
-              ))}
-            </div>
-          )}
-          {operationalWarnings.length > 0 && (
-            <div className="space-y-2">
-              {operationalWarnings.map((issue, index) => (
-                <div key={`${issue?.type || 'warning'}-${index}`} className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
-                  {issue?.message || 'Hay una advertencia operativa que conviene revisar.'}
-                </div>
-              ))}
-            </div>
-          )}
-          {companyScopeWithoutFleet ? (
-            <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-100">
-              La empresa principal actual del workspace es <span className="font-semibold">{currentCompany?.name}</span> y tiene 0 buses activos. Cambia la empresa principal o usa modo UTE para que la flota real aparezca en la asignacion.
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onOpenRules}
-              className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
-            >
-              Reglas de optimizacion
-            </button>
-            {fleetVirtual > 0 && (
-              <button
-                type="button"
-                onClick={onOpenReconciliation}
-                className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
-              >
-                Reconciliar flota
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
-            <PublicationStatusCard title="Flota real hoy" value={fleetReal} tone="success" helper="Buses reales del dia activo." compact />
-            <PublicationStatusCard title="Estado de publicacion" value={readiness.label} helper="Resumen del estado operativo actual." compact />
-            <PublicationStatusCard title="Provisionales hoy" value={fleetVirtual} tone={fleetVirtual > 0 ? 'warning' : 'success'} helper={weekFleetVirtual > fleetVirtual ? `Semana completa: ${weekFleetVirtual}` : (fleetVirtual > 0 ? 'Requieren asignacion real antes de publicar.' : 'No quedan pendientes.')} compact />
-            <PublicationStatusCard title="Conflictos reales" value={workspace?.conflict_count ?? 0} tone={hasConflict ? 'danger' : 'success'} helper={hasConflict ? 'Hay una colision real con otra publicacion.' : 'No hay bloqueos detectados.'} compact />
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-            <PublicationStatusCard title="Buses cortos" value={overCapacity} tone={overCapacity > 0 ? 'danger' : 'success'} helper={overCapacity > 0 ? 'Vehiculo real por debajo de la demanda.' : 'No hay deficits de plazas detectados.'} compact />
-            <PublicationStatusCard title="Buses justos" value={tightCapacity} tone={tightCapacity > 0 ? 'warning' : 'success'} helper={tightCapacity > 0 ? 'Conviene revisar antes de publicar.' : 'Hay margen razonable de plazas.'} compact />
-            <PublicationStatusCard title="Sin vehiculo/cap." value={missingVehicle} tone={missingVehicle > 0 ? 'warning' : 'success'} helper={missingVehicle > 0 ? 'Falta reconciliar o completar capacidad.' : 'Todas las unidades tienen capacidad visible.'} compact />
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-            <PublicationStatusCard
-              title="Solver activo"
-              value={selectedSolverLabel}
-              tone={selectedSolver === 'cp_sat' ? 'warning' : 'neutral'}
-              helper={requestedSolver === selectedSolver ? `Pedido: ${requestedSolverLabel}` : `Pedido: ${requestedSolverLabel} -> activo: ${selectedSolverLabel}`}
-              compact
-            />
-            <PublicationStatusCard
-              title="Warm start"
-              value={activeDayOptimizerDiagnostics?.warm_start_used ? 'Si' : (activeDayOptimizerDiagnostics?.warm_start_available ? 'Disponible' : 'No')}
-              helper="Semilla greedy usada antes del solver."
-              compact
-            />
-            <PublicationStatusCard
-              title="Decision motor"
-              value={solverReason || 'Sin detalle'}
-              helper={solverReasonDetail}
-              compact
-            />
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-[#0d1623]/70 p-3">
-            <p className="text-[10px] uppercase tracking-[0.1em] text-slate-500">Reglas activas</p>
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-                Ambito: {optimizationOptions?.fleet_scope_mode === 'ute' ? 'UTE' : 'Empresa'}
-              </span>
-              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-                Objetivo: {objectiveLabel}
-              </span>
-              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-                Solver pedido: {requestedSolverLabel}
-              </span>
-              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-                Solver activo: {selectedSolverLabel}
-              </span>
-              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-                Balanceo: {optimizationOptions?.balance_load === false ? 'Flexible' : 'Activo'}
-              </span>
-              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-                Diferencia max: {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
-              </span>
-              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-                Ventanas: {routeRulesCount}
-              </span>
-              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-slate-200">
-                Publicacion: {optimizationOptions?.virtual_bus_publish_policy === 'block' ? 'Bloquear provisionales' : 'Permitir con aviso'}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-            <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Ruta</span>
-            <span className="rounded-md border border-slate-500/20 bg-slate-500/10 px-2 py-1 text-slate-200">Posicionamiento</span>
-            <span className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-rose-100">Conflicto</span>
-            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-amber-100">Bus provisional</span>
-            <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-cyan-100">Bus publicado</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
