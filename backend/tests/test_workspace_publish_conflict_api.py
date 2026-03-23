@@ -58,18 +58,31 @@ def _seed_workspace(db):
     )
 
 
-def _seed_vehicle(db, *, company_id: str, vehicle_id: str, vehicle_code: str, seats_max: int = 55):
+def _seed_vehicle(
+    db,
+    *,
+    company_id: str,
+    vehicle_id: str,
+    vehicle_code: str,
+    seats_max: int = 55,
+    brand: str | None = None,
+    model: str | None = None,
+    gps_provider: str | None = None,
+):
     db.add(
         models.FleetVehicleModel(
             id=vehicle_id,
             company_id=company_id,
             vehicle_code=vehicle_code,
             plate=f"{vehicle_code}-PLATE",
+            brand=brand,
+            model=model,
             seats_base=seats_max,
             seats_pmr=0,
             seats_min=seats_max,
             seats_max=seats_max,
             status="active",
+            gps_provider=gps_provider,
         )
     )
     db.commit()
@@ -586,6 +599,88 @@ def test_apply_fleet_reconciliation_respects_exact_vehicle_selection(monkeypatch
     assigned_bus = body["schedule_by_day"]["L"]["schedule"][0]
     assert assigned_bus["assigned_vehicle_id"] == "veh-2"
     assert assigned_bus["assigned_vehicle_code"] == "B002"
+
+
+def test_preview_fleet_reconciliation_plan_returns_candidate_metadata(monkeypatch):
+    client, Session = _build_test_client(monkeypatch)
+
+    db = Session()
+    try:
+        workspace = crud.create_workspace(
+            db,
+            schemas.WorkspaceCreateRequest(
+                name="Workspace Preview Plan",
+                schedule_by_day={
+                    "L": {
+                        "schedule": [
+                            {
+                                "bus_id": "B-V1",
+                                "fleet_assignment_type": "virtual",
+                                "items": [
+                                    {
+                                        "route_id": "R001",
+                                        "start_time": "08:00:00",
+                                        "end_time": "09:00:00",
+                                        "type": "entry",
+                                        "capacity_needed": 40,
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                },
+            ),
+        )
+        company = crud.ensure_company(db, name="Empresa A", preferred_id="company_a")
+        workspace.company_id = str(company.id)
+        db.commit()
+        _seed_vehicle(
+            db,
+            company_id=str(company.id),
+            vehicle_id="veh-1",
+            vehicle_code="B001",
+            seats_max=55,
+            brand="Iveco",
+            model="Wing",
+            gps_provider="geotab",
+        )
+        db.add(
+            models.FleetVehicleDocumentModel(
+                vehicle_id="veh-1",
+                doc_type="seguro",
+                reference="DOC-1",
+            )
+        )
+        db.commit()
+        workspace_id = str(workspace.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/api/workspaces/{workspace_id}/fleet-reconciliation/plan",
+        json={
+            "day": "L",
+            "company_allocations": [{"company_id": "company_a", "count": 1}],
+            "bus_selections": [
+                {
+                    "day": "L",
+                    "bus_id": "B-V1",
+                    "vehicle_id": "veh-1",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["selected_assignments"][0]["vehicle_id"] == "veh-1"
+    assert body["items"][0]["planned_assignment"]["vehicle_id"] == "veh-1"
+    candidate = body["items"][0]["suggested_real_vehicles"][0]
+    assert candidate["vehicle_code"] == "B001"
+    assert candidate["brand"] == "Iveco"
+    assert candidate["model"] == "Wing"
+    assert candidate["gps_provider"] == "geotab"
+    assert candidate["has_pending_documents"] is False
+    assert candidate["documents_count"] == 1
 
 
 def test_update_workspace_company_changes_primary_company(monkeypatch):

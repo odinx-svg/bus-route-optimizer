@@ -173,3 +173,12 @@ export async function applyWorkspaceFleetReconciliation(workspaceId, payload = {
   });
   return parseResponse(response);
 }
+
+export async function previewWorkspaceFleetReconciliationPlan(workspaceId, payload = {}) {
+  const response = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/fleet-reconciliation/plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse(response);
+}

@@ -37,6 +37,7 @@ import {
   listWorkspaces,
   migrateLegacyWorkspaces,
   optimizeWorkspacePipeline,
+  previewWorkspaceFleetReconciliationPlan,
   publishWorkspaceVersion,
   restoreWorkspace,
   saveWorkspaceVersion,
@@ -958,6 +959,7 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
       previewDay = activeDay,
       successTitle = 'Version publicada',
       successMessage = 'La planificacion ya esta activa en Panel',
+      skipReconciliationPrompt = false,
     } = {},
   ) => {
     if (!activeWorkspaceId) {
@@ -971,6 +973,29 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
         conflicts: fleetPreview.conflicts,
       });
       throw new Error('Publicacion bloqueada por conflictos de flota');
+    }
+
+    const pendingVirtualCount = Number(fleetPreview?.virtual_created || 0);
+    if (!skipReconciliationPrompt && pendingVirtualCount > 0) {
+      const reconciliationData = await getWorkspaceFleetReconciliation(activeWorkspaceId, previewDay).catch(() => null);
+      if (reconciliationData && typeof reconciliationData === 'object') {
+        setFleetReconciliationModal(
+          buildFleetReconciliationModalData({
+            data: reconciliationData,
+            activeDay: previewDay,
+            dayLabels: DAY_LABELS,
+            intent: 'publish',
+            pendingPublishPayload: snapshotPayload,
+            publishSuccessTitle: successTitle,
+            publishSuccessMessage: successMessage,
+          })
+        );
+        notifications.info(
+          'Selecciona la flota antes de publicar',
+          'Puedes dejar la propuesta automatica o ajustar buses aptos desde el Garage.'
+        );
+        return false;
+      }
     }
 
     const resolvedPolicy = String(
@@ -1003,7 +1028,12 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
         scopeLabel: fleetPreview?.scope_label || '',
         scopeVehicleCount: Number(fleetPreview?.scope_vehicle_count || 0),
         scopeMode: String(fleetPreview?.scope_mode || 'company'),
-      }));
+        intent: 'publish',
+        pendingPublishPayload: snapshotPayload,
+        previewDay,
+        publishSuccessTitle: successTitle,
+        publishSuccessMessage: successMessage,
+        }));
       throw new Error('Publicacion bloqueada: hay buses ficticios pendientes de reconciliar');
     }
 
@@ -1036,6 +1066,11 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
           scopeLabel: publication?.scope_label || '',
           scopeVehicleCount: Number(publication?.scope_vehicle_count || 0),
           scopeMode: String(publication?.scope_mode || 'company'),
+          intent: 'publish',
+          pendingPublishPayload: snapshotPayload,
+          previewDay,
+          publishSuccessTitle: successTitle,
+          publishSuccessMessage: successMessage,
         });
       } else if (publication?.blocked) {
         setFleetConflictModal({
@@ -1047,6 +1082,7 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
     }
 
     notifications.success(successTitle, successMessage);
+    return true;
   }, [activeDay, activeOptimizationOptions?.virtual_bus_publish_policy, activeWorkspaceId]);
 
   const handleSaveManualSchedule = async (scheduleData, intent = 'save') => {
@@ -1126,11 +1162,14 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
           summary_metrics: mergedScheduleByDay?.[payload.day]?.stats || {},
         };
         if (intent === 'publish') {
-          await publishWorkspaceSnapshot(snapshotPayload, {
+          const published = await publishWorkspaceSnapshot(snapshotPayload, {
             previewDay: payload.day || activeDay,
             successTitle: 'Version publicada',
             successMessage: 'La planificacion ya esta activa en Panel',
           });
+          if (!published) {
+            return data;
+          }
         } else {
           await saveWorkspaceVersion(activeWorkspaceId, snapshotPayload);
           notifications.success('Dia guardado', `${DAY_LABELS[payload.day] || payload.day} guardado en la semana`);
@@ -1183,11 +1222,14 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
 
     const loadingToast = notifications.loading('Publicando semana completa...');
     try {
-      await publishWorkspaceSnapshot(snapshotPayload, {
+      const published = await publishWorkspaceSnapshot(snapshotPayload, {
         previewDay: activeDay,
         successTitle: 'Semana publicada',
         successMessage: 'Los 5 dias ya estan activos en Panel',
       });
+      if (!published) {
+        return;
+      }
       setScheduleByDay(effectiveWeekSchedule);
       await refreshWorkspaces();
       const freshDetail = await getWorkspace(activeWorkspaceId).catch(() => null);
@@ -1409,15 +1451,29 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
     }
   }, [activeDay, activeOptimizationOptions, activeWorkspaceId, createWorkspaceFleetUte, uteOptions]);
 
+  const previewFleetReconciliationProposal = useCallback(async (companyAllocations = [], busSelections = []) => {
+    if (!activeWorkspaceId) return null;
+    const modalContext = fleetReconciliationModal;
+    return previewWorkspaceFleetReconciliationPlan(activeWorkspaceId, {
+      day: modalContext.previewDay || activeDay,
+      allocation_mode: 'pending_only',
+      autofill_remaining: true,
+      bus_ids: modalContext.busId ? [modalContext.busId] : [],
+      company_allocations: Array.isArray(companyAllocations) ? companyAllocations : [],
+      bus_selections: Array.isArray(busSelections) ? busSelections : [],
+    });
+  }, [activeDay, activeWorkspaceId, fleetReconciliationModal]);
+
   const applyFleetReconciliationProposal = useCallback(async (companyAllocations = [], busSelections = []) => {
     if (!activeWorkspaceId) return;
+    const modalContext = fleetReconciliationModal;
     try {
       setFleetReconciliationModal((prev) => ({ ...prev, applying: true }));
       const result = await applyWorkspaceFleetReconciliation(activeWorkspaceId, {
-        day: activeDay,
+        day: modalContext.previewDay || activeDay,
         allocation_mode: 'pending_only',
         autofill_remaining: true,
-        bus_ids: fleetReconciliationModal.busId ? [fleetReconciliationModal.busId] : [],
+        bus_ids: modalContext.busId ? [modalContext.busId] : [],
         company_allocations: Array.isArray(companyAllocations) ? companyAllocations : [],
         bus_selections: Array.isArray(busSelections) ? busSelections : [],
       });
@@ -1431,6 +1487,36 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
       if (freshDetail) {
         setActiveWorkspaceDetail(freshDetail);
       }
+
+      if (modalContext.intent === 'publish' && modalContext.pendingPublishPayload) {
+        const published = await publishWorkspaceSnapshot(
+          {
+            ...modalContext.pendingPublishPayload,
+            schedule_by_day: (
+              result?.schedule_by_day
+              && typeof result.schedule_by_day === 'object'
+            )
+              ? result.schedule_by_day
+              : (modalContext.pendingPublishPayload?.schedule_by_day || {}),
+          },
+          {
+            previewDay: modalContext.previewDay || activeDay,
+            successTitle: modalContext.publishSuccessTitle || 'Version publicada',
+            successMessage: modalContext.publishSuccessMessage || 'La planificacion ya esta activa en Panel',
+            skipReconciliationPrompt: true,
+          }
+        );
+        if (published) {
+          await refreshWorkspaces();
+          const publishedDetail = await getWorkspace(activeWorkspaceId).catch(() => null);
+          if (publishedDetail) {
+            setActiveWorkspaceDetail(publishedDetail);
+          }
+          setFleetReconciliationModal(createFleetReconciliationModalState());
+          return;
+        }
+      }
+
       setFleetReconciliationModal(createFleetReconciliationModalState());
 
       notifications.success(
@@ -1451,7 +1537,7 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
         error?.message || 'Error guardando la reasignacion de flota'
       );
     }
-  }, [activeDay, activeWorkspaceId, fleetReconciliationModal.busId, refreshWorkspaces]);
+  }, [activeDay, activeWorkspaceId, fleetReconciliationModal, publishWorkspaceSnapshot, refreshWorkspaces]);
 
   return (
     <Layout
@@ -1779,7 +1865,9 @@ Puedes continuar con la optimizacion usando solo las filas validas, o detenerte 
         operationalSummary={fleetReconciliationModal.operationalSummary}
         candidateRejectionReasons={fleetReconciliationModal.candidateRejectionReasons}
         applying={fleetReconciliationModal.applying}
+        intent={fleetReconciliationModal.intent}
         onApply={applyFleetReconciliationProposal}
+        onPreviewPlan={previewFleetReconciliationProposal}
         onClose={() => setFleetReconciliationModal(createFleetReconciliationModalState())}
       />
       <FleetScopeChoiceModal

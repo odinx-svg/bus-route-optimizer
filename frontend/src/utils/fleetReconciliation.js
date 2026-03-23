@@ -17,6 +17,11 @@ export const createFleetReconciliationModalState = () => ({
   operationalSummary: null,
   candidateRejectionReasons: null,
   applying: false,
+  intent: 'reconcile',
+  pendingPublishPayload: null,
+  previewDay: null,
+  publishSuccessTitle: '',
+  publishSuccessMessage: '',
 });
 
 export const formatMinuteValue = (value) => {
@@ -81,6 +86,10 @@ export const buildFleetReconciliationModalData = ({
   activeDay,
   busId = null,
   dayLabels = {},
+  intent = 'reconcile',
+  pendingPublishPayload = null,
+  publishSuccessTitle = '',
+  publishSuccessMessage = '',
 }) => {
   const dayItems = Array.isArray(data?.reconciliation_day?.items)
     ? data.reconciliation_day.items
@@ -115,5 +124,10 @@ export const buildFleetReconciliationModalData = ({
     busId: busId || null,
     operationalSummary: data?.operational_summary || daySummary?.operational_summary || null,
     candidateRejectionReasons: data?.candidate_rejection_reasons || daySummary?.candidate_rejection_reasons || null,
+    intent,
+    pendingPublishPayload,
+    previewDay: activeDay,
+    publishSuccessTitle,
+    publishSuccessMessage,
   };
 };

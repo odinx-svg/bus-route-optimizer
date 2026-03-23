@@ -77,17 +77,31 @@ def _normalize_vehicle(vehicle: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     seats_pmr = _safe_int(vehicle.get("seats_pmr"), max(0, seats_max - seats_base))
     if seats_pmr < 0:
         seats_pmr = 0
+    documents = vehicle.get("documents") if isinstance(vehicle.get("documents"), list) else []
+    gps_provider = str(vehicle.get("gps_provider", "") or "").strip()
+    gps_external_id = str(vehicle.get("gps_external_id", "") or "").strip()
     return {
         "id": str(vehicle.get("id", "") or ""),
         "vehicle_code": str(vehicle.get("vehicle_code", "") or "").strip(),
         "plate": str(vehicle.get("plate", "") or "").strip(),
         "status": str(vehicle.get("status", "active") or "active").strip().lower(),
+        "brand": str(vehicle.get("brand", "") or "").strip() or None,
+        "model": str(vehicle.get("model", "") or "").strip() or None,
         "company_id": str(vehicle.get("company_id", "") or "").strip() or None,
         "company_name": str(vehicle.get("company_name", "") or "").strip() or None,
         "seats_base": seats_base,
         "seats_pmr": seats_pmr,
         "seats_min": seats_min,
         "seats_max": seats_max,
+        "accessibility": bool(vehicle.get("accessibility", False)),
+        "gps_provider": gps_provider or None,
+        "gps_external_id": gps_external_id or None,
+        "gps_last_seen_at": str(vehicle.get("gps_last_seen_at", "") or "").strip() or None,
+        "has_gps_link": bool(gps_provider or gps_external_id),
+        "documents": documents,
+        "documents_count": len(documents),
+        "has_pending_documents": len(documents) == 0,
+        "default_driver_name": str(vehicle.get("default_driver_name", "") or "").strip() or None,
     }
 
 

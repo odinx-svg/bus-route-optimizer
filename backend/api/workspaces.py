@@ -659,10 +659,168 @@ def _reconciliation_key(day: Any, bus_id: Any) -> str:
     return f"{str(day or '').strip()}::{str(bus_id or '').strip()}"
 
 
+def _build_reconciliation_company_targets(
+    day_payload: Dict[str, Any],
+    allocations: Optional[List[Any]] = None,
+) -> Dict[str, int]:
+    explicit_targets: Dict[str, int] = {}
+    for row in (allocations or []):
+        if row is None:
+            continue
+        if hasattr(row, "company_id"):
+            company_id = getattr(row, "company_id", None)
+            count = getattr(row, "count", 0)
+        elif isinstance(row, dict):
+            company_id = row.get("company_id")
+            count = row.get("count", 0)
+        else:
+            continue
+        normalized_company_id = str(company_id or "unassigned")
+        normalized_count = max(0, int(count or 0))
+        if normalized_count > 0:
+            explicit_targets[normalized_company_id] = normalized_count
+    if explicit_targets:
+        return explicit_targets
+
+    snapshot_targets: Dict[str, int] = {}
+    for row in _safe_list(day_payload.get("company_allocations")):
+        if not isinstance(row, dict):
+            continue
+        normalized_company_id = str(row.get("company_id") or "unassigned")
+        normalized_count = max(0, int(row.get("count", 0) or 0))
+        if normalized_count > 0:
+            snapshot_targets[normalized_company_id] = normalized_count
+    if snapshot_targets:
+        return snapshot_targets
+
+    recommended_targets: Dict[str, int] = {}
+    company_mix = _safe_dict(day_payload.get("company_mix"))
+    for row in _safe_list(company_mix.get("recommended_companies")):
+        if not isinstance(row, dict):
+            continue
+        normalized_company_id = str(row.get("company_id") or "unassigned")
+        normalized_count = max(0, int(row.get("recommended_count", 0) or 0))
+        if normalized_count > 0:
+            recommended_targets[normalized_company_id] = normalized_count
+    return recommended_targets
+
+
+def _build_reconciliation_bus_preferences(
+    requested_day: str,
+    day_payload: Dict[str, Any],
+    selections: Optional[List[Any]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    bus_preferences: Dict[str, Dict[str, Any]] = {}
+
+    for selection in _safe_list(day_payload.get("bus_selections")):
+        if not isinstance(selection, dict):
+            continue
+        key = _reconciliation_key(selection.get("day") or requested_day, selection.get("bus_id"))
+        bus_preferences[key] = {
+            "company_id": str(selection.get("company_id") or "").strip() or None,
+            "vehicle_id": str(selection.get("vehicle_id") or "").strip() or None,
+            "excluded_vehicle_ids": [
+                str(vehicle_id).strip()
+                for vehicle_id in _safe_list(selection.get("excluded_vehicle_ids"))
+                if str(vehicle_id).strip()
+            ],
+        }
+
+    for selection in (selections or []):
+        if selection is None:
+            continue
+        if hasattr(selection, "bus_id"):
+            selection_day = getattr(selection, "day", None)
+            bus_id = getattr(selection, "bus_id", "")
+            company_id = getattr(selection, "company_id", None)
+            vehicle_id = getattr(selection, "vehicle_id", None)
+            excluded_vehicle_ids = getattr(selection, "excluded_vehicle_ids", None)
+        elif isinstance(selection, dict):
+            selection_day = selection.get("day")
+            bus_id = selection.get("bus_id", "")
+            company_id = selection.get("company_id")
+            vehicle_id = selection.get("vehicle_id")
+            excluded_vehicle_ids = selection.get("excluded_vehicle_ids")
+        else:
+            continue
+        key = _reconciliation_key(selection_day or requested_day, bus_id)
+        bus_preferences[key] = {
+            "company_id": str(company_id or "").strip() or None,
+            "vehicle_id": str(vehicle_id or "").strip() or None,
+            "excluded_vehicle_ids": [
+                str(candidate_id).strip()
+                for candidate_id in (excluded_vehicle_ids or [])
+                if str(candidate_id).strip()
+            ],
+        }
+    return bus_preferences
+
+
+def _build_reconciliation_selection_preview(
+    *,
+    rows: List[Dict[str, Any]],
+    company_targets: Optional[Dict[str, int]] = None,
+    bus_preferences: Optional[Dict[str, Dict[str, Any]]] = None,
+    autofill_remaining: bool = True,
+) -> Dict[str, Any]:
+    applied = _select_reconciliation_assignments(
+        rows,
+        company_targets=company_targets,
+        bus_preferences=bus_preferences,
+        autofill_remaining=autofill_remaining,
+    )
+    selected_assignments = (
+        applied.get("selected_assignments", {})
+        if isinstance(applied.get("selected_assignments"), dict)
+        else {}
+    )
+    normalized_preferences = bus_preferences if isinstance(bus_preferences, dict) else {}
+    materialized_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_key = _reconciliation_key(row.get("day"), row.get("bus_id"))
+        preference = normalized_preferences.get(row_key, {}) if isinstance(normalized_preferences.get(row_key), dict) else {}
+        planned_assignment = selected_assignments.get(row_key)
+        materialized_rows.append(
+            {
+                **row,
+                "row_key": row_key,
+                "planned_assignment": planned_assignment if isinstance(planned_assignment, dict) else None,
+                "planning_state": (
+                    "manual_vehicle"
+                    if str(preference.get("vehicle_id") or "").strip()
+                    else (
+                        "preferred_company"
+                        if str(preference.get("company_id") or "").strip()
+                        else ("auto" if isinstance(planned_assignment, dict) else "unresolved")
+                    )
+                ),
+            }
+        )
+
+    return {
+        **applied,
+        "items": materialized_rows,
+        "selected_assignments_list": [
+            {
+                "day": str(row_key).split("::", 1)[0],
+                "bus_id": str(row_key).split("::", 1)[1] if "::" in str(row_key) else "",
+                **assignment,
+            }
+            for row_key, assignment in selected_assignments.items()
+            if isinstance(assignment, dict)
+        ],
+        "company_targets": dict(company_targets or {}),
+        "autofill_remaining": bool(autofill_remaining),
+    }
+
+
 def _select_reconciliation_assignments(
     rows: List[Dict[str, Any]],
     company_targets: Optional[Dict[str, int]] = None,
     bus_preferences: Optional[Dict[str, Dict[str, Any]]] = None,
+    autofill_remaining: bool = True,
 ) -> Dict[str, Any]:
     normalized_targets = {
         str(company_id or "unassigned"): max(0, int(count or 0))
@@ -763,6 +921,18 @@ def _select_reconciliation_assignments(
                     if _candidate_available(row, candidate):
                         chosen = candidate
                         break
+        if chosen is None and not bool(autofill_remaining) and (
+            bool(normalized_targets) or bool(preferred_company_id) or bool(preferred_vehicle_id)
+        ):
+            unresolved.append(
+                {
+                    "day": row.get("day"),
+                    "bus_id": row.get("bus_id"),
+                    "required_capacity": int(row.get("required_capacity", row.get("required_seats", 0)) or 0),
+                    "reason": "no_candidate_within_requested_scope",
+                }
+            )
+            continue
         if chosen is None:
             for candidate in suggestions:
                 if _candidate_available(row, candidate):
@@ -1276,6 +1446,90 @@ async def get_workspace_fleet_reconciliation(
         db.close()
 
 
+@router.post("/{workspace_id}/fleet-reconciliation/plan")
+async def preview_workspace_fleet_reconciliation_plan(
+    workspace_id: str,
+    payload: schemas.FleetReconciliationApplyRequest = Body(default_factory=schemas.FleetReconciliationApplyRequest),
+) -> Dict[str, Any]:
+    """Preview the exact real-vehicle proposal without persisting it."""
+    if not is_database_available() or SessionLocal is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    _ensure_tables_ready()
+
+    db = SessionLocal()
+    try:
+        workspace = db_crud.get_workspace(db, workspace_id)
+        if workspace is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        workspace = _repair_workspace_primary_company(db, workspace)
+        working_version = workspace.working_version or workspace.published_version
+        if working_version is None:
+            raise HTTPException(status_code=409, detail="Workspace has no version to reconcile")
+
+        schedule_by_day = db_crud.normalize_schedule_by_day(working_version.schedule_by_day or {})
+        scope = resolve_workspace_fleet_scope(db, workspace)
+        requested_day = str(payload.day or "").strip() or None
+        if not requested_day:
+            raise HTTPException(status_code=400, detail="Day is required for fleet reconciliation planning")
+
+        current_reconciliation = _build_operational_reconciliation_response(
+            db,
+            workspace=workspace,
+            schedule_by_day=schedule_by_day,
+            scope=scope,
+            fleet_snapshot=working_version.fleet_snapshot if isinstance(working_version.fleet_snapshot, dict) else None,
+            day=requested_day,
+        )
+        day_payload = _safe_dict(current_reconciliation.get("reconciliation_day"))
+        target_rows = _safe_list(day_payload.get("pending_assignments"))
+        requested_bus_ids = {
+            str(bus_id).strip()
+            for bus_id in (payload.bus_ids or [])
+            if str(bus_id).strip()
+        }
+        if requested_bus_ids:
+            target_rows = [row for row in target_rows if str(row.get("bus_id") or "").strip() in requested_bus_ids]
+
+        company_targets = _build_reconciliation_company_targets(day_payload, payload.company_allocations)
+        bus_preferences = _build_reconciliation_bus_preferences(requested_day, day_payload, payload.bus_selections)
+        selection_preview = _build_reconciliation_selection_preview(
+            rows=target_rows,
+            company_targets=company_targets,
+            bus_preferences=bus_preferences,
+            autofill_remaining=bool(payload.autofill_remaining),
+        )
+
+        return {
+            "workspace_id": workspace_id,
+            "day": requested_day,
+            "company_allocations": [
+                {
+                    "company_id": company_id if company_id != "unassigned" else None,
+                    "count": count,
+                }
+                for company_id, count in company_targets.items()
+            ],
+            "bus_selections": [
+                {
+                    "day": requested_day,
+                    "bus_id": str(row_key).split("::", 1)[1] if "::" in str(row_key) else "",
+                    **selection,
+                }
+                for row_key, selection in bus_preferences.items()
+                if isinstance(selection, dict) and str(row_key).startswith(f"{requested_day}::")
+            ],
+            "items": selection_preview.get("items", []),
+            "selected_assignments": selection_preview.get("selected_assignments_list", []),
+            "applied_by_company": selection_preview.get("applied_by_company", []),
+            "remaining_targets": selection_preview.get("remaining_targets", {}),
+            "unresolved": selection_preview.get("unresolved", []),
+            "autofill_remaining": bool(payload.autofill_remaining),
+            "operational_summary": day_payload.get("operational_summary", {}),
+        }
+    finally:
+        db.close()
+
+
 @router.post("/{workspace_id}/fleet-reconciliation/apply")
 async def apply_workspace_fleet_reconciliation(
     workspace_id: str,
@@ -1338,11 +1592,7 @@ async def apply_workspace_fleet_reconciliation(
                 "reconciliation": current_reconciliation,
             }
 
-        company_targets = {
-            str(row.company_id or "unassigned"): int(row.count or 0)
-            for row in (payload.company_allocations or [])
-            if int(row.count or 0) > 0
-        }
+        company_targets = _build_reconciliation_company_targets(day_payload, payload.company_allocations)
         existing_snapshot = _safe_dict(working_version.fleet_snapshot)
         previous_reconciliation_snapshot = _safe_dict(existing_snapshot.get("reconciliation_snapshot"))
         previous_day_snapshot = _safe_dict(_safe_dict(previous_reconciliation_snapshot.get("days")).get(requested_day))
@@ -1351,32 +1601,13 @@ async def apply_workspace_fleet_reconciliation(
             for item in _safe_list(previous_day_snapshot.get("selected_assignments"))
             if isinstance(item, dict)
         }
-        bus_preferences: Dict[str, Dict[str, Any]] = {}
-        for selection in _safe_list(previous_day_snapshot.get("bus_selections")):
-            if not isinstance(selection, dict):
-                continue
-            key = _reconciliation_key(selection.get("day") or requested_day, selection.get("bus_id"))
-            bus_preferences[key] = {
-                "company_id": str(selection.get("company_id") or "").strip() or None,
-                "vehicle_id": str(selection.get("vehicle_id") or "").strip() or None,
-                "excluded_vehicle_ids": [
-                    str(vehicle_id).strip()
-                    for vehicle_id in _safe_list(selection.get("excluded_vehicle_ids"))
-                    if str(vehicle_id).strip()
-                ],
-            }
-        for selection in (payload.bus_selections or []):
-            key = _reconciliation_key(selection.day or requested_day, selection.bus_id)
-            bus_preferences[key] = {
-                "company_id": str(selection.company_id or "").strip() or None,
-                "vehicle_id": str(selection.vehicle_id or "").strip() or None,
-                "excluded_vehicle_ids": [
-                    str(vehicle_id).strip()
-                    for vehicle_id in (selection.excluded_vehicle_ids or [])
-                    if str(vehicle_id).strip()
-                ],
-            }
-        applied = _select_reconciliation_assignments(target_rows, company_targets, bus_preferences)
+        bus_preferences = _build_reconciliation_bus_preferences(requested_day, previous_day_snapshot, payload.bus_selections)
+        applied = _select_reconciliation_assignments(
+            target_rows,
+            company_targets,
+            bus_preferences,
+            autofill_remaining=bool(payload.autofill_remaining),
+        )
         selected_assignments = applied.get("selected_assignments", {}) if isinstance(applied.get("selected_assignments"), dict) else {}
         if not selected_assignments and not existing_selected_assignments:
             raise HTTPException(
