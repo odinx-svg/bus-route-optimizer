@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Architecture"
+  short_description: "Mapa general del sistema Tutti"
+  brand_color: "#1E3A8A"
+  default_prompt: "Use $tutti-architecture to orientarme en la arquitectura, flujos y skills del proyecto Tutti."
+
+policy:
+  allow_implicit_invocation: true

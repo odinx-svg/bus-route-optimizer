@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Skill Governance"
+  short_description: "Mantiene coherente la libreria de skills"
+  brand_color: "#4338CA"
+  default_prompt: "Use $tutti-skill-governance to crear, dividir o actualizar skills de Tutti manteniendo consistencia entre SKILL.md, references y metadata."
+
+policy:
+  allow_implicit_invocation: true

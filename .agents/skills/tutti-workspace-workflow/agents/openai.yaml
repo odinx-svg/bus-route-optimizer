@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Workspace Flow"
+  short_description: "Save, publish, archive y readiness"
+  brand_color: "#7C3AED"
+  default_prompt: "Use $tutti-workspace-workflow to revisar versionado, publish y estados operativos del workspace."
+
+policy:
+  allow_implicit_invocation: true

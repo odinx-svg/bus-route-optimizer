@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Troubleshooting"
+  short_description: "Diagnostico y debugging transversal"
+  brand_color: "#991B1B"
+  default_prompt: "Use $tutti-debug-troubleshoot to diagnosticar errores, performance issues o fallos de integracion en Tutti."
+
+policy:
+  allow_implicit_invocation: true

@@ -153,6 +153,55 @@ function StatCard({ label, value, tone = 'text-white' }) {
   );
 }
 
+function ConfirmActionModal({
+  open = false,
+  title = '',
+  description = '',
+  tone = 'danger',
+  confirmLabel = 'Confirmar',
+  cancelLabel = 'Cancelar',
+  onConfirm,
+  onCancel,
+}) {
+  if (!open) return null;
+
+  const toneClass = tone === 'danger'
+    ? 'border-rose-500/30 bg-rose-500/10 text-rose-100'
+    : 'border-amber-500/30 bg-amber-500/10 text-amber-100';
+  const confirmClass = tone === 'danger'
+    ? 'border-rose-500/45 bg-rose-500/20 text-rose-100 hover:bg-rose-500/30'
+    : 'border-amber-500/45 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30';
+
+  return (
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-[#020611]/85 backdrop-blur-[2px]" onClick={onCancel} />
+      <div className="relative w-full max-w-md rounded-xl border border-[#304a62] bg-[#0b141f] p-4 shadow-2xl">
+        <div className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${toneClass}`}>
+          Confirmacion
+        </div>
+        <h3 className="mt-3 text-[16px] font-semibold text-white">{title}</h3>
+        <p className="mt-2 whitespace-pre-line text-[12px] leading-relaxed text-slate-300">{description}</p>
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-[#2a4057] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9eb2c8] transition hover:bg-white/5"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`rounded-md border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] transition ${confirmClass}`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function FleetPage() {
   const [vehicles, setVehicles] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -185,6 +234,14 @@ export default function FleetPage() {
   const [driverSaving, setDriverSaving] = useState(false);
   const [driverAssignmentsDraft, setDriverAssignmentsDraft] = useState({ default_driver_id: '', days: { L: '', M: '', Mc: '', X: '', V: '' } });
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [confirmState, setConfirmState] = useState({
+    open: false,
+    title: '',
+    description: '',
+    confirmLabel: 'Confirmar',
+    tone: 'danger',
+    onConfirm: null,
+  });
 
   const selectedVehicle = useMemo(() => vehicles.find((vehicle) => String(vehicle.id) === String(selectedId)) || null, [selectedId, vehicles]);
   const isEditing = Boolean(editingId);
@@ -511,17 +568,26 @@ export default function FleetPage() {
 
   const handleDelete = async (vehicle) => {
     if (!vehicle) return;
-    if (!window.confirm(`Eliminar ${vehicle.vehicle_code} (${vehicle.plate})?`)) return;
-
-    try {
-      await deleteFleetVehicle(vehicle.id);
-      notifications.success('Vehiculo eliminado', vehicle.vehicle_code);
-      setEditingId(null);
-      setScreenMode('garage');
-      await loadFleet();
-    } catch (error) {
-      notifications.error('No se pudo eliminar', error.message);
-    }
+    setConfirmState({
+      open: true,
+      title: 'Eliminar vehiculo',
+      description: `Se va a eliminar ${vehicle.vehicle_code} (${vehicle.plate}).\n\nEsta accion afecta a la ficha de flota y no se puede deshacer.`,
+      confirmLabel: 'Eliminar vehiculo',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteFleetVehicle(vehicle.id);
+          notifications.success('Vehiculo eliminado', vehicle.vehicle_code);
+          setEditingId(null);
+          setScreenMode('garage');
+          await loadFleet();
+        } catch (error) {
+          notifications.error('No se pudo eliminar', error.message);
+        } finally {
+          setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+        }
+      },
+    });
   };
 
   const addDocument = () => {
@@ -599,24 +665,33 @@ export default function FleetPage() {
 
   const handleDeleteDriver = async (driver) => {
     if (!driver) return;
-    if (!window.confirm(`Eliminar conductor ${driver.full_name}?`)) return;
-
-    try {
-      await deleteFleetDriver(driver.id);
-      notifications.success('Conductor eliminado', driver.full_name);
-      if (selectedVehicle?.company_id) {
-        await loadCompanyDrivers(selectedVehicle.company_id, { force: true });
-      }
-      if (String(driverAssignmentsDraft.default_driver_id || '') === String(driver.id)) {
-        setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: '' }));
-      }
-      setDriverAssignmentsDraft((prev) => ({
-        ...prev,
-        days: Object.fromEntries(Object.entries(prev.days || {}).map(([day, value]) => [day, String(value) === String(driver.id) ? '' : value])),
-      }));
-    } catch (error) {
-      notifications.error('No se pudo eliminar el conductor', error.message);
-    }
+    setConfirmState({
+      open: true,
+      title: 'Eliminar conductor',
+      description: `Se va a eliminar a ${driver.full_name}.\n\nSi estaba asignado al vehiculo o a dias concretos, esas referencias se limpiaran.`,
+      confirmLabel: 'Eliminar conductor',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteFleetDriver(driver.id);
+          notifications.success('Conductor eliminado', driver.full_name);
+          if (selectedVehicle?.company_id) {
+            await loadCompanyDrivers(selectedVehicle.company_id, { force: true });
+          }
+          if (String(driverAssignmentsDraft.default_driver_id || '') === String(driver.id)) {
+            setDriverAssignmentsDraft((prev) => ({ ...prev, default_driver_id: '' }));
+          }
+          setDriverAssignmentsDraft((prev) => ({
+            ...prev,
+            days: Object.fromEntries(Object.entries(prev.days || {}).map(([day, value]) => [day, String(value) === String(driver.id) ? '' : value])),
+          }));
+        } catch (error) {
+          notifications.error('No se pudo eliminar el conductor', error.message);
+        } finally {
+          setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }));
+        }
+      },
+    });
   };
 
   const handleSaveDriverAssignments = async () => {
@@ -1487,6 +1562,19 @@ export default function FleetPage() {
   return (
     <div className="relative h-full min-h-0 overflow-auto rounded-[18px] control-panel p-4 md:p-5 space-y-4">
       {renderImportModal()}
+      <ConfirmActionModal
+        open={confirmState.open}
+        title={confirmState.title}
+        description={confirmState.description}
+        confirmLabel={confirmState.confirmLabel}
+        tone={confirmState.tone}
+        onCancel={() => setConfirmState((prev) => ({ ...prev, open: false, onConfirm: null }))}
+        onConfirm={() => {
+          if (typeof confirmState.onConfirm === 'function') {
+            confirmState.onConfirm();
+          }
+        }}
+      />
       <div className="rounded-[22px] border border-[#304a62] bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,rgba(11,20,31,0.96),rgba(10,16,24,0.98))] p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <SectionTitle eyebrow="GARAGE" title="Garage virtual de flota" description="La entrada es la playa de vehiculos. Filtra por hangar, entra en una unidad y revisa primero sus servicios publicados." />

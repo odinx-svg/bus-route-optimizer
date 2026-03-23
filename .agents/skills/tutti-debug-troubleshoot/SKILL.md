@@ -5,6 +5,26 @@ description: Debugging y troubleshooting para Tutti Fleet Optimizer. Usar cuando
 
 # Tutti Debug & Troubleshoot Skill
 
+## Scope
+
+Esta skill cubre diagnostico general y troubleshooting. Es la skill de entrada cuando el problema no esta localizado.
+
+Cuando ya identifiques el subsistema, deriva a:
+
+- `tutti-optimizer-dev` si el fallo es de solver, infeasibility o chaining
+- `tutti-excel-ingestion` si el problema nace al importar Excel
+- `tutti-fleet-operations` si hay conflicto de flota, virtuales o reconciliacion
+- `tutti-workspace-workflow` si el bug aparece en save/publish/archive
+- `tutti-routing-maps` si hay OSRM, geometria o mapa
+- `tutti-pdf-exports` si el output roto es el PDF
+
+## Workflow minimo
+
+1. Reproducir el fallo.
+2. Aislar si es datos, backend, optimizer, flota, mapa, PDF o frontend.
+3. Recolectar logs, metricas y artefactos.
+4. Derivar al dominio correcto antes de proponer un fix.
+
 ## Niveles de Logging
 
 ### Backend
@@ -301,7 +321,8 @@ set PYTHONUNBUFFERED=1
 ### Resetear Estado
 
 ```batch
-:: Limpiar todo
+:: NO ejecutar estas limpiezas sin confirmar impacto.
+:: Pueden borrar entorno, build y datos locales.
 rmdir /S /Q .venv
 rmdir /S /Q frontend\node_modules
 rmdir /S /Q frontend\dist

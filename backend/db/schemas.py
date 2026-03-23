@@ -397,6 +397,8 @@ class FleetReconciliationDaySummary(BaseModel):
     company_allocations: List[Dict[str, Any]] = Field(default_factory=list)
     stale_assignments: List[Dict[str, Any]] = Field(default_factory=list)
     unresolved: List[Dict[str, Any]] = Field(default_factory=list)
+    operational_summary: Dict[str, Any] = Field(default_factory=dict)
+    candidate_rejection_reasons: Dict[str, int] = Field(default_factory=dict)
 
 
 class FleetReconciliationResponse(BaseModel):
@@ -414,6 +416,8 @@ class FleetReconciliationResponse(BaseModel):
     company_capacity_summary: List[Dict[str, Any]] = Field(default_factory=list)
     days: Dict[str, FleetReconciliationDaySummary] = Field(default_factory=dict)
     reconciliation_snapshot: FleetReconciliationSnapshot = Field(default_factory=FleetReconciliationSnapshot)
+    operational_summary: Dict[str, Any] = Field(default_factory=dict)
+    candidate_rejection_reasons: Dict[str, int] = Field(default_factory=dict)
 
 
 class FleetPublicationSummary(BaseModel):
@@ -446,6 +450,9 @@ class WorkspaceReadinessSummary(BaseModel):
     pending_virtual_count: int = 0
     conflict_count: int = 0
     scope_summary: WorkspaceScopeSummary = Field(default_factory=WorkspaceScopeSummary)
+    capacity_summary: Dict[str, Any] = Field(default_factory=dict)
+    operational_warnings: List[Dict[str, Any]] = Field(default_factory=list)
+    blocking_issues: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class WorkspaceCreateRequest(BaseModel):
@@ -519,6 +526,9 @@ class WorkspaceResponse(BaseModel):
     pending_virtual_count: int = 0
     conflict_count: int = 0
     scope_summary: WorkspaceScopeSummary = Field(default_factory=WorkspaceScopeSummary)
+    capacity_summary: Dict[str, Any] = Field(default_factory=dict)
+    operational_warnings: List[Dict[str, Any]] = Field(default_factory=list)
+    blocking_issues: List[Dict[str, Any]] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

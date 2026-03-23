@@ -635,9 +635,9 @@ def normalize_time_window_limits(raw_limits: Optional[List[Dict[str, Any]]]) -> 
     Accepted row format:
       {start_time: "07:30", end_time: "09:30", max_routes: 3, enabled: true, label?: "..."}
     """
-    normalized: List[TimeWindowLimit] = []
+    dedup: Dict[Tuple[int, int], TimeWindowLimit] = {}
     if not isinstance(raw_limits, list):
-        return normalized
+        return []
 
     for idx, row in enumerate(raw_limits):
         if not isinstance(row, dict):
@@ -659,14 +659,24 @@ def normalize_time_window_limits(raw_limits: Optional[List[Dict[str, Any]]]) -> 
         label = str(row.get("label", "") or "").strip()
         if not label:
             label = f"{start_min // 60:02d}:{start_min % 60:02d}-{end_min // 60:02d}:{end_min % 60:02d}"
-        normalized.append(
-            TimeWindowLimit(
-                start_min=int(start_min),
-                end_min=int(end_min),
-                max_routes=max(1, max_routes),
-                label=label,
-            )
+        candidate = TimeWindowLimit(
+            start_min=int(start_min),
+            end_min=int(end_min),
+            max_routes=max(1, max_routes),
+            label=label,
         )
+        key = (candidate.start_min, candidate.end_min)
+        current = dedup.get(key)
+        if current is None:
+            dedup[key] = candidate
+            continue
+        dedup[key] = TimeWindowLimit(
+            start_min=current.start_min,
+            end_min=current.end_min,
+            max_routes=min(int(current.max_routes), int(candidate.max_routes)),
+            label=current.label or candidate.label,
+        )
+    normalized = list(dedup.values())
     normalized.sort(key=lambda item: (item.start_min, item.end_min, item.max_routes))
     return normalized
 

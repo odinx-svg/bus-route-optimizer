@@ -18,6 +18,7 @@ import {
 import { RoutesPalette } from '../components/manual-schedule/RoutesPalette';
 import { RouteCard } from '../components/manual-schedule/RouteCard';
 import { WorkspaceBusRow } from '../components/manual-schedule/WorkspaceBusRow';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { notifications } from '../services/notifications';
 
 // Constantes
@@ -197,6 +198,30 @@ export function ManualSchedulePage({ routes = [], onSave }) {
   const [isOverWorkspace, setIsOverWorkspace] = useState(false);
   const [activeDay, setActiveDay] = useState('L');
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    title: '',
+    description: '',
+    tone: 'danger',
+    confirmLabel: 'Confirmar',
+    onConfirm: null,
+  });
+
+  const closeConfirmDialog = useCallback(() => {
+    setConfirmDialog((prev) => ({ ...prev, open: false, onConfirm: null }));
+  }, []);
+
+  const openConfirmDialog = useCallback((config) => {
+    setConfirmDialog({
+      open: true,
+      title: '',
+      description: '',
+      tone: 'danger',
+      confirmLabel: 'Confirmar',
+      onConfirm: null,
+      ...config,
+    });
+  }, []);
 
   // Filtrar rutas disponibles (no asignadas a ningún bus)
   const assignedRouteIds = useMemo(() => {
@@ -294,17 +319,17 @@ export function ManualSchedulePage({ routes = [], onSave }) {
   }, [generateBusId]);
 
   const handleRemoveBus = useCallback((busId) => {
-    if (!confirm(`¿Eliminar el bus ${busId}?`)) return;
-    
-    setBuses(prev => {
-      const bus = prev.find(b => b.id === busId);
-      // Liberar rutas asignadas
-      if (bus && bus.routes.length > 0) {
-        // Las rutas vuelven a estar disponibles automáticamente
-      }
-      return prev.filter(b => b.id !== busId);
+    openConfirmDialog({
+      title: `Eliminar ${busId}`,
+      description: `Se eliminara el bus ${busId} del horario manual. Las rutas asignadas volveran a quedar disponibles.`,
+      tone: 'danger',
+      confirmLabel: 'Eliminar bus',
+      onConfirm: () => {
+        setBuses((prev) => prev.filter((b) => b.id !== busId));
+        notifications.info('Bus eliminado', `${busId} ya no forma parte del horario manual`);
+      },
     });
-  }, []);
+  }, [openConfirmDialog]);
 
   const handleDragStart = useCallback((event) => {
     const { active } = event;
@@ -408,10 +433,17 @@ export function ManualSchedulePage({ routes = [], onSave }) {
   }, []);
 
   const handleClearAll = useCallback(() => {
-    if (!confirm('¿Limpiar todo el horario? Esto eliminará todas las asignaciones.')) return;
-    setBuses(prev => prev.map(bus => ({ ...bus, routes: [] })));
-    notifications.info('Horario limpiado', 'Todas las asignaciones han sido eliminadas');
-  }, []);
+    openConfirmDialog({
+      title: 'Vaciar horario manual',
+      description: 'Se eliminaran todas las asignaciones actuales y cada ruta volvera a la paleta disponible.',
+      tone: 'warning',
+      confirmLabel: 'Vaciar horario',
+      onConfirm: () => {
+        setBuses((prev) => prev.map((bus) => ({ ...bus, routes: [] })));
+        notifications.info('Horario limpiado', 'Todas las asignaciones han sido eliminadas');
+      },
+    });
+  }, [openConfirmDialog]);
 
   const handleSaveSchedule = useCallback(async () => {
     // Verificar errores antes de guardar
@@ -663,6 +695,19 @@ export function ManualSchedulePage({ routes = [], onSave }) {
       <DragOverlay dropAnimation={dropAnimation}>
         {activeDragItem && renderDragOverlay(activeDragItem)}
       </DragOverlay>
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        tone={confirmDialog.tone}
+        confirmLabel={confirmDialog.confirmLabel}
+        onCancel={closeConfirmDialog}
+        onConfirm={() => {
+          const action = confirmDialog.onConfirm;
+          closeConfirmDialog();
+          action?.();
+        }}
+      />
     </DndContext>
   );
 }

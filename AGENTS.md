@@ -38,13 +38,22 @@ El proyecto incluye skills especializadas en `.agents/skills/` para facilitar el
 | Skill | Descripción | Cuándo Usar |
 |-------|-------------|-------------|
 | `tutti-architecture` | Arquitectura completa del sistema | Entender estructura, flujos de datos |
+| `tutti-domain-model` | Dominio operativo e invariantes | Cambios en entidades, payloads y semántica |
+| `tutti-excel-ingestion` | Parser Excel y datos sucios | Importación de archivos, columnas y normalización |
+| `tutti-optimizer-dev` | Optimizador V6 y constraints | Solver, chaining, feasibility, load balance |
 | `tutti-backend-dev` | Desarrollo backend FastAPI/Python | Crear endpoints, optimizadores, modelos |
+| `tutti-workspace-workflow` | Save/publish/archive y readiness | Versionado, publish, estados operativos |
+| `tutti-fleet-operations` | Flota real/virtual y reconciliación | Conflictos, snapshots, publicación de flota |
 | `tutti-frontend-dev` | Desarrollo frontend React | Componentes UI, stores, hooks |
 | `tutti-frontend-design` | Diseño UI/UX y estilos | Paleta de colores, animaciones, responsive |
+| `tutti-pdf-exports` | Exportación PDF operativa | ReportLab, tablas por bus, links Google Maps |
+| `tutti-routing-maps` | OSRM, geometrías y mapas | Tiempos, caché, Leaflet, visualización geoespacial |
 | `image-ui-analyzer` | Análisis de imágenes UI | Extraer diseño de screenshots para replicar |
 | `tutti-build-deploy` | Build y deployment | Generar EXE, releases, landing |
 | `tutti-debug-troubleshoot` | Debugging y troubleshooting | Diagnosticar errores, logs |
 | `tutti-testing` | Testing y calidad | Escribir tests, cobertura |
+| `tutti-skill-governance` | Gobernanza de skills | Crear, dividir y mantener la librería de skills |
+| `tutti-drivers-messaging` | Conductores y mensajería futura | Modelado futuro de drivers y envíos automáticos |
 
 Estas skills se activan automáticamente según el contexto y proporcionan conocimiento especializado para cada área del proyecto.
 
@@ -193,6 +202,7 @@ bus-route-optimizer/
 │   ├── 📄 models.py            # Pydantic models (Route, Stop, Bus, etc)
 │   ├── 📄 parser.py            # Excel parser
 │   ├── 📄 optimizer_v6.py      # Optimizador principal (ILP)
+│   ├── 📁 optimizer/           # Capa nueva de motor pluggable (config/engine/solvers)
 │   ├── 📄 pdf_service.py       # Generación de PDFs
 │   ├── 📄 router_service.py    # OSRM integration
 │   ├── 📄 requirements.txt     # Dependencias Python
@@ -362,6 +372,29 @@ for /f "tokens=5" %a in ('netstat -aon ^| findstr ":8000"') do taskkill /F /PID 
 
 ## 📌 Notas de Versión
 
+### v2.3 (2026-03-22)
+
+**Cambios mayores:**
+- ✅ Nueva capa `backend/optimizer/` para desacoplar configuracion, engine, solver adapters y warm starts
+- ✅ `optimization_pipeline_service.py` ya usa `OptimizerEngine` como orquestador estable sobre `optimizer_v6`
+- ✅ Primer `greedy_builder` deterministico para seed / fallback controlado
+- ✅ Nuevos contratos de config para migracion futura a otros solvers (`preferred_solver`, `enable_greedy_warm_start`, `time_limit_seconds`)
+- ✅ Adapter `CP-SAT` operativo en `backend/optimizer/solver_cpsat.py` usando `ortools`
+- ✅ Benchmark de comparacion entre backends en `backend/benchmarks/compare_optimizer_backends.py`
+- ✅ Tests de fase 1 para config, engine, greedy builder e integracion del pipeline
+
+**Nuevas notas del motor:**
+- `preferred_solver=auto` ya selecciona entre `pulp_v6` y `cp_sat` con heuristica compartida
+- Los endpoints directos y el pipeline devuelven `selected_solver`, `solver_selection_reason` y `solver_selection`
+- La UI ya distingue entre solver pedido y solver realmente usado por dia
+
+**Compatibilidad:**
+- No se rompe `optimizer_v6`; sigue siendo el backend productivo bajo la nueva interfaz
+- Los payloads actuales del pipeline siguen siendo compatibles; los nuevos campos son aditivos
+- `start-tutti.bat` y `backend/requirements.txt` ya contemplan `ortools`
+- Esta fase prepara el camino para CP-SAT / estrategias hibridas sin migracion destructiva
+- `preferred_solver` debe tratarse como `auto | pulp_v6 | cp_sat`
+
 ### v2.2 (2026-03-15)
 
 **Cambios mayores:**
@@ -520,4 +553,4 @@ Cuando se aborde esta funcionalidad, partir de esta secuencia:
 
 > **Recuerda:** Cada vez que hagas cambios que afecten el inicio del proyecto, actualiza `start-tutti.bat` y documenta en este archivo.
 
-*Última actualización: 2026-03-07*
+*Última actualización: 2026-03-22*

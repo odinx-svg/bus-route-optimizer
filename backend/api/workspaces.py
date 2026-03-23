@@ -71,6 +71,141 @@ def _has_schedule_payload(version: Optional[OptimizationWorkspaceVersionModel]) 
     return False
 
 
+def _iter_schedule_buses(schedule_by_day: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    normalized = db_crud.normalize_schedule_by_day(schedule_by_day or {})
+    for day, day_payload in normalized.items():
+        buses = _safe_list(_safe_dict(day_payload).get("schedule"))
+        for bus in buses:
+            if isinstance(bus, dict):
+                rows.append({"day": day, "bus": bus})
+    return rows
+
+
+def _build_capacity_summary(schedule_by_day: Dict[str, Any]) -> Dict[str, Any]:
+    summary = {
+        "with_demand": 0,
+        "healthy": 0,
+        "tight": 0,
+        "over_capacity": 0,
+        "missing_vehicle": 0,
+        "total_required_seats": 0,
+        "max_required_seats": 0,
+    }
+    highlighted: List[Dict[str, Any]] = []
+
+    for row in _iter_schedule_buses(schedule_by_day):
+        day = row["day"]
+        bus = row["bus"]
+        required_seats = 0
+        for item in _safe_list(bus.get("items")):
+            if not isinstance(item, dict):
+                continue
+            required_seats = max(required_seats, int(item.get("capacity_needed", 0) or 0))
+        if required_seats <= 0:
+            continue
+
+        summary["with_demand"] += 1
+        summary["total_required_seats"] += required_seats
+        summary["max_required_seats"] = max(summary["max_required_seats"], required_seats)
+
+        bus_id = str(bus.get("bus_id") or "").strip()
+        vehicle_code = str(bus.get("assigned_vehicle_code") or "").strip() or None
+        assigned_seats = int(
+            bus.get("assigned_vehicle_seats_max")
+            or bus.get("assigned_vehicle_seats_min")
+            or 0
+        )
+        assignment_type = str(bus.get("fleet_assignment_type") or "virtual").strip().lower()
+
+        if assigned_seats <= 0:
+            summary["missing_vehicle"] += 1
+            highlighted.append({
+                "day": day,
+                "bus_id": bus_id,
+                "required_seats": required_seats,
+                "assigned_seats": 0,
+                "vehicle_code": vehicle_code,
+                "severity": "warning" if assignment_type != "real" else "error",
+                "reason": "missing_vehicle_capacity",
+            })
+            continue
+
+        spare = assigned_seats - required_seats
+        if spare < 0:
+            summary["over_capacity"] += 1
+            highlighted.append({
+                "day": day,
+                "bus_id": bus_id,
+                "required_seats": required_seats,
+                "assigned_seats": assigned_seats,
+                "vehicle_code": vehicle_code,
+                "severity": "error",
+                "reason": "assigned_vehicle_capacity_insufficient",
+            })
+        elif spare <= 6:
+            summary["tight"] += 1
+            highlighted.append({
+                "day": day,
+                "bus_id": bus_id,
+                "required_seats": required_seats,
+                "assigned_seats": assigned_seats,
+                "vehicle_code": vehicle_code,
+                "severity": "warning",
+                "reason": "assigned_vehicle_capacity_tight",
+            })
+        else:
+            summary["healthy"] += 1
+
+    summary["highlighted_buses"] = highlighted[:12]
+    return summary
+
+
+def _build_operational_issue_blocks(
+    readiness_summary: schemas.WorkspaceReadinessSummary,
+    capacity_summary: Dict[str, Any],
+) -> Dict[str, List[Dict[str, Any]]]:
+    blocking_issues: List[Dict[str, Any]] = []
+    operational_warnings: List[Dict[str, Any]] = []
+
+    if readiness_summary.conflict_count > 0:
+        blocking_issues.append({
+            "type": "fleet_conflict",
+            "count": int(readiness_summary.conflict_count),
+            "message": "Hay colisiones reales con otras publicaciones.",
+        })
+    if readiness_summary.pending_virtual_count > 0 and readiness_summary.blocking_reason == "virtual_reconciliation_required":
+        blocking_issues.append({
+            "type": "virtual_reconciliation_required",
+            "count": int(readiness_summary.pending_virtual_count),
+            "message": "Quedan buses provisionales pendientes de reconciliar.",
+        })
+    if int(capacity_summary.get("over_capacity", 0) or 0) > 0:
+        blocking_issues.append({
+            "type": "capacity_insufficient",
+            "count": int(capacity_summary.get("over_capacity", 0) or 0),
+            "message": "Hay buses con vehiculo real por debajo de la demanda de plazas.",
+        })
+
+    if int(capacity_summary.get("tight", 0) or 0) > 0:
+        operational_warnings.append({
+            "type": "capacity_tight",
+            "count": int(capacity_summary.get("tight", 0) or 0),
+            "message": "Hay buses con margen de plazas muy ajustado.",
+        })
+    if int(capacity_summary.get("missing_vehicle", 0) or 0) > 0:
+        operational_warnings.append({
+            "type": "vehicle_missing",
+            "count": int(capacity_summary.get("missing_vehicle", 0) or 0),
+            "message": "Hay buses sin vehiculo real asignado o sin capacidad informada.",
+        })
+
+    return {
+        "blocking_issues": blocking_issues,
+        "operational_warnings": operational_warnings,
+    }
+
+
 def _build_scope_summary(
     workspace: OptimizationWorkspaceModel,
     fleet_snapshot: Dict[str, Any],
@@ -109,6 +244,7 @@ def _build_readiness_summary(workspace: OptimizationWorkspaceModel) -> schemas.W
     source_version = working or published
     source_summary = _safe_dict(source_version.summary_metrics if source_version is not None else None)
     fleet_snapshot = _safe_dict(source_version.fleet_snapshot if source_version is not None else None)
+    schedule_by_day = db_crud.normalize_schedule_by_day(source_version.schedule_by_day if source_version is not None else {})
     reconciliation = _safe_dict(fleet_snapshot.get("reconciliation"))
     conflicts = _safe_list(fleet_snapshot.get("conflicts"))
     pending_virtual_count = int(
@@ -161,6 +297,20 @@ def _build_readiness_summary(workspace: OptimizationWorkspaceModel) -> schemas.W
         readiness_state = "ready"
         next_action = "publish"
 
+    capacity_summary = _build_capacity_summary(schedule_by_day)
+    issue_blocks = _build_operational_issue_blocks(
+        schemas.WorkspaceReadinessSummary(
+            workflow_stage=workflow_stage,
+            readiness_state=readiness_state,
+            blocking_reason=blocking_reason,
+            next_recommended_action=next_action,
+            pending_virtual_count=max(0, pending_virtual_count),
+            conflict_count=max(0, conflict_count),
+            scope_summary=scope_summary,
+        ),
+        capacity_summary,
+    )
+
     return schemas.WorkspaceReadinessSummary(
         workflow_stage=workflow_stage,
         readiness_state=readiness_state,
@@ -169,6 +319,9 @@ def _build_readiness_summary(workspace: OptimizationWorkspaceModel) -> schemas.W
         pending_virtual_count=max(0, pending_virtual_count),
         conflict_count=max(0, conflict_count),
         scope_summary=scope_summary,
+        capacity_summary=capacity_summary,
+        operational_warnings=issue_blocks["operational_warnings"],
+        blocking_issues=issue_blocks["blocking_issues"],
     )
 
 
@@ -246,6 +399,9 @@ def _to_workspace_response(workspace: OptimizationWorkspaceModel) -> schemas.Wor
         pending_virtual_count=readiness_summary.pending_virtual_count,
         conflict_count=readiness_summary.conflict_count,
         scope_summary=readiness_summary.scope_summary,
+        capacity_summary=readiness_summary.capacity_summary,
+        operational_warnings=readiness_summary.operational_warnings,
+        blocking_issues=readiness_summary.blocking_issues,
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
     )
@@ -427,6 +583,17 @@ def _build_operational_reconciliation_response(
             "uncovered_buses": 0,
         }
     )
+    operational_summary = {
+        "required_bus_count": int(snapshot.get("required_bus_count", 0) or 0),
+        "real_bound_count": int(snapshot.get("real_bound_count", 0) or 0),
+        "virtual_bound_count": int(snapshot.get("virtual_bound_count", 0) or 0),
+        "pending_real_reconciliation_count": int(snapshot.get("pending_real_reconciliation_count", 0) or 0),
+        "stale_assignment_count": sum(
+            len(_safe_list(_safe_dict(day_payload).get("stale_assignments")))
+            for day_payload in days.values()
+            if isinstance(day_payload, dict)
+        ),
+    }
     response = {
         "workspace_id": str(workspace.id),
         "company_id": company_id,
@@ -442,10 +609,13 @@ def _build_operational_reconciliation_response(
         "pending_real_reconciliation_count": int(snapshot.get("pending_real_reconciliation_count", 0) or 0),
         "company_capacity_summary": snapshot.get("company_capacity_summary", []),
         "reconciliation_snapshot": snapshot.get("reconciliation_snapshot", {}),
+        "operational_summary": operational_summary,
+        "candidate_rejection_reasons": snapshot.get("candidate_rejection_reasons", {}),
         "company_mix": aggregate_company_mix,
         "reconciliation": {
             **snapshot,
             "company_mix": aggregate_company_mix,
+            "operational_summary": operational_summary,
         },
         "days": days,
         "pending_assignments": (
@@ -479,6 +649,8 @@ def _build_operational_reconciliation_response(
             "company_allocations": [],
             "stale_assignments": [],
             "unresolved": [],
+            "operational_summary": {},
+            "candidate_rejection_reasons": {},
         }
     return response
 
@@ -981,6 +1153,24 @@ async def get_workspace_fleet_preview(
             schedule_by_day=schedule_by_day,
             exclude_workspace_id=str(workspace.id),
         )
+        preview_schedule = preview.get("schedule_by_day", {}) if isinstance(preview.get("schedule_by_day"), dict) else {}
+        capacity_summary = _build_capacity_summary(preview_schedule)
+        preview_readiness = schemas.WorkspaceReadinessSummary(
+            workflow_stage="preview",
+            readiness_state="blocked" if bool(preview.get("blocked", False)) else "warning",
+            blocking_reason="fleet_conflict" if bool(preview.get("blocked", False)) else None,
+            next_recommended_action="reconcile" if int(preview.get("virtual_created", 0) or 0) > 0 else "review",
+            pending_virtual_count=int(preview.get("virtual_created", 0) or 0),
+            conflict_count=len(_safe_list(preview.get("conflicts"))),
+            scope_summary=_build_scope_summary(workspace, {
+                "scope_mode": scope.get("scope_mode"),
+                "scope_company_ids": scope_company_ids,
+                "company_id": company_id,
+                "ute_id": scope.get("ute_id"),
+                "ute_name": scope.get("ute_name"),
+            }),
+        )
+        issue_blocks = _build_operational_issue_blocks(preview_readiness, capacity_summary)
         normalized_reconciliation = _normalize_reconciliation_payload(
             preview.get("reconciliation", {}) if isinstance(preview.get("reconciliation"), dict) else {}
         )
@@ -1006,6 +1196,9 @@ async def get_workspace_fleet_preview(
                     virtual_policy == "block"
                     and int(preview.get("virtual_created", 0) or 0) > 0
                 ),
+                "capacity_summary": capacity_summary,
+                "operational_warnings": issue_blocks["operational_warnings"],
+                "blocking_issues": issue_blocks["blocking_issues"],
                 "day_payload": preview.get("schedule_by_day", {}).get(day, {}),
                 "reconciliation": normalized_reconciliation,
                 "days": preview.get("days", {}),
@@ -1029,6 +1222,9 @@ async def get_workspace_fleet_preview(
                 virtual_policy == "block"
                 and int(preview.get("virtual_created", 0) or 0) > 0
             ),
+            "capacity_summary": capacity_summary,
+            "operational_warnings": issue_blocks["operational_warnings"],
+            "blocking_issues": issue_blocks["blocking_issues"],
             "schedule_by_day": preview.get("schedule_by_day", {}),
             "reconciliation": normalized_reconciliation,
             "days": preview.get("days", {}),
@@ -1204,6 +1400,7 @@ async def apply_workspace_fleet_reconciliation(
             schedule_by_day=updated_schedule,
             exclude_workspace_id=str(workspace.id),
         )
+        updated_capacity_summary = _build_capacity_summary(updated_preview.get("schedule_by_day", updated_schedule))
         day_snapshot_payload = {
             "day": requested_day,
             "allocation_mode": (
@@ -1280,12 +1477,14 @@ async def apply_workspace_fleet_reconciliation(
             "virtual_publish_policy": virtual_policy,
             "reconciliation": updated_preview.get("reconciliation", {}),
             "reconciliation_snapshot": new_reconciliation_snapshot,
+            "capacity_summary": updated_capacity_summary,
         }
         merged_summary = dict(working_version.summary_metrics or {})
         merged_summary["fleet_real_assigned"] = int(updated_preview.get("real_assigned", 0))
         merged_summary["fleet_virtual_created"] = int(updated_preview.get("virtual_created", 0))
         merged_summary["fleet_binding_state"] = "preview"
         merged_summary["fleet_reconciliation_applied_count"] = len(selected_assignments)
+        merged_summary["capacity_summary"] = updated_capacity_summary
 
         version_payload = schemas.WorkspaceVersionCreate(
             checkpoint_name=payload.checkpoint_name or f"fleet-reconciliation-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
@@ -1405,6 +1604,7 @@ async def publish_workspace(
             schedule_by_day=normalized_schedule,
             exclude_workspace_id=str(workspace.id),
         )
+        publish_capacity_summary = _build_capacity_summary(preview.get("schedule_by_day", normalized_schedule))
         if bool(preview.get("blocked", False)):
             raise HTTPException(
                 status_code=409,
@@ -1423,6 +1623,7 @@ async def publish_workspace(
                         "conflicts": preview.get("conflicts", []),
                         "blocked": True,
                         "days": preview.get("days", {}),
+                        "capacity_summary": publish_capacity_summary,
                     },
                 },
             )
@@ -1448,6 +1649,7 @@ async def publish_workspace(
                         "days": preview.get("days", {}),
                         "virtual_publish_policy": virtual_policy,
                         "reconciliation": preview.get("reconciliation", {}),
+                        "capacity_summary": publish_capacity_summary,
                     },
                 },
             )
@@ -1466,12 +1668,14 @@ async def publish_workspace(
             "virtual_publish_policy": virtual_policy,
             "reconciliation": preview.get("reconciliation", {}),
             "reconciliation_snapshot": reconciliation_snapshot,
+            "capacity_summary": publish_capacity_summary,
         }
         merged_summary = dict(publish_payload.summary_metrics or {})
         merged_summary["fleet_real_assigned"] = int(preview.get("real_assigned", 0))
         merged_summary["fleet_virtual_created"] = int(preview.get("virtual_created", 0))
         merged_summary["fleet_binding_state"] = "committed"
         merged_summary["fleet_virtual_publish_policy"] = virtual_policy
+        merged_summary["capacity_summary"] = publish_capacity_summary
 
         final_payload = publish_payload.model_copy(
             update={

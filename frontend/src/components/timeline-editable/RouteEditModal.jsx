@@ -42,6 +42,7 @@ export function RouteEditModal({ route, isOpen, onClose }) {
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // Inicializar cuando se abre
   useEffect(() => {
@@ -53,6 +54,7 @@ export function RouteEditModal({ route, isOpen, onClose }) {
       setHasChanges(false);
       setActiveTab('general');
       setShowDeleteConfirm(false);
+      setShowDiscardConfirm(false);
     }
   }, [route, isOpen]);
 
@@ -69,12 +71,10 @@ export function RouteEditModal({ route, isOpen, onClose }) {
 
   const handleClose = useCallback(() => {
     if (hasChanges) {
-      if (window.confirm('Hay cambios sin guardar. ¿Cerrar sin guardar?')) {
-        onClose();
-      }
-    } else {
-      onClose();
+      setShowDiscardConfirm(true);
+      return;
     }
+    onClose();
   }, [hasChanges, onClose]);
 
   const handleLockToggle = useCallback(() => {
@@ -124,6 +124,7 @@ export function RouteEditModal({ route, isOpen, onClose }) {
 
   const handleDelete = useCallback(() => {
     if (editedRoute && !editedRoute.isLocked) {
+      setShowDeleteConfirm(false);
       removeRoute(editedRoute.route_id);
       onClose();
     }
@@ -203,13 +204,29 @@ export function RouteEditModal({ route, isOpen, onClose }) {
         />
 
         {/* Confirmación de eliminación */}
-        {showDeleteConfirm && (
-          <DeleteConfirmDialog
-            routeName={editedRoute.school || editedRoute.route_name}
-            onConfirm={handleDelete}
-            onCancel={() => setShowDeleteConfirm(false)}
-          />
-        )}
+        <ConfirmDialog
+          open={showDeleteConfirm}
+          title="Eliminar ruta"
+          description={`Se eliminara la ruta ${editedRoute.school || editedRoute.route_name || editedRoute.route_code || 'seleccionada'} del horario editable.`}
+          tone="danger"
+          confirmLabel="Eliminar ruta"
+          cancelLabel="Cancelar"
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+        <ConfirmDialog
+          open={showDiscardConfirm}
+          title="Cerrar sin guardar"
+          description="Hay cambios sin guardar en esta ruta. Si cierras ahora, se perderan."
+          tone="warning"
+          confirmLabel="Descartar cambios"
+          cancelLabel="Seguir editando"
+          onConfirm={() => {
+            setShowDiscardConfirm(false);
+            onClose();
+          }}
+          onCancel={() => setShowDiscardConfirm(false)}
+        />
       </div>
     </div>
   );
@@ -659,38 +676,6 @@ function ModalFooter({ route, onLockToggle, onSave, onClose, onDelete, hasChange
   );
 }
 
-function DeleteConfirmDialog({ routeName, onConfirm, onCancel }) {
-  return (
-    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-2xl flex items-center justify-center z-10">
-      <div className="bg-[#1a1a23] border border-gray-700 rounded-xl p-6 max-w-sm mx-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-            <Trash2 className="w-5 h-5 text-red-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-white">¿Eliminar ruta?</h3>
-        </div>
-        <p className="text-gray-400 mb-6">
-          ¿Estás seguro de que quieres eliminar <strong className="text-white">{routeName}</strong>? 
-          Esta acción no se puede deshacer.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors"
-          >
-            Eliminar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function Field({ label, value, readOnly = false }) {
   return (

@@ -322,6 +322,16 @@ def generate_google_maps_search_link(lat: float, lon: float, query: str = "") ->
     return base_url + "&" + urllib.parse.urlencode(params)
 
 
+def generate_item_google_maps_link(item: Dict[str, Any]) -> Optional[str]:
+    """Generate a Google Maps directions link for a single route item."""
+    if not isinstance(item, dict):
+        return None
+    stops = item.get('stops', [])
+    if not isinstance(stops, list) or len(stops) < 2:
+        return None
+    return generate_google_maps_link(stops)
+
+
 # =============================================================================
 # ESTILOS PERSONALIZADOS
 # =============================================================================
@@ -833,30 +843,22 @@ def create_positioning_card(
 
 
 def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
-    """
-    Create a summary table for a bus (similar to Excel client view).
-    
-    Columns: #, Origen, Destino, H.Inicio, H.Fin, Duración, Tipo
-    """
+    """Create a summary table for a bus with one Google Maps link per route."""
     styles = create_styles()
-    
     ordered_items = sort_schedule_items_by_time(items)
 
-    # Header row
-    data = [
-        [
-            Paragraph("#", styles['table_header']),
-            Paragraph("Origen", styles['table_header']),
-            Paragraph("Destino", styles['table_header']),
-            Paragraph("H.Inicio", styles['table_header']),
-            Paragraph("H.Fin", styles['table_header']),
-            Paragraph("Duración", styles['table_header']),
-            Paragraph("Posic.", styles['table_header']),
-            Paragraph("Tipo", styles['table_header']),
-        ]
-    ]
-    
-    # Data rows
+    data = [[
+        Paragraph("#", styles['table_header']),
+        Paragraph("Origen", styles['table_header']),
+        Paragraph("Destino", styles['table_header']),
+        Paragraph("H.Inicio", styles['table_header']),
+        Paragraph("H.Fin", styles['table_header']),
+        Paragraph("Duracion", styles['table_header']),
+        Paragraph("Posic.", styles['table_header']),
+        Paragraph("Tipo", styles['table_header']),
+        Paragraph("Maps", styles['table_header']),
+    ]]
+
     total_duration = 0
     total_positioning = 0
     route_row_indices: List[int] = []
@@ -888,14 +890,11 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
     )
 
     def _safe_cell_text(value: Any, fallback: str = 'N/A', max_length: int = 30) -> str:
-        """Normalize PDF table cell values to avoid None/invalid slicing errors."""
         if value is None:
-            text = fallback
+            text_value = fallback
         else:
-            text = str(value).strip()
-            if not text:
-                text = fallback
-        return text[:max_length]
+            text_value = str(value).strip() or fallback
+        return text_value[:max_length]
 
     for i, item in enumerate(ordered_items, 1):
         stops = item.get('stops', [])
@@ -903,7 +902,7 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
         last_stop = stops[-1] if stops and isinstance(stops[-1], dict) else {}
         origin = _safe_cell_text(first_stop.get('name', 'N/A'))
         destination = _safe_cell_text(last_stop.get('name') if stops else item.get('school_name', 'N/A'))
-        
+
         start_time = format_time(item.get('start_time', ''))
         end_time = format_time(item.get('end_time', ''))
         duration = calculate_route_duration(item.get('start_time'), item.get('end_time'))
@@ -915,34 +914,37 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
         incoming_margin: Optional[int] = None
         if i > 1:
             prev_item = ordered_items[i - 2]
-            incoming_window = calculate_route_duration(
-                prev_item.get('end_time'),
-                item.get('start_time'),
-            )
+            incoming_window = calculate_route_duration(prev_item.get('end_time'), item.get('start_time'))
             incoming_margin = incoming_window - positioning_minutes
-        
+
         route_type = item.get('type', '')
         if route_type == 'entry':
-            type_text = "ENTRADA"
+            type_text = 'ENTRADA'
             type_color = Colors.ENTRY_TEXT
             type_bg = Colors.ENTRY_BG
         elif route_type == 'exit':
-            type_text = "SALIDA"
+            type_text = 'SALIDA'
             type_color = Colors.EXIT_TEXT
             type_bg = Colors.EXIT_BG
         else:
-            type_text = "RUTA"
+            type_text = 'RUTA'
             type_color = Colors.TEXT_DARK
             type_bg = colors.HexColor('#f3f4f6')
-        
+
+        item_maps_link = generate_item_google_maps_link(item)
+        maps_cell = Paragraph(
+            f'<a href="{item_maps_link}" color="{Colors.LINK_BLUE.hexval()}">Abrir</a>' if item_maps_link else '--',
+            styles['maps_link'] if item_maps_link else styles['table_cell'],
+        )
+
         row = [
             Paragraph(str(i), styles['table_cell']),
             Paragraph(origin, styles['table_cell_left']),
             Paragraph(destination, styles['table_cell_left']),
             Paragraph(start_time, styles['table_cell']),
             Paragraph(end_time, styles['table_cell']),
-            Paragraph(f"{duration}m", styles['table_cell']),
-            Paragraph("--" if i == 1 else f"{positioning_minutes}m", styles['table_cell']),
+            Paragraph(f'{duration}m', styles['table_cell']),
+            Paragraph('--' if i == 1 else f'{positioning_minutes}m', styles['table_cell']),
             Paragraph(type_text, ParagraphStyle(
                 'TypeBadge',
                 parent=styles['table_cell'],
@@ -950,6 +952,7 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
                 backColor=type_bg,
                 fontName='Helvetica-Bold',
             )),
+            maps_cell,
         ]
         current_row_index = len(data)
         route_row_indices.append(current_row_index)
@@ -962,28 +965,25 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
 
         if i < len(ordered_items):
             next_item = ordered_items[i]
-            available_window = calculate_route_duration(
-                item.get('end_time'),
-                next_item.get('start_time'),
-            )
+            available_window = calculate_route_duration(item.get('end_time'), next_item.get('start_time'))
             required_positioning = get_positioning_minutes(next_item)
             margin = available_window - required_positioning
 
             transition_style = transition_text_style
             if margin < 0:
-                status = "RIESGO"
+                status = 'RIESGO'
                 transition_style = transition_text_style_risk
             elif margin <= 5:
-                status = "AJUSTADO"
+                status = 'AJUSTADO'
                 transition_style = transition_text_style_warning
             else:
-                status = "OK"
+                status = 'OK'
 
             transition_text = (
-                f"R{i} -> R{i + 1} | "
-                f"{format_time(item.get('end_time'))} -> {format_time(next_item.get('start_time'))} | "
-                f"Ventana {available_window}m | Posicionamiento {required_positioning}m | "
-                f"Margen {margin:+d}m ({status})"
+                f'R{i} -> R{i + 1} | '
+                f'{format_time(item.get("end_time"))} -> {format_time(next_item.get("start_time"))} | '
+                f'Ventana {available_window}m | Posicionamiento {required_positioning}m | '
+                f'Margen {margin:+d}m ({status})'
             )
             transition_row_index = len(data)
             if margin < 0:
@@ -991,48 +991,47 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
             elif margin <= 5:
                 warning_transition_row_indices.append(transition_row_index)
 
-            transition_row = [
-                Paragraph("", styles['table_cell']),
+            data.append([
+                Paragraph('', styles['table_cell']),
                 Paragraph(transition_text, transition_style),
-                Paragraph("", styles['table_cell']),
-                Paragraph("", styles['table_cell']),
-                Paragraph("", styles['table_cell']),
-                Paragraph("", styles['table_cell']),
-                Paragraph("", styles['table_cell']),
-                Paragraph("", styles['table_cell']),
-            ]
-            transition_row_indices.append(len(data))
-            data.append(transition_row)
-    
-    # Total row
+                Paragraph('', styles['table_cell']),
+                Paragraph('', styles['table_cell']),
+                Paragraph('', styles['table_cell']),
+                Paragraph('', styles['table_cell']),
+                Paragraph('', styles['table_cell']),
+                Paragraph('', styles['table_cell']),
+                Paragraph('', styles['table_cell']),
+            ])
+            transition_row_indices.append(len(data) - 1)
+
     data.append([
-        Paragraph("", styles['table_cell']),
-        Paragraph("<b>TOTAL</b>", styles['table_cell_left']),
-        Paragraph("", styles['table_cell']),
-        Paragraph("", styles['table_cell']),
-        Paragraph("", styles['table_cell']),
-        Paragraph(f"<b>{format_duration(total_duration)}</b>", styles['table_cell']),
-        Paragraph(f"<b>{total_positioning}m</b>", styles['table_cell']),
-        Paragraph("", styles['table_cell']),
+        Paragraph('', styles['table_cell']),
+        Paragraph('<b>TOTAL</b>', styles['table_cell_left']),
+        Paragraph('', styles['table_cell']),
+        Paragraph('', styles['table_cell']),
+        Paragraph('', styles['table_cell']),
+        Paragraph(f'<b>{format_duration(total_duration)}</b>', styles['table_cell']),
+        Paragraph(f'<b>{total_positioning}m</b>', styles['table_cell']),
+        Paragraph('', styles['table_cell']),
+        Paragraph('', styles['table_cell']),
     ])
 
-    # Create table
     table = Table(
         data,
         colWidths=[
             0.35 * inch,
-            1.55 * inch,
-            1.55 * inch,
-            0.85 * inch,
-            0.85 * inch,
-            0.75 * inch,
-            0.75 * inch,
+            1.5 * inch,
+            1.45 * inch,
             0.8 * inch,
+            0.8 * inch,
+            0.7 * inch,
+            0.7 * inch,
+            0.8 * inch,
+            0.7 * inch,
         ],
     )
-    
+
     table_styles = [
-        # Header
         ('BACKGROUND', (0, 0), (-1, 0), Colors.TABLE_HEADER_BG),
         ('TEXTCOLOR', (0, 0), (-1, 0), Colors.TABLE_HEADER_TEXT),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
@@ -1041,30 +1040,22 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
         ('FONTSIZE', (0, 0), (-1, 0), 9),
         ('TOPPADDING', (0, 0), (-1, 0), 8),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-        
-        # Grid
         ('GRID', (0, 0), (-1, -2), 0.5, Colors.TABLE_BORDER),
         ('LINEBELOW', (0, 0), (-1, 0), 1.5, Colors.TABLE_HEADER_BG),
-        
-        # Total row
         ('BACKGROUND', (0, -1), (-1, -1), Colors.TABLE_HEADER_BG),
         ('TEXTCOLOR', (0, -1), (-1, -1), Colors.TABLE_HEADER_TEXT),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('LINEABOVE', (0, -1), (-1, -1), 1.5, Colors.TABLE_HEADER_BG),
-        
-        # Padding
         ('TOPPADDING', (0, 1), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
         ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('RIGHTPADDING', (0, 0), (-1, -1), 4),
     ]
-    
-    # Alternating colors for route rows only
+
     for route_idx, row_i in enumerate(route_row_indices, 1):
         bg = Colors.TABLE_EVEN if route_idx % 2 == 0 else Colors.TABLE_ODD
         table_styles.append(('BACKGROUND', (0, row_i), (-1, row_i), bg))
 
-    # Route rows with positioning risk/warning.
     for row_i in warning_route_row_indices:
         table_styles.extend([
             ('BACKGROUND', (0, row_i), (-1, row_i), Colors.ALERT_AMBER_BG),
@@ -1078,7 +1069,6 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
             ('FONTNAME', (6, row_i), (6, row_i), 'Helvetica-Bold'),
         ])
 
-    # Inter-route rows with compact shared message
     for row_i in transition_row_indices:
         if row_i in risk_transition_row_indices:
             transition_bg = Colors.ALERT_RED_BG
@@ -1090,18 +1080,16 @@ def create_bus_summary_table(bus_id: str, items: List[Dict[str, Any]]) -> Table:
             transition_bg = colors.HexColor('#eef2ff')
             transition_line = Colors.CARD_BORDER
         table_styles.extend([
-            ('SPAN', (1, row_i), (7, row_i)),
+            ('SPAN', (1, row_i), (8, row_i)),
             ('BACKGROUND', (0, row_i), (-1, row_i), transition_bg),
             ('LINEABOVE', (0, row_i), (-1, row_i), 0.4, transition_line),
             ('LINEBELOW', (0, row_i), (-1, row_i), 0.4, transition_line),
             ('TOPPADDING', (0, row_i), (-1, row_i), 3),
             ('BOTTOMPADDING', (0, row_i), (-1, row_i), 3),
         ])
-    
-    table.setStyle(TableStyle(table_styles))
-    
-    return table
 
+    table.setStyle(TableStyle(table_styles))
+    return table
 
 def create_summary_table(schedule: List[Dict[str, Any]]) -> Table:
     """Create summary statistics table."""

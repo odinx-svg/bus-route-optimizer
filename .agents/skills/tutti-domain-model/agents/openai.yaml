@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Domain Model"
+  short_description: "Entidades core e invariantes de Tutti"
+  brand_color: "#1D4ED8"
+  default_prompt: "Use $tutti-domain-model to revisar entidades, payloads e invariantes operativos de Tutti."
+
+policy:
+  allow_implicit_invocation: true

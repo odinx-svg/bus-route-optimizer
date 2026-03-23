@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Testing"
+  short_description: "Tests, fixtures y cobertura de Tutti"
+  brand_color: "#065F46"
+  default_prompt: "Use $tutti-testing to diseñar, ejecutar o ampliar tests backend, frontend o E2E de Tutti."
+
+policy:
+  allow_implicit_invocation: true

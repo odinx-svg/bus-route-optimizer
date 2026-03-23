@@ -155,6 +155,11 @@ const getBusReferenceLabel = (bus = {}) => {
   return parts.join(' · ');
 };
 
+const getBusAssignedSeats = (bus = {}) => {
+  const raw = Number(bus?.assigned_vehicle_seats_max ?? bus?.assigned_vehicle_seats_min ?? 0);
+  return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 0;
+};
+
 // ============================================================================
 // COMPRESIIN DE TIMELINE
 // ============================================================================
@@ -991,6 +996,28 @@ export function TimelineBusRow({
     };
   }, [routes]);
 
+  const busAssignedSeats = useMemo(() => getBusAssignedSeats(bus), [bus]);
+  const capacityState = useMemo(() => {
+    if (!stats?.minSeats) {
+      return busAssignedSeats > 0
+        ? { tone: 'idle', label: `${busAssignedSeats}P vehiculo` }
+        : null;
+    }
+
+    if (busAssignedSeats <= 0) {
+      return { tone: 'missing', label: `${stats.minSeats}P req · sin vehiculo` };
+    }
+
+    const spareSeats = busAssignedSeats - stats.minSeats;
+    if (spareSeats < 0) {
+      return { tone: 'critical', label: `${stats.minSeats}P req · ${busAssignedSeats}P bus` };
+    }
+    if (spareSeats <= 6) {
+      return { tone: 'tight', label: `${stats.minSeats}P req · ${busAssignedSeats}P bus` };
+    }
+    return { tone: 'ok', label: `${stats.minSeats}P req · ${busAssignedSeats}P bus` };
+  }, [busAssignedSeats, stats]);
+
   const totalWidth = segments && segments.length > 0
     ? segments[segments.length - 1].end * (pixelsPerHour / 60)
     : (maxHour - minHour) * pixelsPerHour;
@@ -1208,6 +1235,21 @@ export function TimelineBusRow({
               {stats.minSeats > 0 && (
                 <span className="text-[11px] text-cyan-300 tabular-nums uppercase tracking-wide">
                   {stats.minSeats} plazas
+                </span>
+              )}
+              {capacityState && (
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                  capacityState.tone === 'critical'
+                    ? 'border-rose-500/35 bg-rose-500/12 text-rose-200'
+                    : capacityState.tone === 'tight'
+                      ? 'border-amber-500/35 bg-amber-500/12 text-amber-200'
+                      : capacityState.tone === 'missing'
+                        ? 'border-slate-500/35 bg-slate-500/12 text-slate-300'
+                        : capacityState.tone === 'ok'
+                          ? 'border-cyan-500/35 bg-cyan-500/12 text-cyan-200'
+                          : 'border-slate-500/35 bg-slate-500/12 text-slate-300'
+                }`}>
+                  {capacityState.label}
                 </span>
               )}
             </>

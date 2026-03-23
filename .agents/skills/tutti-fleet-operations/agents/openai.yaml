@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Fleet Operations"
+  short_description: "Flota real/virtual y reconciliacion"
+  brand_color: "#D97706"
+  default_prompt: "Use $tutti-fleet-operations to trabajar en reconciliacion, conflictos y publicacion operativa de flota."
+
+policy:
+  allow_implicit_invocation: true

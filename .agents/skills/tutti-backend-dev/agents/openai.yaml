@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Backend Dev"
+  short_description: "Backend FastAPI y servicios de Tutti"
+  brand_color: "#1F2937"
+  default_prompt: "Use $tutti-backend-dev to trabajar en endpoints, servicios y capas backend de Tutti."
+
+policy:
+  allow_implicit_invocation: true

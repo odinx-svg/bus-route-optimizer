@@ -48,34 +48,140 @@ def _make_schedule(bus_count: int) -> List[BusSchedule]:
     return schedules
 
 
+def _make_route_payload(route_id: str = "R001", days: List[str] | None = None) -> Dict[str, Any]:
+    return {
+        "id": route_id,
+        "name": route_id,
+        "stops": [
+            {
+                "name": "Stop",
+                "lat": 42.24,
+                "lon": -8.72,
+                "order": 1,
+                "time_from_start": 0,
+                "passengers": 5,
+                "is_school": False,
+            },
+            {
+                "name": "School",
+                "lat": 42.25,
+                "lon": -8.73,
+                "order": 2,
+                "time_from_start": 20,
+                "passengers": 0,
+                "is_school": True,
+            },
+        ],
+        "school_id": "SCH001",
+        "school_name": "School Test",
+        "arrival_time": "08:20:00",
+        "departure_time": None,
+        "capacity_needed": 20,
+        "contract_id": "CNT",
+        "type": "entry",
+        "days": list(days or ["L"]),
+    }
+
+
 def test_optimize_v6_forwards_use_ml_assignment_flag(monkeypatch):
     from main import app
-    import optimizer_v6
 
-    captured: Dict[str, Any] = {"use_ml_assignment": None}
+    captured: Dict[str, Any] = {}
 
-    def fake_optimize_v6(
+    def fake_run_optimizer_engine_once(
         routes,
-        progress_callback=None,
-        use_ml_assignment=True,
-        balance_load=True,
-        load_balance_hard_spread_limit=2,
-        load_balance_target_band=1,
+        *,
+        objective,
+        preferred_solver,
+        use_ml_assignment,
+        balance_load,
+        load_balance_hard_spread_limit,
+        load_balance_target_band,
+        enable_greedy_warm_start,
+        time_limit_seconds,
     ):
+        captured["objective"] = objective
+        captured["preferred_solver"] = preferred_solver
         captured["use_ml_assignment"] = bool(use_ml_assignment)
         captured["balance_load"] = bool(balance_load)
-        return []
+        captured["enable_greedy_warm_start"] = bool(enable_greedy_warm_start)
+        captured["time_limit_seconds"] = time_limit_seconds
+        return _make_schedule(1), {"selected_solver": preferred_solver, "solver_status": "optimal"}
 
-    monkeypatch.setattr(optimizer_v6, "optimize_v6", fake_optimize_v6)
+    monkeypatch.setattr("main._run_optimizer_engine_once", fake_run_optimizer_engine_once)
 
     client = TestClient(app)
-    response = client.post("/optimize-v6?use_ml_assignment=false", json=[])
+    response = client.post(
+        "/optimize-v6?objective=min_km&preferred_solver=cp_sat&use_ml_assignment=false"
+        "&enable_greedy_warm_start=false&time_limit_seconds=12",
+        json=[_make_route_payload()],
+    )
 
     assert response.status_code == 200
     data = response.json()
+    assert captured["objective"] == "min_km"
+    assert captured["preferred_solver"] == "cp_sat"
     assert captured["use_ml_assignment"] is False
     assert captured["balance_load"] is True
+    assert captured["enable_greedy_warm_start"] is False
+    assert captured["time_limit_seconds"] == 12
     assert data["optimization_options"]["use_ml_assignment"] is False
+    assert data["optimization_options"]["preferred_solver"] == "cp_sat"
+    assert data["optimization_options"]["objective"] == "min_km"
+    assert data["optimizer_diagnostics"]["selected_solver"] == "cp_sat"
+
+
+def test_optimize_v6_by_day_forwards_solver_preferences(monkeypatch):
+    from main import app
+
+    captured_calls: List[Dict[str, Any]] = []
+
+    def fake_run_optimizer_engine_once(
+        routes,
+        *,
+        objective,
+        preferred_solver,
+        use_ml_assignment,
+        balance_load,
+        load_balance_hard_spread_limit,
+        load_balance_target_band,
+        enable_greedy_warm_start,
+        time_limit_seconds,
+    ):
+        captured_calls.append(
+            {
+                "route_count": len(routes),
+                "objective": objective,
+                "preferred_solver": preferred_solver,
+                "use_ml_assignment": bool(use_ml_assignment),
+                "enable_greedy_warm_start": bool(enable_greedy_warm_start),
+                "time_limit_seconds": time_limit_seconds,
+            }
+        )
+        return _make_schedule(1), {"selected_solver": preferred_solver, "solver_status": "optimal"}
+
+    monkeypatch.setattr("main._run_optimizer_engine_once", fake_run_optimizer_engine_once)
+
+    client = TestClient(app)
+    response = client.post(
+        "/optimize-v6-by-day?objective=min_deadhead&preferred_solver=cp_sat"
+        "&enable_greedy_warm_start=false&time_limit_seconds=9",
+        json=[
+            _make_route_payload("R001", ["L", "M"]),
+            _make_route_payload("R002", ["L"]),
+        ],
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(captured_calls) == 2
+    assert captured_calls[0]["objective"] == "min_deadhead"
+    assert captured_calls[0]["preferred_solver"] == "cp_sat"
+    assert captured_calls[0]["enable_greedy_warm_start"] is False
+    assert captured_calls[0]["time_limit_seconds"] == 9
+    assert data["L"]["optimization_options"]["preferred_solver"] == "cp_sat"
+    assert data["L"]["optimizer_diagnostics"]["selected_solver"] == "cp_sat"
+    assert data["V"]["stats"]["total_buses"] == 0
 
 
 def test_optimize_v6_ab_returns_deltas_and_recommendation(monkeypatch):

@@ -13,6 +13,7 @@ import { RouteLego } from './RouteLego';
 import { Bus, AlertCircle, MoreHorizontal, Lock, Unlock, Trash2 } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { useTimelineEditableStore } from '../../stores/timelineEditableStore';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 export function BusTrack({ bus, index, timeRange, pixelsPerMinute, viewMode, onRouteClick }) {
   const { isOver, setNodeRef } = useDroppable({
@@ -29,6 +30,7 @@ export function BusTrack({ bus, index, timeRange, pixelsPerMinute, viewMode, onR
   } = useTimelineEditableStore();
 
   const [showControls, setShowControls] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const startMinutes = timeRange.start * 60;
 
   const handleLockToggle = useCallback((routeId) => {
@@ -36,19 +38,17 @@ export function BusTrack({ bus, index, timeRange, pixelsPerMinute, viewMode, onR
   }, [toggleRouteLock]);
 
   const handleClearBus = useCallback(() => {
-    const lockedCount = bus.routes.filter(r => r.isLocked).length;
-    const msg = lockedCount > 0 
-      ? `¿Eliminar las rutas no bloqueadas del Bus ${bus.busName || bus.busId}? (${lockedCount} bloqueadas se mantendrán)`
-      : `¿Eliminar todas las rutas del Bus ${bus.busName || bus.busId}?`;
-    
-    if (window.confirm(msg)) {
-      bus.routes.forEach(route => {
-        if (!route.isLocked) {
-          moveRoute(route.route_id, null);
-        }
-      });
-    }
-  }, [bus, moveRoute]);
+    setShowClearConfirm(true);
+  }, []);
+
+  const confirmClearBus = useCallback(() => {
+    bus.routes.forEach((route) => {
+      if (!route.isLocked) {
+        moveRoute(route.route_id, null);
+      }
+    });
+    setShowClearConfirm(false);
+  }, [bus.routes, moveRoute]);
 
   const handleLockAll = useCallback(() => {
     const allLocked = bus.routes.every(r => r.isLocked);
@@ -159,6 +159,18 @@ export function BusTrack({ bus, index, timeRange, pixelsPerMinute, viewMode, onR
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={showClearConfirm}
+        title={`Vaciar ${bus.busName || bus.busId}`}
+        description={bus.routes.filter((route) => route.isLocked).length > 0
+          ? `Se eliminaran las rutas desbloqueadas de ${bus.busName || bus.busId}. Las bloqueadas se mantendran.`
+          : `Se eliminaran todas las rutas de ${bus.busName || bus.busId}.`}
+        tone="warning"
+        confirmLabel="Vaciar unidad"
+        cancelLabel="Cancelar"
+        onConfirm={confirmClearBus}
+        onCancel={() => setShowClearConfirm(false)}
+      />
     </div>
   );
 }

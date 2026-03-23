@@ -215,6 +215,92 @@ def _build_company_mix(
     }
 
 
+def _accumulate_rejection_reasons(target: Dict[str, int], reasons: Dict[str, int]) -> None:
+    for key, value in (reasons or {}).items():
+        target[key] = int(target.get(key, 0) or 0) + int(value or 0)
+
+
+def _rank_vehicle_candidates(
+    *,
+    bus_row: Dict[str, Any],
+    vehicles: List[Dict[str, Any]],
+    published_occupancy: Dict[str, List[Tuple[int, int]]],
+    selected_occupancy: Dict[str, List[Tuple[int, int]]],
+    preferred_company_id: Optional[str] = None,
+    selected_vehicle_id: Optional[str] = None,
+    excluded_vehicle_ids: Optional[set[str]] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    required_seats = int(bus_row.get("required_seats", 0) or 0)
+    start_minute = int(bus_row.get("start_minute", 0) or 0)
+    end_minute = int(bus_row.get("end_minute", 0) or 0)
+    preferred_company = str(preferred_company_id or "").strip()
+    exact_vehicle = str(selected_vehicle_id or "").strip()
+    excluded_ids = excluded_vehicle_ids or set()
+    suggestions: List[Dict[str, Any]] = []
+    rejection_reasons: Dict[str, int] = {}
+
+    for vehicle in vehicles:
+        vehicle_id = str(vehicle.get("id") or "").strip()
+        if not vehicle_id:
+            rejection_reasons["vehicle_missing_identifier"] = int(rejection_reasons.get("vehicle_missing_identifier", 0)) + 1
+            continue
+        if vehicle_id in excluded_ids:
+            rejection_reasons["vehicle_excluded"] = int(rejection_reasons.get("vehicle_excluded", 0)) + 1
+            continue
+        if exact_vehicle and vehicle_id != exact_vehicle:
+            rejection_reasons["different_vehicle_selected"] = int(rejection_reasons.get("different_vehicle_selected", 0)) + 1
+            continue
+
+        company_id = str(vehicle.get("company_id") or "unassigned")
+        if preferred_company and company_id != preferred_company:
+            rejection_reasons["company_out_of_scope"] = int(rejection_reasons.get("company_out_of_scope", 0)) + 1
+            continue
+
+        seats_max = int(vehicle.get("seats_max", 0) or 0)
+        if seats_max < required_seats:
+            rejection_reasons["capacity_insufficient"] = int(rejection_reasons.get("capacity_insufficient", 0)) + 1
+            continue
+
+        if any(_window_overlaps(start_minute, end_minute, win_start, win_end) for win_start, win_end in published_occupancy.get(vehicle_id, [])):
+            rejection_reasons["reserved_in_published_workspace"] = int(rejection_reasons.get("reserved_in_published_workspace", 0)) + 1
+            continue
+        if any(_window_overlaps(start_minute, end_minute, win_start, win_end) for win_start, win_end in selected_occupancy.get(vehicle_id, [])):
+            rejection_reasons["already_used_in_reconciliation"] = int(rejection_reasons.get("already_used_in_reconciliation", 0)) + 1
+            continue
+
+        score = _fleet_score_for_requirement(vehicle, required_seats)
+        suggestions.append(
+            {
+                "vehicle_id": vehicle_id,
+                "vehicle_code": str(vehicle.get("vehicle_code") or ""),
+                "plate": str(vehicle.get("plate") or "") or None,
+                "company_id": str(vehicle.get("company_id") or "") or None,
+                "company_name": str(vehicle.get("company_name") or "") or None,
+                "seats_base": int(vehicle.get("seats_base") or vehicle.get("seats_min") or 0),
+                "seats_pmr": int(vehicle.get("seats_pmr") or 0),
+                "seats_min": int(vehicle.get("seats_min") or 0),
+                "seats_max": seats_max,
+                "overflow": max(0, seats_max - required_seats),
+                "assignment_score": {
+                    "penalty": int(score[0]),
+                    "seats_max": int(score[1]),
+                    "seats_min": int(score[2]),
+                },
+            }
+        )
+
+    suggestions.sort(
+        key=lambda vehicle: (
+            int(_safe_dict(vehicle.get("assignment_score")).get("penalty", 999999) or 999999),
+            int(vehicle.get("overflow", 999999) or 999999),
+            int(vehicle.get("seats_max", 999999) or 999999),
+            str(vehicle.get("company_name") or ""),
+            str(vehicle.get("vehicle_code") or ""),
+        )
+    )
+    return suggestions[:12], rejection_reasons
+
+
 def _build_day_bus_rows(day_schedule: Dict[str, Any], day: str) -> List[Dict[str, Any]]:
     buses = _safe_list(_safe_dict(day_schedule).get("schedule"))
     rows: List[Dict[str, Any]] = []
@@ -288,6 +374,7 @@ def build_operational_reconciliation_snapshot(
     top_real = 0
     top_virtual = 0
     top_pending = 0
+    aggregate_rejection_reasons: Dict[str, int] = {}
 
     for day in ALL_DAYS:
         day_schedule = _safe_dict(normalized_schedule.get(day))
@@ -392,6 +479,7 @@ def build_operational_reconciliation_snapshot(
             }
 
         pending_items: List[Dict[str, Any]] = []
+        day_rejection_reasons: Dict[str, int] = {}
         for bus_row in bus_rows:
             row_key = _day_bus_key(day, bus_row.get("bus_id"))
             if row_key in valid_selected_assignments:
@@ -406,47 +494,17 @@ def build_operational_reconciliation_snapshot(
                 if str(vehicle_id).strip()
             }
 
-            suggestions: List[Dict[str, Any]] = []
-            for vehicle in vehicles:
-                vehicle_id = str(vehicle.get("id") or "").strip()
-                if not vehicle_id or vehicle_id in excluded_vehicle_ids:
-                    continue
-                if int(vehicle.get("seats_max", 0) or 0) < int(bus_row.get("required_seats", 0) or 0):
-                    continue
-                windows = []
-                windows.extend(published_occupancy.get(vehicle_id, []))
-                windows.extend(selected_occupancy.get(vehicle_id, []))
-                if any(
-                    _window_overlaps(
-                        int(bus_row.get("start_minute", 0) or 0),
-                        int(bus_row.get("end_minute", 0) or 0),
-                        win_start,
-                        win_end,
-                    )
-                    for win_start, win_end in windows
-                ):
-                    continue
-                suggestions.append(
-                    {
-                        "vehicle_id": vehicle_id,
-                        "vehicle_code": str(vehicle.get("vehicle_code") or ""),
-                        "plate": str(vehicle.get("plate") or "") or None,
-                        "company_id": str(vehicle.get("company_id") or "") or None,
-                        "company_name": str(vehicle.get("company_name") or "") or None,
-                        "seats_base": int(vehicle.get("seats_base") or vehicle.get("seats_min") or 0),
-                        "seats_pmr": int(vehicle.get("seats_pmr") or 0),
-                        "seats_min": int(vehicle.get("seats_min") or 0),
-                        "seats_max": int(vehicle.get("seats_max") or 0),
-                        "overflow": max(0, int(vehicle.get("seats_max", 0) or 0) - int(bus_row.get("required_seats", 0) or 0)),
-                    }
-                )
-            suggestions.sort(
-                key=lambda vehicle: (
-                    _fleet_score_for_requirement(vehicle, int(bus_row.get("required_seats", 0) or 0)),
-                    str(vehicle.get("company_name") or ""),
-                    str(vehicle.get("vehicle_code") or ""),
-                )
+            suggestions, rejection_reasons = _rank_vehicle_candidates(
+                bus_row=bus_row,
+                vehicles=vehicles,
+                published_occupancy=published_occupancy,
+                selected_occupancy=selected_occupancy,
+                preferred_company_id=preferred_company_id,
+                selected_vehicle_id=selected_vehicle_id,
+                excluded_vehicle_ids=excluded_vehicle_ids,
             )
+            _accumulate_rejection_reasons(day_rejection_reasons, rejection_reasons)
+            _accumulate_rejection_reasons(aggregate_rejection_reasons, rejection_reasons)
             pending_items.append(
                 {
                     **bus_row,
@@ -458,8 +516,9 @@ def build_operational_reconciliation_snapshot(
                     "already_real_bound": False,
                     "preferred_company_id": preferred_company_id,
                     "selected_vehicle_id": selected_vehicle_id,
-                    "suggestions": suggestions[:12],
-                    "suggested_real_vehicles": suggestions[:12],
+                    "suggestions": suggestions,
+                    "suggested_real_vehicles": suggestions,
+                    "candidate_rejection_reasons": rejection_reasons,
                 }
             )
 
@@ -486,6 +545,7 @@ def build_operational_reconciliation_snapshot(
             "company_allocations": _safe_list(day_snapshot.get("company_allocations")),
             "stale_assignments": stale_assignments,
             "unresolved": _safe_list(day_snapshot.get("unresolved")),
+            "candidate_rejection_reasons": day_rejection_reasons,
             "scope_mode": scope_mode,
             "scope_label": scope_label,
             "scope_company_ids": normalized_scope_company_ids,
@@ -511,6 +571,7 @@ def build_operational_reconciliation_snapshot(
         "virtual_bound_count": top_virtual,
         "pending_real_reconciliation_count": top_pending,
         "days": days_payload,
+        "candidate_rejection_reasons": aggregate_rejection_reasons,
         "reconciliation_snapshot": existing_snapshot,
         "updated_at": datetime.utcnow().isoformat(),
     }

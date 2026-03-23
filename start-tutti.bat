@@ -52,7 +52,7 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-"%VENV_PYTHON%" -c "import reportlab, httpx, pulp, websockets, wsproto, alembic; from PIL import Image" >nul 2>&1 || "%VENV_PYTHON%" -m pip install -q reportlab pillow httpx pulp websockets wsproto alembic
+"%VENV_PYTHON%" -c "import reportlab, httpx, pulp, websockets, wsproto, alembic, ortools; from PIL import Image" >nul 2>&1 || "%VENV_PYTHON%" -m pip install -q reportlab pillow httpx pulp websockets wsproto alembic ortools
 if %errorlevel% neq 0 (
     echo        ERROR: Critical Python dependencies check failed
     pause
@@ -78,6 +78,7 @@ echo  [5/6] Syncing frontend dependencies...
 if not exist "%BACKEND%\main.py" echo        WARNING: backend\main.py not found
 if not exist "%BACKEND%\models.py" echo        WARNING: backend\models.py not found
 if not exist "%BACKEND%\optimizer_v6.py" echo        WARNING: backend\optimizer_v6.py not found
+if not exist "%BACKEND%\optimizer\solver_cpsat.py" echo        WARNING: backend\optimizer\solver_cpsat.py not found
 if not exist "%BACKEND%\services\fleet_repository.py" echo        WARNING: backend\services\fleet_repository.py not found
 if not exist "%BACKEND%\services\fleet_publication.py" echo        WARNING: backend\services\fleet_publication.py not found
 if not exist "%BACKEND%\services\telematics_provider.py" echo        WARNING: backend\services\telematics_provider.py not found

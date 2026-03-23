@@ -1,6 +1,11 @@
 ﻿import React from 'react';
 import { Upload, Play, RotateCcw, Clock } from 'lucide-react';
 import FileUpload from './FileUpload';
+import {
+  getObjectiveDisplayLabel,
+  getPreferredSolverHint,
+  getSolverDisplayLabel,
+} from '../utils/optimizerDiagnostics';
 
 const DAY_LABELS = { L: 'Lun', M: 'Mar', Mc: 'Mié', X: 'Jue', V: 'Vie' };
 
@@ -34,8 +39,8 @@ const Sidebar = ({
       <div className="px-5 pt-5 pb-4 gt-border-b">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-[11px] font-semibold text-gt-text uppercase tracking-[0.14em]">Datos</p>
-            <p className="text-[11px] text-gt-text-muted mt-0.5">Carga y revision de rutas operativas</p>
+            <p className="text-[11px] font-semibold text-cyan-300 uppercase tracking-[0.14em]">Ingesta y motor</p>
+            <p className="text-[11px] text-gt-text-muted mt-0.5">Carga Excel, valida calidad y dispara la optimizacion operativa</p>
           </div>
           {showCloseButton && typeof onClose === 'function' && (
             <button
@@ -60,7 +65,15 @@ const Sidebar = ({
             <div className="space-y-3 animate-fadeIn">
               {/* Data summary */}
               <div className="gt-glass rounded-xl p-4">
-                <p className="text-[10px] font-medium text-gt-text-muted uppercase tracking-[0.14em] mb-3">Datos cargados</p>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-medium text-gt-text-muted uppercase tracking-[0.14em]">Datos cargados</p>
+                    <p className="mt-1 text-[11px] text-slate-400">Resumen de la base importada antes de optimizar.</p>
+                  </div>
+                  <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-200">
+                    Paso 1
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="gt-stat-card rounded-xl p-3 text-center">
                     <p className="text-xl font-semibold text-gt-text data-mono">{routes.length}</p>
@@ -89,7 +102,15 @@ const Sidebar = ({
 
               {parseReport && (
                 <div className={`gt-glass rounded-xl p-4 ${droppedRows > 0 ? 'border border-gt-warning/30' : ''}`}>
-                  <p className="text-[10px] font-medium text-gt-text-muted uppercase tracking-[0.14em] mb-2">Calidad de datos</p>
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-medium text-gt-text-muted uppercase tracking-[0.14em]">Calidad de datos</p>
+                      <p className="mt-1 text-[11px] text-slate-400">Antes de correr el solver, revisa descartes y patrones sucios.</p>
+                    </div>
+                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300">
+                      Paso 2
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="gt-stat-card rounded-xl p-2.5 text-center">
                       <p className="text-lg font-semibold text-gt-text data-mono">{parseReport.rows_total || 0}</p>
@@ -118,13 +139,32 @@ const Sidebar = ({
               {/* Progress UI (OptimizationProgress component) */}
               {children}
               <div className="gt-glass rounded-xl p-3 border border-[#2a4057]">
-                <p className="text-[10px] font-medium text-cyan-300 uppercase tracking-[0.14em] mb-1">
-                  Reglas de optimizacion
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-medium text-cyan-300 uppercase tracking-[0.14em] mb-1">
+                      Reglas de optimizacion
+                    </p>
+                    <p className="text-[11px] text-gt-text-muted">
+                      Parametros activos del reparto antes de generar la semana.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300">
+                    Paso 3
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] text-gt-text-muted">
+                  Objetivo {getObjectiveDisplayLabel(optimizationOptions?.objective)}
+                  {' '}| Solver {getSolverDisplayLabel(optimizationOptions?.preferred_solver)}
+                  {' '}| Seed {optimizationOptions?.enable_greedy_warm_start === false ? 'off' : 'on'}
+                  {' '}| Tiempo {optimizationOptions?.time_limit_seconds ?? 'auto'}s
                 </p>
-                <p className="text-[11px] text-gt-text-muted">
+                <p className="mt-1 text-[11px] text-gt-text-muted">
                   Diferencia max {optimizationOptions?.load_balance_hard_spread_limit ?? 2}
                   {' '}| Margen ±{optimizationOptions?.load_balance_target_band ?? 1}
                   {' '}| Ventanas {Array.isArray(optimizationOptions?.route_load_constraints) ? optimizationOptions.route_load_constraints.length : 0}
+                </p>
+                <p className="mt-1 text-[10px] text-cyan-200/80">
+                  {getPreferredSolverHint(optimizationOptions, Array.isArray(routes) ? routes.length : null)}
                 </p>
                 <button
                   type="button"
@@ -147,7 +187,7 @@ const Sidebar = ({
                     ) : (
                       <>
                         <Play size={13} fill="currentColor" />
-                        Generar planificacion
+                        Generar plan operativo
                       </>
                     )}
                   </button>

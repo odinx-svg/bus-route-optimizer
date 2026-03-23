@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   ArchiveRestore,
   Bus,
   CheckCircle2,
@@ -15,6 +16,11 @@ import {
 } from 'lucide-react';
 import { fetchFleetVehicles } from '../services/fleetService';
 import { notifications } from '../services/notifications';
+import {
+  getPrimarySelectedSolver,
+  getSolverDisplayLabel,
+  getSolverUsageSummary,
+} from '../utils/optimizerDiagnostics';
 import {
   getBlockingReasonText,
   getNextActionLabel,
@@ -38,6 +44,7 @@ export default function ControlHubPage({
   activeWorkspaceId = null,
   onOpenWorkspace,
   onCreateWorkspace,
+  onOpenFleet,
   onRefresh,
   onArchiveWorkspace,
   onRestoreWorkspace,
@@ -102,6 +109,12 @@ export default function ControlHubPage({
     });
   }, [filter, query, workspaces]);
 
+  const activeWorkspace = useMemo(() => {
+    const current = workspaces.find((workspace) => String(workspace.id) === String(activeWorkspaceId));
+    if (current) return current;
+    return workspaces.find((workspace) => workspace.status !== 'inactive') || null;
+  }, [activeWorkspaceId, workspaces]);
+
   const pendingToday = useMemo(() => ({
     unpublished: workspaces.filter((ws) => ws.status === 'draft').length,
     provisional: workspaces.filter((ws) => Number(ws.pending_virtual_count || 0) > 0).length,
@@ -110,6 +123,9 @@ export default function ControlHubPage({
 
   const expectedDeleteName = String(deleteDialog.workspace?.name || '');
   const canConfirmDelete = expectedDeleteName.length > 0 && deleteDialog.typedName.trim() === expectedDeleteName;
+  const activeWorkspaceRequestedSolver = String(activeWorkspace?.summary_metrics?.requested_solver || 'auto');
+  const activeWorkspaceSelectedSolver = getPrimarySelectedSolver(activeWorkspace?.summary_metrics, activeWorkspaceRequestedSolver);
+  const activeWorkspaceSolverUsage = getSolverUsageSummary(activeWorkspace?.summary_metrics);
 
   const closeDeleteDialog = () => {
     if (deletingWorkspaceId) return;
@@ -235,6 +251,155 @@ export default function ControlHubPage({
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.9fr)]">
+        <div className="rounded-[18px] border border-[#304a62] bg-[#0c1520]/95 p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Continuidad operativa</p>
+              <h3 className="mt-1 text-[21px] font-semibold text-white" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+                {activeWorkspace ? 'Sigue donde lo dejaste' : 'Empieza una optimizacion nueva'}
+              </h3>
+              <p className="mt-1 text-[12px] text-slate-400">
+                {activeWorkspace
+                  ? 'Accede directo al workspace activo o revisa la flota antes de publicar.'
+                  : 'Carga un Excel, configura las reglas y genera la primera planificacion.'}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={onCreateWorkspace}
+                className="px-3 py-1.5 control-btn-primary rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Nueva optimizacion
+              </button>
+              <button
+                onClick={onOpenFleet}
+                className="px-3 py-1.5 rounded-md border border-cyan-500/35 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10 flex items-center gap-1"
+              >
+                <Bus className="w-3.5 h-3.5" />
+                Abrir flota
+              </button>
+            </div>
+          </div>
+
+          {activeWorkspace ? (
+            <div className="mt-4 rounded-[16px] border border-cyan-500/18 bg-[linear-gradient(135deg,rgba(6,78,99,0.2),rgba(8,17,32,0.2))] p-4">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100">
+                      Workspace recomendado
+                    </span>
+                    <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${getWorkspaceReadinessConfig(activeWorkspace.readiness_state).chipClass}`}>
+                      {getWorkspaceReadinessConfig(activeWorkspace.readiness_state).label}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-[22px] font-semibold text-white">{activeWorkspace.name}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                    <span>{getScopeLabel(activeWorkspace.scope_summary)}</span>
+                    <span className="text-slate-600">•</span>
+                    <span>{activeWorkspace.city_label || 'Sin ciudad'}</span>
+                    <span className="text-slate-600">•</span>
+                    <span>{getWorkspaceStatusLabel(activeWorkspace)}</span>
+                    <span className="text-slate-600">•</span>
+                    <span>Siguiente paso: {getNextActionLabel(activeWorkspace.next_recommended_action)}</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
+                      Solver pedido: {getSolverDisplayLabel(activeWorkspaceRequestedSolver)}
+                    </span>
+                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-100">
+                      Solver dominante: {getSolverDisplayLabel(activeWorkspaceSelectedSolver)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[12px] text-slate-300">
+                    {getBlockingReasonText(activeWorkspace.blocking_reason) || getWorkspacePendingLabel(activeWorkspace)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Motor: {activeWorkspaceSolverUsage}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 xl:justify-end">
+                  <button
+                    onClick={() => onOpenWorkspace?.(activeWorkspace.id)}
+                    className="px-3 py-1.5 control-btn-primary rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    Abrir workspace
+                  </button>
+                  <button
+                    onClick={() => onConfigureWorkspaceOptions?.(activeWorkspace.id, activeWorkspace.name)}
+                    className="px-3 py-1.5 rounded-md border border-white/10 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-100 hover:bg-white/[0.05]"
+                  >
+                    Ver reglas
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              {[
+                { step: '1', title: 'Carga datos', description: 'Sube el Excel y revisa si hubo filas descartadas.' },
+                { step: '2', title: 'Genera el plan', description: 'Aplica reglas de reparto y ejecuta la optimizacion.' },
+                { step: '3', title: 'Publica con flota', description: 'Reconcila buses reales y publica la semana.' },
+              ].map((item) => (
+                <div key={item.step} className="rounded-[14px] border border-white/10 bg-white/[0.03] p-3">
+                  <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100">
+                    Paso {item.step}
+                  </span>
+                  <p className="mt-3 text-[14px] font-semibold text-white">{item.title}</p>
+                  <p className="mt-1 text-[12px] text-slate-400">{item.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-[18px] border border-[#304a62] bg-[#0c1520]/95 p-4">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Acciones rapidas</p>
+          <div className="mt-4 space-y-3">
+            <button
+              type="button"
+              onClick={onCreateWorkspace}
+              className="flex w-full items-center justify-between rounded-[14px] border border-cyan-500/18 bg-cyan-500/8 px-4 py-3 text-left transition hover:bg-cyan-500/12"
+            >
+              <div>
+                <p className="text-[12px] font-semibold text-cyan-100">Crear una optimizacion nueva</p>
+                <p className="mt-1 text-[11px] text-slate-400">Abre la ingesta de Excel y prepara una corrida nueva.</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-cyan-200" />
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenFleet}
+              className="flex w-full items-center justify-between rounded-[14px] border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition hover:bg-white/[0.05]"
+            >
+              <div>
+                <p className="text-[12px] font-semibold text-white">Revisar flota y conductores</p>
+                <p className="mt-1 text-[11px] text-slate-400">Consulta disponibilidad, documentacion y plan semanal por vehiculo.</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-slate-300" />
+            </button>
+
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="flex w-full items-center justify-between rounded-[14px] border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition hover:bg-white/[0.05]"
+            >
+              <div>
+                <p className="text-[12px] font-semibold text-white">Actualizar estado operativo</p>
+                <p className="mt-1 text-[11px] text-slate-400">Recarga optimizaciones, flota resumida y bloqueos actuales.</p>
+              </div>
+              <RefreshCw className="h-4 w-4 text-slate-300" />
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-3">
         {filteredWorkspaces.length === 0 && (
           <div className="rounded-[16px] border border-[#304a62] bg-[#0d1623]/95 p-8 text-center text-slate-400">
@@ -250,7 +415,14 @@ export default function ControlHubPage({
           const fleetReal = workspace?.summary_metrics?.fleet_real_assigned ?? workspace?.summary_metrics?.fleet_assigned ?? 0;
           const fleetVirtual = workspace?.pending_virtual_count ?? workspace?.summary_metrics?.fleet_virtual_created ?? 0;
           const conflictCount = workspace?.conflict_count ?? 0;
+          const capacitySummary = workspace?.capacity_summary || {};
+          const overCapacity = Number(capacitySummary?.over_capacity || 0);
+          const tightCapacity = Number(capacitySummary?.tight || 0);
+          const missingVehicle = Number(capacitySummary?.missing_vehicle || 0);
           const helperText = getBlockingReasonText(workspace.blocking_reason) || getWorkspacePendingLabel(workspace);
+          const requestedSolver = String(workspace?.summary_metrics?.requested_solver || 'auto');
+          const selectedSolver = getPrimarySelectedSolver(workspace?.summary_metrics, requestedSolver);
+          const solverUsage = getSolverUsageSummary(workspace?.summary_metrics);
 
           return (
             <div
@@ -280,6 +452,17 @@ export default function ControlHubPage({
                     <span className="text-slate-600">|</span>
                     <span>{new Date(workspace.updated_at).toLocaleString()}</span>
                   </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
+                      Pedido: {getSolverDisplayLabel(requestedSolver)}
+                    </span>
+                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-100">
+                      Dominante: {getSolverDisplayLabel(selectedSolver)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    Motor: {solverUsage}
+                  </p>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
                     <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
@@ -299,6 +482,26 @@ export default function ControlHubPage({
                       <p className="mt-1 text-[13px] font-semibold text-white">{nextActionLabel}</p>
                     </div>
                   </div>
+
+                  {(overCapacity > 0 || tightCapacity > 0 || missingVehicle > 0) && (
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                      {overCapacity > 0 && (
+                        <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-rose-100">
+                          {overCapacity} buses cortos de plazas
+                        </span>
+                      )}
+                      {tightCapacity > 0 && (
+                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-100">
+                          {tightCapacity} buses justos
+                        </span>
+                      )}
+                      {missingVehicle > 0 && (
+                        <span className="rounded-full border border-slate-500/30 bg-slate-500/10 px-2.5 py-1 text-slate-200">
+                          {missingVehicle} sin vehiculo/capacidad
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <div className="mt-3 inline-flex items-start gap-2 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2">
                     {workspace.readiness_state === 'blocked' ? (

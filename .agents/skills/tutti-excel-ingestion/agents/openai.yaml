@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Excel Ingestion"
+  short_description: "Parser Excel y datos sucios de entrada"
+  brand_color: "#0F766E"
+  default_prompt: "Use $tutti-excel-ingestion to trabajar en parsing Excel, columnas y normalizacion de datos sucios."
+
+policy:
+  allow_implicit_invocation: true

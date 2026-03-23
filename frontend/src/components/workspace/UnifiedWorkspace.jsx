@@ -56,6 +56,7 @@ import { useScheduleValidation } from '../../hooks/useScheduleValidation';
 import { downloadIncidentsAsCsv, downloadIncidentsAsJson } from '../../utils/incidentsExport';
 import { buildRouteCapacityMap, getItemCapacityNeeded } from '../../utils/capacity';
 import { RouteEditModal } from './RouteEditModal';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import { TimelineBusRow, TimelineScale, TimelineControls, calculateTimelineCompression } from './TimelineBusRow';
 
 // ============================================================================
@@ -157,6 +158,11 @@ function extractPositioningMinutes(item = {}) {
   );
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+}
+
+function getAssignedBusSeatCapacity(bus = {}) {
+  const seatsMax = Number(bus?.assigned_vehicle_seats_max ?? bus?.assigned_vehicle_seats_min ?? 0);
+  return Number.isFinite(seatsMax) && seatsMax > 0 ? seatsMax : 0;
 }
 
 function withPositioningMinutes(route = {}, minutes = 0) {
@@ -654,6 +660,42 @@ export function UnifiedWorkspace({
     if (!isBusFilterActive) return buses;
     return buses.filter((bus) => visibleBusIdSet.has(String(bus?.id || bus?.bus_id || '')));
   }, [buses, isBusFilterActive, visibleBusIdSet]);
+
+  const capacityWorkspaceSummary = useMemo(() => (
+    displayedBuses.reduce((acc, bus) => {
+      const routeSeatNeed = (bus?.routes || []).reduce((maxSeats, route) => {
+        const needed = getItemCapacityNeeded(route, routeCapacityById);
+        return needed > maxSeats ? needed : maxSeats;
+      }, 0);
+      const assignedSeats = getAssignedBusSeatCapacity(bus);
+
+      if (routeSeatNeed <= 0) {
+        return acc;
+      }
+
+      acc.withDemand += 1;
+      if (assignedSeats <= 0) {
+        acc.missingVehicle += 1;
+        return acc;
+      }
+
+      const spareSeats = assignedSeats - routeSeatNeed;
+      if (spareSeats < 0) {
+        acc.overCapacity += 1;
+      } else if (spareSeats <= 6) {
+        acc.tight += 1;
+      } else {
+        acc.healthy += 1;
+      }
+      return acc;
+    }, {
+      withDemand: 0,
+      healthy: 0,
+      tight: 0,
+      overCapacity: 0,
+      missingVehicle: 0,
+    })
+  ), [displayedBuses, routeCapacityById]);
   
   // Calcular compresion del timeline (eliminar huecos vacios)
   const { segments: compressedSegments, compressedWidth } = useMemo(() => {
@@ -706,12 +748,36 @@ export function UnifiedWorkspace({
     mode: 'edit', // 'edit', 'create', 'duplicate'
     route: null,
   });
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    title: '',
+    description: '',
+    tone: 'danger',
+    confirmLabel: 'Confirmar',
+    onConfirm: null,
+  });
   const busesRef = useRef(buses);
   const refreshRunIdRef = useRef(0);
   const refreshTimerRef = useRef(null);
   const refreshPendingAllRef = useRef(false);
   const refreshPendingBusIdsRef = useRef(new Set());
   const toolsMenuRef = useRef(null);
+
+  const closeConfirmDialog = useCallback(() => {
+    setConfirmDialog((prev) => ({ ...prev, open: false, onConfirm: null }));
+  }, []);
+
+  const openConfirmDialog = useCallback((config) => {
+    setConfirmDialog({
+      open: true,
+      title: '',
+      description: '',
+      tone: 'danger',
+      confirmLabel: 'Confirmar',
+      onConfirm: null,
+      ...config,
+    });
+  }, []);
 
   const updateSelectedBus = useCallback((nextBusId) => {
     const value = nextBusId || null;
@@ -1314,10 +1380,18 @@ export function UnifiedWorkspace({
   }, [generateBusId]);
 
   const handleRemoveBus = useCallback((busId) => {
-    if (!confirm(`Eliminar el bus ${busId}?`)) return;
-    setBuses(prev => prev.filter(b => b.id !== busId));
-    if (selectedBusId === busId) updateSelectedBus(null);
-  }, [selectedBusId, updateSelectedBus]);
+    openConfirmDialog({
+      title: `Eliminar ${busId}`,
+      description: `Se eliminara la unidad ${busId} del workspace operativo. Las rutas volveran a la paleta o quedaran disponibles para reasignacion.`,
+      tone: 'danger',
+      confirmLabel: 'Eliminar unidad',
+      onConfirm: () => {
+        setBuses((prev) => prev.filter((b) => b.id !== busId));
+        if (selectedBusId === busId) updateSelectedBus(null);
+        notifications.info('Unidad eliminada', `${busId} salio del workspace actual`);
+      },
+    });
+  }, [openConfirmDialog, selectedBusId, updateSelectedBus]);
 
   const handleDragStart = useCallback((event) => {
     const data = event.active.data.current;
@@ -1476,7 +1550,16 @@ export function UnifiedWorkspace({
     ))
   ), []);
 
-  const evaluatePlacementScore = useCallback((route, targetRoutes = []) => {
+  const getRouteSeatNeed = useCallback((route) => {
+    const capacityNeeded = getItemCapacityNeeded(route, routeCapacityById);
+    if (capacityNeeded > 0) return capacityNeeded;
+
+    const fallbackVehicleMin = Number(route?.vehicle_capacity_min ?? route?.vehicleCapacityMin ?? 0);
+    return Number.isFinite(fallbackVehicleMin) && fallbackVehicleMin > 0 ? fallbackVehicleMin : 0;
+  }, [routeCapacityById]);
+
+  const evaluatePlacementScore = useCallback((route, candidateBus = null) => {
+    const targetRoutes = candidateBus?.routes || [];
     const simulated = sortRoutesByTime([...(targetRoutes || []), route]);
     const idx = simulated.findIndex((item) => routeMatchesId(item, getRouteId(route)));
     if (idx < 0) return -9999;
@@ -1493,8 +1576,26 @@ export function UnifiedWorkspace({
 
     const slack = Math.min(beforeWindow, afterWindow);
     const loadPenalty = (targetRoutes?.length || 0) * 0.35;
-    return slack - loadPenalty;
-  }, []);
+    const seatNeed = getRouteSeatNeed(route);
+    const busSeatCapacity = getAssignedBusSeatCapacity(candidateBus);
+
+    let capacityScore = 0;
+    if (seatNeed > 0 && busSeatCapacity > 0) {
+      const spareSeats = busSeatCapacity - seatNeed;
+      if (spareSeats < 0) {
+        return -5000 - Math.abs(spareSeats * 10);
+      }
+      capacityScore = spareSeats <= 6
+        ? 10
+        : spareSeats <= 18
+          ? 6
+          : 2;
+    } else if (seatNeed > 0 && busSeatCapacity === 0) {
+      capacityScore = -2;
+    }
+
+    return slack - loadPenalty + capacityScore;
+  }, [getRouteSeatNeed]);
 
   const runCriticalReassignment = useCallback(async ({
     trigger = 'manual',
@@ -1579,7 +1680,7 @@ export function UnifiedWorkspace({
 
           if (!feasibility?.feasible) continue;
 
-          const score = evaluatePlacementScore(route, candidateBus?.routes || []);
+          const score = evaluatePlacementScore(route, candidateBus);
           if (!bestPlacement || score > bestPlacement.score) {
             bestPlacement = {
               busId: candidateBus.id,
@@ -1720,6 +1821,16 @@ export function UnifiedWorkspace({
       return { success: false, reason: 'Ruta duplicada' };
     }
 
+    const seatNeed = getRouteSeatNeed(route);
+    const busSeatCapacity = getAssignedBusSeatCapacity(targetBus);
+    if (seatNeed > 0 && busSeatCapacity > 0 && seatNeed > busSeatCapacity) {
+      notifications.error(
+        'Capacidad insuficiente',
+        `La ruta ${route.code} necesita ${seatNeed} plazas y ${busId} solo tiene ${busSeatCapacity}.`
+      );
+      return { success: false, reason: 'Capacidad insuficiente' };
+    }
+
     // Verificar solapamiento con rutas existentes
     const hasOverlap = targetBus.routes.some((existingRoute) =>
       checkOverlap(route.startTime, route.endTime, existingRoute.startTime, existingRoute.endTime)
@@ -1785,7 +1896,7 @@ export function UnifiedWorkspace({
         return next;
       });
     }
-  }, [buses, canAssignRoute, requestPositioningRefresh]);
+  }, [buses, canAssignRoute, getRouteSeatNeed, requestPositioningRefresh]);
 
   // handleDragEnd definido DESPUES de handleDropRoute
   const handleDragEnd = useCallback(async (event) => {
@@ -1905,10 +2016,17 @@ export function UnifiedWorkspace({
   }, [requestPositioningRefresh]);
 
   const handleClearAll = useCallback(() => {
-    if (!confirm('Limpiar todo el horario?')) return;
-    setBuses(prev => prev.map(bus => ({ ...bus, routes: [] })));
-    notifications.info('Horario limpiado');
-  }, []);
+    openConfirmDialog({
+      title: 'Vaciar horario operativo',
+      description: 'Se eliminaran todas las asignaciones de la jornada actual y el workspace quedara listo para reconstruir el plan.',
+      tone: 'warning',
+      confirmLabel: 'Vaciar horario',
+      onConfirm: () => {
+        setBuses((prev) => prev.map((bus) => ({ ...bus, routes: [] })));
+        notifications.info('Horario limpiado');
+      },
+    });
+  }, [openConfirmDialog]);
 
   const buildScheduleData = useCallback(() => ({
     day: activeDay,
@@ -2431,6 +2549,22 @@ export function UnifiedWorkspace({
               <span><strong className="text-slate-200 tabular-nums">{displayedBuses.length}</strong> buses</span>
               <span className="text-slate-600">|</span>
               <span><strong className="text-slate-200 tabular-nums">{displayedBuses.reduce((s, b) => s + b.routes.length, 0)}</strong> rutas</span>
+              {capacityWorkspaceSummary.withDemand > 0 && (
+                <>
+                  <span className="text-slate-600">|</span>
+                  <span className="text-cyan-300"><strong className="tabular-nums">{capacityWorkspaceSummary.healthy}</strong> OK</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-amber-300"><strong className="tabular-nums">{capacityWorkspaceSummary.tight}</strong> justos</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-rose-300"><strong className="tabular-nums">{capacityWorkspaceSummary.overCapacity}</strong> cortos</span>
+                  {capacityWorkspaceSummary.missingVehicle > 0 && (
+                    <>
+                      <span className="text-slate-600">/</span>
+                      <span className="text-slate-300"><strong className="tabular-nums">{capacityWorkspaceSummary.missingVehicle}</strong> sin vehiculo</span>
+                    </>
+                  )}
+                </>
+              )}
               {isBusFilterActive && (
                 <>
                   <span className="text-slate-600">|</span>
@@ -2994,6 +3128,19 @@ export function UnifiedWorkspace({
         route={routeEditModal.route}
         mode={routeEditModal.mode}
         onSave={handleSaveRoute}
+      />
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        tone={confirmDialog.tone}
+        confirmLabel={confirmDialog.confirmLabel}
+        onCancel={closeConfirmDialog}
+        onConfirm={() => {
+          const action = confirmDialog.onConfirm;
+          closeConfirmDialog();
+          action?.();
+        }}
       />
     </DndContext>
   );

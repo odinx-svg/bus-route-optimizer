@@ -415,6 +415,8 @@ def test_workspace_list_and_detail_include_readiness_fields(monkeypatch):
     assert detail["readiness_summary"]["workflow_stage"] == "pending_reconciliation"
     assert detail["readiness_summary"]["next_recommended_action"] == "reconcile"
     assert detail["readiness_summary"]["pending_virtual_count"] == 2
+    assert "capacity_summary" in detail["readiness_summary"]
+    assert "blocking_issues" in detail["readiness_summary"]
 
 
 def test_fleet_reconciliation_endpoint_normalizes_pending_assignments(monkeypatch):
@@ -466,6 +468,9 @@ def test_fleet_reconciliation_endpoint_normalizes_pending_assignments(monkeypatc
     assert body["reconciliation"]["company_mix"]["total_pending_buses"] == 1
     assert body["reconciliation"]["company_mix"]["recommended_companies"][0]["company_name"] == "Empresa A"
     assert body["reconciliation_day"]["company_mix"]["recommended_companies"][0]["recommended_count"] == 1
+    assert "operational_summary" in body
+    assert "candidate_rejection_reasons" in body
+    assert "candidate_rejection_reasons" in body["reconciliation_day"]
 
 
 def test_apply_fleet_reconciliation_persists_selected_real_assignments(monkeypatch):

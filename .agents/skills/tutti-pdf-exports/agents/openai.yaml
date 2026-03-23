@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti PDF Exports"
+  short_description: "PDF operativo y links de Google Maps"
+  brand_color: "#2563EB"
+  default_prompt: "Use $tutti-pdf-exports to modificar la exportacion PDF, tablas por bus o enlaces de Google Maps."
+
+policy:
+  allow_implicit_invocation: true

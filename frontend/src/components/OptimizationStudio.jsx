@@ -4,9 +4,9 @@ import BusListPanel from './BusListPanel';
 import { UnifiedWorkspace } from './workspace';
 
 const STUDIO_TABS = [
-  { id: 'workspace', label: 'Horario' },
-  { id: 'map', label: 'Mapa' },
-  { id: 'mixed', label: 'Mapa + horario' },
+  { id: 'workspace', label: 'Timeline operativo', description: 'Edicion detallada por bus y dia' },
+  { id: 'map', label: 'Mapa operativo', description: 'Lectura geografica y foco por vehiculo' },
+  { id: 'mixed', label: 'Vista mixta', description: 'Mapa y timeline coordinados' },
 ];
 
 export default function OptimizationStudio({
@@ -32,6 +32,7 @@ export default function OptimizationStudio({
   const [splitPercent, setSplitPercent] = useState(40);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [liveScheduleByDay, setLiveScheduleByDay] = useState({});
+  const activeStudioTab = STUDIO_TABS.find((tab) => tab.id === studioTab) || STUDIO_TABS[0];
 
   const currentDaySchedule = useMemo(
     () => scheduleByDay?.[activeDay]?.schedule || [],
@@ -106,25 +107,40 @@ export default function OptimizationStudio({
 
   return (
     <div className="h-full w-full min-h-0 flex flex-col gap-2">
-      <div className="rounded-xl border border-[#2a4057] bg-[#0b1521]/92 px-3 py-2">
-        <div className="inline-flex w-fit items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
-          {STUDIO_TABS.map((tab) => {
-            const active = studioTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setStudioTab(tab.id)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold uppercase tracking-[0.08em] transition-all ${
-                  active
-                    ? 'bg-gt-accent text-white shadow-gt-glow'
-                    : 'text-gt-text-muted hover:text-gt-text hover:bg-white/5'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+      <div className="rounded-[18px] border border-[#2a4057] bg-[#0b1521]/92 px-4 py-3 shadow-[0_16px_40px_rgba(2,6,23,0.24)]">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Workspace activo</p>
+            <h2
+              className="mt-1 text-[18px] font-semibold text-[#ecf4fb]"
+              style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}
+            >
+              {activeStudioTab.label}
+            </h2>
+            <p className="mt-1 text-[12px] text-slate-400">
+              {activeStudioTab.description}
+            </p>
+          </div>
+
+          <div className="inline-flex w-fit flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            {STUDIO_TABS.map((tab) => {
+              const active = studioTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStudioTab(tab.id)}
+                  className={`px-3 py-2 rounded-lg text-[10px] font-semibold uppercase tracking-[0.08em] transition-all ${
+                    active
+                      ? 'bg-gt-accent text-white shadow-gt-glow'
+                      : 'text-gt-text-muted hover:text-gt-text hover:bg-white/5'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

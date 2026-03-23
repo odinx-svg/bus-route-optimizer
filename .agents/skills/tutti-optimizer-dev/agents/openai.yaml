@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Optimizer"
+  short_description: "Optimizer V6, constraints y feasibility"
+  brand_color: "#B91C1C"
+  default_prompt: "Use $tutti-optimizer-dev to analizar o modificar optimizer_v6, constraints y chaining de buses."
+
+policy:
+  allow_implicit_invocation: true

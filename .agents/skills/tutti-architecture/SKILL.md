@@ -13,6 +13,26 @@ Tutti Fleet Optimizer es un sistema de optimizacion de rutas escolares con distr
 - **Landing Page**: Vercel para marketing y descargas
 - **Modo Desarrollo**: Backend + Frontend por separado
 
+## Skill Map
+
+Usa esta skill para orientacion inicial. Despues deriva al modulo correcto:
+
+- `tutti-domain-model`: entidades core, semantica e invariantes
+- `tutti-excel-ingestion`: parser de Excel y datos sucios
+- `tutti-optimizer-dev`: optimizer V6 y reglas de chaining
+- `tutti-backend-dev`: backend general FastAPI/SQLAlchemy
+- `tutti-workspace-workflow`: save/publish/archive y readiness
+- `tutti-fleet-operations`: reconciliacion, publication y scope de flota
+- `tutti-frontend-dev`: React, timeline, stores y UI funcional
+- `tutti-frontend-design`: sistema visual y UX
+- `tutti-pdf-exports`: PDF operativo y Google Maps links
+- `tutti-routing-maps`: OSRM, geometria y mapas
+- `tutti-testing`: pytest, fixtures y E2E
+- `tutti-debug-troubleshoot`: diagnostico y troubleshooting
+- `tutti-build-deploy`: arranque, desktop y releases
+- `tutti-drivers-messaging`: capa futura de conductores
+- `tutti-skill-governance`: mantenimiento y evolucion de la libreria de skills
+
 ## Estructura de Directorios
 
 ```
@@ -138,3 +158,4 @@ Entidades:
 3. **Siempre** mantener compatibilidad con modo desktop
 4. Usar type hints en Python
 5. Usar destructuring con defaults en React
+6. Si una tarea entra en dominio, optimizer, flota, PDF o routing, derivar a la skill especializada antes de editar

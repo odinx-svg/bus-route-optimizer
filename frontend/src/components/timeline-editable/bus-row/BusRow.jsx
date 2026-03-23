@@ -3,6 +3,7 @@ import { BusTimelineTrack } from './BusTimelineTrack';
 import { BusLabel } from '../shared/BusLabel';
 import { BusControls } from '../shared/BusControls';
 import { DeadheadGap } from './DeadheadGap';
+import ConfirmDialog from '../../ui/ConfirmDialog';
 
 /**
  * BusRow - Fila completa de un bus en el timeline
@@ -22,6 +23,7 @@ export function BusRow({
   onRouteClick 
 }) {
   const [allLocked, setAllLocked] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const handleLockAll = () => {
     const newLockedState = !allLocked;
@@ -30,15 +32,10 @@ export function BusRow({
   };
 
   const handleClear = () => {
-    const lockedCount = bus.routes.filter(r => r.isLocked).length;
-    const msg = lockedCount > 0 
-      ? `¿Eliminar las rutas no bloqueadas del Bus ${bus.busName || bus.busId}? (${lockedCount} bloqueadas se mantendrán)`
-      : `¿Eliminar todas las rutas del Bus ${bus.busName || bus.busId}?`;
-    
-    if (window.confirm(msg)) {
-      onClearBus?.(bus.busId);
-    }
+    setShowClearConfirm(true);
   };
+
+  const lockedCount = bus.routes.filter((route) => route.isLocked).length;
 
   return (
     <div 
@@ -71,6 +68,21 @@ export function BusRow({
         onClear={handleClear}
         allLocked={allLocked}
         routeCount={bus.routes?.length || 0}
+      />
+      <ConfirmDialog
+        open={showClearConfirm}
+        title={`Vaciar ${bus.busName || bus.busId}`}
+        description={lockedCount > 0
+          ? `Se eliminaran las rutas desbloqueadas de ${bus.busName || bus.busId}. ${lockedCount} bloqueadas se mantendran.`
+          : `Se eliminaran todas las rutas de ${bus.busName || bus.busId}.`}
+        tone="warning"
+        confirmLabel="Vaciar unidad"
+        cancelLabel="Cancelar"
+        onConfirm={() => {
+          setShowClearConfirm(false);
+          onClearBus?.(bus.busId);
+        }}
+        onCancel={() => setShowClearConfirm(false)}
       />
     </div>
   );

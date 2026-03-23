@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Drivers & Messaging"
+  short_description: "Capa futura de conductores y mensajeria"
+  brand_color: "#4B5563"
+  default_prompt: "Use $tutti-drivers-messaging to diseñar o extender la futura capa de conductores y mensajeria."
+
+policy:
+  allow_implicit_invocation: true

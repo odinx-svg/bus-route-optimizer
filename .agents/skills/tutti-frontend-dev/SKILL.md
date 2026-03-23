@@ -5,6 +5,28 @@ description: Desarrollo frontend para Tutti Fleet Optimizer. Usar cuando se nece
 
 # Tutti Frontend Development Skill
 
+## Scope
+
+Esta skill cubre frontend funcional general: React, stores, componentes, integracion con API y comportamiento del timeline.
+
+Deriva a otras skills cuando el foco principal sea:
+
+- `tutti-routing-maps`
+  - si el cambio toca OSRM, geometria, cache de rutas o componentes de mapa
+- `tutti-pdf-exports`
+  - si el cambio es sobre exportacion PDF o su contrato con backend
+- `tutti-frontend-design`
+  - si el trabajo es principalmente visual, de layout, motion o sistema de diseño
+- `tutti-workspace-workflow`
+  - si el frontend consume o reinterpreta readiness, publish state o workflow operativo
+
+## Workflow minimo
+
+1. Identificar si la tarea es de UI funcional, mapa, diseño o workflow operativo.
+2. Revisar el componente afectado y su servicio/store asociado.
+3. Verificar contrato con backend.
+4. Revisar si hay E2E o smoke tests relacionados.
+
 ## Stack Tecnologico
 
 | Tecnologia | Uso |

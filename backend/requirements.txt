@@ -3,11 +3,12 @@ uvicorn
 websockets>=12.0
 wsproto>=1.2.0
 gunicorn
-pandas
+pandas>=2.1,<3
 openpyxl
 python-multipart
 requests
 pulp>=2.8
+ortools>=9.8
 reportlab>=4.0
 python-dotenv
 

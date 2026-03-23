@@ -1120,6 +1120,14 @@ async def optimize_v5_endpoint(routes: List[Route]) -> Dict[str, Any]:
 @app.post("/optimize-v6")
 async def optimize_v6_endpoint(
     routes: List[Route],
+    objective: str = Query(
+        default="min_buses_viability",
+        description="Modo objetivo del motor de optimizacion",
+    ),
+    preferred_solver: str = Query(
+        default="auto",
+        description="Backend del motor: auto, pulp_v6 o cp_sat",
+    ),
     use_ml_assignment: bool = Query(
         default=True,
         description="Activa scoring ML para encadenado de rutas",
@@ -1140,6 +1148,16 @@ async def optimize_v6_endpoint(
         le=6,
         description="Banda objetivo alrededor de mediana",
     ),
+    enable_greedy_warm_start: bool = Query(
+        default=True,
+        description="Usa un seed greedy antes del solver principal",
+    ),
+    time_limit_seconds: Optional[int] = Query(
+        default=None,
+        ge=1,
+        le=600,
+        description="Limite opcional de tiempo del solver",
+    ),
 ) -> Dict[str, Any]:
     """
     Tutti Optimizer V6: ILP-based optimization + local search.
@@ -1152,58 +1170,48 @@ async def optimize_v6_endpoint(
         Dictionary with schedule and statistics
     """
     try:
-        from optimizer_v6 import optimize_v6
-
         logger.info(
             f"[V6] Starting optimization with {len(routes)} routes "
-            f"(ml_assignment={use_ml_assignment}, "
+            f"(objective={objective}, solver={preferred_solver}, "
+            f"ml_assignment={use_ml_assignment}, "
             f"balance_load={balance_load}, "
             f"spread_limit={load_balance_hard_spread_limit}, "
             f"target_band={load_balance_target_band})"
         )
-        schedule = optimize_v6(
-            routes,
+        optimization_options = _build_optimizer_request_options(
+            objective=objective,
+            preferred_solver=preferred_solver,
             use_ml_assignment=use_ml_assignment,
             balance_load=balance_load,
             load_balance_hard_spread_limit=load_balance_hard_spread_limit,
             load_balance_target_band=load_balance_target_band,
+            enable_greedy_warm_start=enable_greedy_warm_start,
+            time_limit_seconds=time_limit_seconds,
         )
-        schedule, fleet_assignment = _apply_fleet_profiles(schedule)
-
-        total_routes = sum(len(b.items) for b in schedule)
-        entry_counts = [sum(1 for i in b.items if i.type == "entry") for b in schedule]
-        exit_counts = [sum(1 for i in b.items if i.type == "exit") for b in schedule]
-        max_entries = max(entry_counts) if entry_counts else 0
-        max_exits = max(exit_counts) if exit_counts else 0
-        buses_with_morning_and_afternoon = sum(1 for i, e in enumerate(entry_counts) if e > 0 and exit_counts[i] > 0)
-        total_early_shift = sum(
-            item.time_shift_minutes for b in schedule for item in b.items
-            if item.time_shift_minutes > 0
+        schedule, optimizer_diagnostics = _run_optimizer_engine_once(
+            routes,
+            objective=objective,
+            preferred_solver=preferred_solver,
+            use_ml_assignment=use_ml_assignment,
+            balance_load=balance_load,
+            load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+            load_balance_target_band=load_balance_target_band,
+            enable_greedy_warm_start=enable_greedy_warm_start,
+            time_limit_seconds=time_limit_seconds,
+        )
+        payload = _build_direct_optimization_response(
+            schedule=schedule,
+            optimization_options=optimization_options,
+            optimizer_diagnostics=optimizer_diagnostics,
         )
 
-        logger.info(f"[V6] Complete: {len(schedule)} buses, {total_routes} routes")
+        logger.info(
+            f"[V6] Complete: {payload['stats'].get('total_buses', 0)} buses, "
+            f"{payload['stats'].get('total_routes', 0)} routes "
+            f"(solver={payload.get('optimizer_diagnostics', {}).get('selected_solver', preferred_solver)})"
+        )
 
-        return {
-            "schedule": [s.dict() for s in schedule],
-            "stats": {
-                "total_buses": len(schedule),
-                "total_routes": total_routes,
-                "total_entries": sum(entry_counts),
-                "total_exits": sum(exit_counts),
-                "max_entries_per_bus": max_entries,
-                "max_exits_per_bus": max_exits,
-                "buses_with_both": buses_with_morning_and_afternoon,
-                "avg_routes_per_bus": round(total_routes / len(schedule), 1) if schedule else 0,
-                "total_early_shift_minutes": total_early_shift,
-            },
-            "optimization_options": {
-                "use_ml_assignment": bool(use_ml_assignment),
-                "balance_load": bool(balance_load),
-                "load_balance_hard_spread_limit": int(load_balance_hard_spread_limit),
-                "load_balance_target_band": int(load_balance_target_band),
-            },
-            "fleet_assignment": fleet_assignment,
-        }
+        return payload
 
     except Exception as e:
         logger.error(f"[V6] Optimization error: {e}")
@@ -1468,12 +1476,15 @@ class PipelineConfigPayload(BaseModel):
     objective: str = "min_buses_viability"
     max_duration_sec: int = 300
     max_iterations: int = 2
+    preferred_solver: str = "auto"
     use_ml_assignment: bool = True
     invalid_rows_dropped: int = 0
     balance_load: bool = True
     load_balance_hard_spread_limit: int = 2
     load_balance_target_band: int = 1
     route_load_constraints: List[Dict[str, Any]] = Field(default_factory=list)
+    enable_greedy_warm_start: bool = True
+    time_limit_seconds: Optional[int] = None
     fleet_scope_mode: str = "company"
     fleet_scope_ute_id: Optional[str] = None
     fleet_scope_company_ids: List[str] = Field(default_factory=list)
@@ -1494,9 +1505,101 @@ def _route_to_json_payload(route: Route) -> Dict[str, Any]:
     return json.loads(json.dumps(route.dict(), default=str))
 
 
+def _build_optimizer_request_options(
+    *,
+    objective: str,
+    preferred_solver: str,
+    use_ml_assignment: bool,
+    balance_load: bool,
+    load_balance_hard_spread_limit: int,
+    load_balance_target_band: int,
+    enable_greedy_warm_start: bool,
+    time_limit_seconds: Optional[int],
+) -> Dict[str, Any]:
+    return {
+        "objective": str(objective or "min_buses_viability"),
+        "preferred_solver": str(preferred_solver or "auto"),
+        "use_ml_assignment": bool(use_ml_assignment),
+        "balance_load": bool(balance_load),
+        "load_balance_hard_spread_limit": int(load_balance_hard_spread_limit),
+        "load_balance_target_band": int(load_balance_target_band),
+        "enable_greedy_warm_start": bool(enable_greedy_warm_start),
+        "time_limit_seconds": int(time_limit_seconds) if time_limit_seconds is not None else None,
+    }
+
+
+def _run_optimizer_engine_once(
+    routes: List[Route],
+    *,
+    objective: str,
+    preferred_solver: str,
+    use_ml_assignment: bool,
+    balance_load: bool,
+    load_balance_hard_spread_limit: int,
+    load_balance_target_band: int,
+    enable_greedy_warm_start: bool,
+    time_limit_seconds: Optional[int],
+) -> Tuple[List[BusSchedule], Dict[str, Any]]:
+    try:
+        from optimizer import OptimizerConfig, OptimizerEngine
+    except ImportError:
+        from backend.optimizer import OptimizerConfig, OptimizerEngine
+
+    engine = OptimizerEngine()
+    result = engine.optimize(
+        routes,
+        config=OptimizerConfig(
+            objective_mode=objective,
+            preferred_solver=preferred_solver,
+            use_ml_assignment=use_ml_assignment,
+            balance_load=balance_load,
+            load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+            load_balance_target_band=load_balance_target_band,
+            enable_greedy_warm_start=enable_greedy_warm_start,
+            time_limit_seconds=time_limit_seconds,
+        ),
+    )
+    return result.schedule, dict(engine.get_last_diagnostics() or result.diagnostics or {})
+
+
+def _build_direct_optimization_response(
+    *,
+    schedule: List[BusSchedule],
+    optimization_options: Dict[str, Any],
+    optimizer_diagnostics: Optional[Dict[str, Any]] = None,
+    day_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    schedule, fleet_assignment = _apply_fleet_profiles(schedule)
+    diagnostics = dict(optimizer_diagnostics or {})
+    payload: Dict[str, Any] = {
+        "schedule": [s.dict() for s in schedule],
+        "stats": _calculate_stats(schedule),
+        "optimization_options": dict(optimization_options or {}),
+        "fleet_assignment": fleet_assignment,
+        "optimizer_diagnostics": diagnostics,
+        "metadata": {
+            "optimizer_diagnostics": diagnostics,
+            "selected_solver": diagnostics.get("selected_solver") or diagnostics.get("solver_name"),
+            "requested_solver": optimization_options.get("preferred_solver"),
+            "solver_selection": diagnostics.get("solver_selection") or {},
+        },
+    }
+    if day_name is not None:
+        payload["day_name"] = day_name
+    return payload
+
+
 @app.post("/optimize-v6-by-day")
 async def optimize_v6_by_day_endpoint(
     routes: List[Route],
+    objective: str = Query(
+        default="min_buses_viability",
+        description="Modo objetivo del motor de optimizacion",
+    ),
+    preferred_solver: str = Query(
+        default="auto",
+        description="Backend del motor: auto, pulp_v6 o cp_sat",
+    ),
     use_ml_assignment: bool = Query(
         default=True,
         description="Activa scoring ML para encadenado de rutas",
@@ -1517,6 +1620,16 @@ async def optimize_v6_by_day_endpoint(
         le=6,
         description="Banda objetivo alrededor de mediana",
     ),
+    enable_greedy_warm_start: bool = Query(
+        default=True,
+        description="Usa un seed greedy antes del solver principal",
+    ),
+    time_limit_seconds: Optional[int] = Query(
+        default=None,
+        ge=1,
+        le=600,
+        description="Limite opcional de tiempo del solver",
+    ),
 ) -> Dict[str, Any]:
     """
     Optimize routes per day of the week.
@@ -1529,11 +1642,19 @@ async def optimize_v6_by_day_endpoint(
         Dictionary mapping day codes to schedules and statistics
     """
     try:
-        from optimizer_v6 import optimize_v6
-
         logger.info(f"[V6-ByDay] Starting per-day optimization with {len(routes)} total routes")
 
         results: Dict[str, Any] = {}
+        optimization_options = _build_optimizer_request_options(
+            objective=objective,
+            preferred_solver=preferred_solver,
+            use_ml_assignment=use_ml_assignment,
+            balance_load=balance_load,
+            load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+            load_balance_target_band=load_balance_target_band,
+            enable_greedy_warm_start=enable_greedy_warm_start,
+            time_limit_seconds=time_limit_seconds,
+        )
 
         for day in ALL_DAYS:
             # Filter routes that run on this day
@@ -1542,66 +1663,67 @@ async def optimize_v6_by_day_endpoint(
             if not day_routes:
                 results[day] = {
                     "schedule": [],
-                    "stats": {
-                        "total_buses": 0, "total_routes": 0,
-                        "total_entries": 0, "total_exits": 0,
-                        "max_entries_per_bus": 0, "max_exits_per_bus": 0,
-                        "buses_with_both": 0, "avg_routes_per_bus": 0,
-                        "total_early_shift_minutes": 0,
+                    "stats": _calculate_stats([]),
+                    "day_name": DAY_NAMES[day],
+                    "optimization_options": dict(optimization_options),
+                    "fleet_assignment": {"assigned": [], "unassigned": []},
+                    "optimizer_diagnostics": {
+                        "solver_name": str(preferred_solver or "auto"),
+                        "selected_solver": str(preferred_solver or "auto"),
+                        "solver_selection_reason": "empty:no_routes",
+                        "solver_selection_label": "Sin rutas en el dia",
+                        "solver_selection_detail": "No hay rutas que optimizar en este dia.",
+                        "solver_selection": {
+                            "requested_solver": str(preferred_solver or "auto"),
+                            "selected_solver": str(preferred_solver or "auto"),
+                            "decision_mode": "empty",
+                            "reason_code": "empty:no_routes",
+                            "reason_label": "Sin rutas en el dia",
+                            "reason_detail": "No hay rutas que optimizar en este dia.",
+                            "route_count": 0,
+                            "cp_sat_available": None,
+                            "fallback_used": False,
+                            "supports_route_load_constraints": True,
+                            "supports_balance_load_priority": True,
+                        },
+                        "solver_status": "optimal",
+                        "total_routes": 0,
+                        "best_buses": 0,
+                        "split_count": 0,
                     },
-                    "day_name": DAY_NAMES[day]
                 }
                 continue
 
             logger.info(
                 f"[V6-ByDay] {DAY_NAMES[day]}: {len(day_routes)} routes "
-                f"(ml_assignment={use_ml_assignment}, balance_load={balance_load}, "
+                f"(objective={objective}, solver={preferred_solver}, "
+                f"ml_assignment={use_ml_assignment}, balance_load={balance_load}, "
                 f"spread_limit={load_balance_hard_spread_limit}, target_band={load_balance_target_band})"
             )
-            schedule = optimize_v6(
+            schedule, optimizer_diagnostics = _run_optimizer_engine_once(
                 day_routes,
+                objective=objective,
+                preferred_solver=preferred_solver,
                 use_ml_assignment=use_ml_assignment,
                 balance_load=balance_load,
                 load_balance_hard_spread_limit=load_balance_hard_spread_limit,
                 load_balance_target_band=load_balance_target_band,
+                enable_greedy_warm_start=enable_greedy_warm_start,
+                time_limit_seconds=time_limit_seconds,
             )
-            schedule, fleet_assignment = _apply_fleet_profiles(schedule)
-
-            total_routes = sum(len(b.items) for b in schedule)
-            entry_counts = [sum(1 for i in b.items if i.type == "entry") for b in schedule]
-            exit_counts = [sum(1 for i in b.items if i.type == "exit") for b in schedule]
-            max_entries = max(entry_counts) if entry_counts else 0
-            max_exits = max(exit_counts) if exit_counts else 0
-            buses_with_both = sum(1 for i, e in enumerate(entry_counts) if e > 0 and exit_counts[i] > 0)
-            total_early_shift = sum(
-                item.time_shift_minutes for b in schedule for item in b.items
-                if item.time_shift_minutes > 0
+            results[day] = _build_direct_optimization_response(
+                schedule=schedule,
+                optimization_options=optimization_options,
+                optimizer_diagnostics=optimizer_diagnostics,
+                day_name=DAY_NAMES[day],
             )
 
-            results[day] = {
-                "schedule": [s.dict() for s in schedule],
-                "stats": {
-                    "total_buses": len(schedule),
-                    "total_routes": total_routes,
-                    "total_entries": sum(entry_counts),
-                    "total_exits": sum(exit_counts),
-                    "max_entries_per_bus": max_entries,
-                    "max_exits_per_bus": max_exits,
-                    "buses_with_both": buses_with_both,
-                    "avg_routes_per_bus": round(total_routes / len(schedule), 1) if schedule else 0,
-                    "total_early_shift_minutes": total_early_shift,
-                },
-                "fleet_assignment": fleet_assignment,
-                "day_name": DAY_NAMES[day],
-                "optimization_options": {
-                    "use_ml_assignment": bool(use_ml_assignment),
-                    "balance_load": bool(balance_load),
-                    "load_balance_hard_spread_limit": int(load_balance_hard_spread_limit),
-                    "load_balance_target_band": int(load_balance_target_band),
-                },
-            }
-
-            logger.info(f"[V6-ByDay] {DAY_NAMES[day]}: {len(schedule)} buses, {total_routes} routes")
+            logger.info(
+                f"[V6-ByDay] {DAY_NAMES[day]}: "
+                f"{results[day]['stats'].get('total_buses', 0)} buses, "
+                f"{results[day]['stats'].get('total_routes', 0)} routes "
+                f"(solver={results[day].get('optimizer_diagnostics', {}).get('selected_solver', preferred_solver)})"
+            )
 
         return results
 

@@ -5,6 +5,24 @@ description: Build y deployment para Tutti Fleet Optimizer. Usar cuando se neces
 
 # Tutti Build & Deploy Skill
 
+## Scope
+
+Esta skill cubre build, empaquetado desktop, releases y deployment. No debe usarse para cambios funcionales de negocio salvo que afecten directamente al proceso de arranque o distribución.
+
+Complementa con:
+
+- `tutti-architecture` para entender runtime, desktop mode y artefactos del sistema
+- `tutti-routing-maps` si el build afecta variables OSRM o assets geoespaciales
+- `tutti-pdf-exports` si el empaquetado rompe dependencias de ReportLab
+- `tutti-backend-dev` si el problema es un import o entrypoint del backend
+
+## Workflow minimo
+
+1. Identificar si el cambio afecta desktop, landing, CI o release.
+2. Revisar scripts de arranque y build existentes antes de modificar flags.
+3. Verificar dependencias criticas incluidas en runtime.
+4. Validar artefactos generados y rutas embebidas.
+
 ## Overview
 
 Tutti tiene 3 artefactos de distribucion:

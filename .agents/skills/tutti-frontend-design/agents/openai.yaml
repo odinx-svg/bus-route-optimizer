@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Frontend Design"
+  short_description: "UI, UX y lenguaje visual de Tutti"
+  brand_color: "#BE185D"
+  default_prompt: "Use $tutti-frontend-design to mejorar UI, estilos y experiencia visual en el frontend de Tutti."
+
+policy:
+  allow_implicit_invocation: true

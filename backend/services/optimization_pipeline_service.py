@@ -63,12 +63,15 @@ class PipelineConfig:
     objective: str = "min_buses_viability"
     max_duration_sec: int = _DEFAULT_MAX_DURATION_SEC
     max_iterations: int = _DEFAULT_MAX_ITERATIONS
+    preferred_solver: str = "auto"
     use_ml_assignment: bool = True
     invalid_rows_dropped: int = 0
     balance_load: bool = True
     load_balance_hard_spread_limit: int = 2
     load_balance_target_band: int = 1
     route_load_constraints: List[Dict[str, Any]] = field(default_factory=list)
+    enable_greedy_warm_start: bool = True
+    time_limit_seconds: Optional[int] = None
     fleet_scope_mode: str = "company"
     fleet_scope_ute_id: Optional[str] = None
     fleet_scope_company_ids: List[str] = field(default_factory=list)
@@ -80,17 +83,26 @@ class PipelineConfig:
             return cls()
         raw_constraints = data.get("route_load_constraints")
         normalized_constraints = raw_constraints if isinstance(raw_constraints, list) else []
+        spread_limit = max(1, int(data.get("load_balance_hard_spread_limit", 2)))
+        target_band = max(0, min(spread_limit, int(data.get("load_balance_target_band", 1))))
         return cls(
             auto_start=bool(data.get("auto_start", True)),
             objective=str(data.get("objective", "min_buses_viability")),
             max_duration_sec=max(30, int(data.get("max_duration_sec", _DEFAULT_MAX_DURATION_SEC))),
             max_iterations=int(data.get("max_iterations", _DEFAULT_MAX_ITERATIONS)),
+            preferred_solver=str(data.get("preferred_solver", "auto") or "auto"),
             use_ml_assignment=bool(data.get("use_ml_assignment", True)),
             invalid_rows_dropped=max(0, int(data.get("invalid_rows_dropped", 0))),
             balance_load=bool(data.get("balance_load", True)),
-            load_balance_hard_spread_limit=max(1, int(data.get("load_balance_hard_spread_limit", 2))),
-            load_balance_target_band=max(0, int(data.get("load_balance_target_band", 1))),
+            load_balance_hard_spread_limit=spread_limit,
+            load_balance_target_band=target_band,
             route_load_constraints=normalized_constraints,
+            enable_greedy_warm_start=bool(data.get("enable_greedy_warm_start", True)),
+            time_limit_seconds=(
+                max(1, int(data.get("time_limit_seconds")))
+                if data.get("time_limit_seconds") is not None
+                else None
+            ),
             fleet_scope_mode=str(data.get("fleet_scope_mode", "company") or "company"),
             fleet_scope_ute_id=str(data.get("fleet_scope_ute_id", "") or "").strip() or None,
             fleet_scope_company_ids=[
@@ -107,12 +119,15 @@ class PipelineConfig:
             "objective": self.objective,
             "max_duration_sec": self.max_duration_sec,
             "max_iterations": self.max_iterations,
+            "preferred_solver": self.preferred_solver,
             "use_ml_assignment": self.use_ml_assignment,
             "invalid_rows_dropped": self.invalid_rows_dropped,
             "balance_load": self.balance_load,
             "load_balance_hard_spread_limit": self.load_balance_hard_spread_limit,
             "load_balance_target_band": self.load_balance_target_band,
             "route_load_constraints": list(self.route_load_constraints or []),
+            "enable_greedy_warm_start": self.enable_greedy_warm_start,
+            "time_limit_seconds": self.time_limit_seconds,
             "fleet_scope_mode": self.fleet_scope_mode,
             "fleet_scope_ute_id": self.fleet_scope_ute_id,
             "fleet_scope_company_ids": list(self.fleet_scope_company_ids or []),
@@ -641,20 +656,25 @@ def _serialize_schedule_by_day(schedule_by_day: Dict[str, List[BusSchedule]]) ->
 
 def _optimize_by_day_v6(
     routes: List[Route],
+    objective: str = "min_buses_viability",
+    preferred_solver: str = "auto",
     use_ml_assignment: bool = True,
     balance_load: bool = True,
     load_balance_hard_spread_limit: int = 2,
     load_balance_target_band: int = 1,
     route_load_constraints: Optional[List[Dict[str, Any]]] = None,
+    enable_greedy_warm_start: bool = True,
+    time_limit_seconds: Optional[int] = None,
     trace_callback: DayTraceCallback = None,
 ) -> Tuple[Dict[str, List[BusSchedule]], Dict[str, Dict[str, Any]]]:
     try:
-        from optimizer_v6 import optimize_v6, get_last_optimization_diagnostics
+        from optimizer import OptimizerConfig, OptimizerEngine
     except ImportError:
-        from backend.optimizer_v6 import optimize_v6, get_last_optimization_diagnostics
+        from backend.optimizer import OptimizerConfig, OptimizerEngine
 
     by_day: Dict[str, List[BusSchedule]] = {}
     diagnostics_by_day: Dict[str, Dict[str, Any]] = {}
+    engine = OptimizerEngine()
     for day in ALL_DAYS:
         day_routes = [route for route in routes if day in route.days]
         if trace_callback:
@@ -677,16 +697,23 @@ def _optimize_by_day_v6(
                     )
 
             try:
-                by_day[day] = optimize_v6(
+                result = engine.optimize(
                     day_routes,
+                    config=OptimizerConfig(
+                        objective_mode=objective,
+                        preferred_solver=preferred_solver,
+                        use_ml_assignment=use_ml_assignment,
+                        balance_load=balance_load,
+                        load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+                        load_balance_target_band=load_balance_target_band,
+                        route_load_constraints=route_load_constraints or [],
+                        enable_greedy_warm_start=enable_greedy_warm_start,
+                        time_limit_seconds=time_limit_seconds,
+                    ),
                     progress_callback=_day_progress,
-                    use_ml_assignment=use_ml_assignment,
-                    balance_load=balance_load,
-                    load_balance_hard_spread_limit=load_balance_hard_spread_limit,
-                    load_balance_target_band=load_balance_target_band,
-                    route_load_constraints=route_load_constraints,
                 )
-                diagnostics_by_day[day] = get_last_optimization_diagnostics()
+                by_day[day] = result.schedule
+                diagnostics_by_day[day] = engine.get_last_diagnostics()
             except Exception as first_exc:
                 logger.exception(
                     "[Pipeline] V6 failed for day %s (routes=%s). Retrying with conservative mode.",
@@ -700,18 +727,25 @@ def _optimize_by_day_v6(
                         55,
                         "Fallo en V6, reintentando en modo conservador",
                         {"engine": "v6", "error": f"{type(first_exc).__name__}: {first_exc}"},
-                    )
+                )
                 try:
-                    by_day[day] = optimize_v6(
+                    result = engine.optimize(
                         day_routes,
+                        config=OptimizerConfig(
+                            objective_mode=objective,
+                            preferred_solver=preferred_solver,
+                            use_ml_assignment=False,
+                            balance_load=balance_load,
+                            load_balance_hard_spread_limit=load_balance_hard_spread_limit,
+                            load_balance_target_band=load_balance_target_band,
+                            route_load_constraints=route_load_constraints or [],
+                            enable_greedy_warm_start=enable_greedy_warm_start,
+                            time_limit_seconds=time_limit_seconds,
+                        ),
                         progress_callback=_day_progress,
-                        use_ml_assignment=False,
-                        balance_load=balance_load,
-                        load_balance_hard_spread_limit=load_balance_hard_spread_limit,
-                        load_balance_target_band=load_balance_target_band,
-                        route_load_constraints=route_load_constraints,
                     )
-                    diagnostics_by_day[day] = dict(get_last_optimization_diagnostics() or {})
+                    by_day[day] = result.schedule
+                    diagnostics_by_day[day] = dict(engine.get_last_diagnostics() or {})
                     diagnostics_by_day[day]["solver_status"] = "fallback_ml_disabled"
                     diagnostics_by_day[day]["fallback_reason"] = f"{type(first_exc).__name__}: {first_exc}"
                 except Exception as second_exc:
@@ -977,6 +1011,7 @@ async def run_optimization_pipeline_by_day(
     def build_result(candidate: Dict[str, Any]) -> Dict[str, Any]:
         elapsed_sec = round(now_seconds() - started_at, 2)
         assigned_schedule_by_day = candidate.get("schedule_by_day", {})
+        optimizer_diagnostics_by_day = dict(candidate.get("optimizer_diagnostics_by_day") or {})
         fleet_assignment_summary: Dict[str, Any] = {
             "total_assigned": 0,
             "total_virtual_buses": 0,
@@ -999,6 +1034,27 @@ async def run_optimization_pipeline_by_day(
         except Exception:
             assigned_schedule_by_day = candidate.get("schedule_by_day", {})
 
+        selected_solver_by_day: Dict[str, Optional[str]] = {}
+        solver_usage: Dict[str, int] = {}
+        for day in ALL_DAYS:
+            day_payload = assigned_schedule_by_day.get(day)
+            if not isinstance(day_payload, dict):
+                continue
+            day_diagnostics = dict(optimizer_diagnostics_by_day.get(day) or {})
+            selected_solver = str(
+                day_diagnostics.get("selected_solver")
+                or day_diagnostics.get("solver_name")
+                or ""
+            ).strip() or None
+            if selected_solver:
+                selected_solver_by_day[day] = selected_solver
+                solver_usage[selected_solver] = int(solver_usage.get(selected_solver, 0)) + 1
+            metadata = dict(day_payload.get("metadata") or {})
+            metadata["optimizer_diagnostics"] = day_diagnostics
+            metadata["selected_solver"] = selected_solver
+            metadata["requested_solver"] = str(config.preferred_solver or "auto")
+            day_payload["metadata"] = metadata
+
         summary_metrics = dict(candidate["metrics"] or {})
         summary_metrics["fleet_assigned"] = int(fleet_assignment_summary.get("total_assigned", 0))
         summary_metrics["fleet_virtual_buses"] = int(fleet_assignment_summary.get("total_virtual_buses", 0))
@@ -1010,6 +1066,9 @@ async def run_optimization_pipeline_by_day(
             for cid in (config.fleet_scope_company_ids or [])
             if str(cid).strip()
         ]
+        summary_metrics["requested_solver"] = str(config.preferred_solver or "auto")
+        summary_metrics["selected_solver_by_day"] = selected_solver_by_day
+        summary_metrics["solver_usage"] = solver_usage
         add_history(
             "completed",
             100,
@@ -1033,6 +1092,7 @@ async def run_optimization_pipeline_by_day(
             "summary_metrics": summary_metrics,
             "fleet_assignment": fleet_assignment_summary,
             "hybrid_metadata": candidate.get("hybrid_metadata", {}),
+            "optimizer_diagnostics_by_day": optimizer_diagnostics_by_day,
             "elapsed_sec": elapsed_sec,
         }
 
@@ -1047,11 +1107,15 @@ async def run_optimization_pipeline_by_day(
     baseline_by_day, baseline_diagnostics = await asyncio.to_thread(
         _optimize_by_day_v6,
         routes,
+        config.objective,
+        config.preferred_solver,
         config.use_ml_assignment,
         config.balance_load,
         config.load_balance_hard_spread_limit,
         config.load_balance_target_band,
         config.route_load_constraints,
+        config.enable_greedy_warm_start,
+        config.time_limit_seconds,
         lambda day, phase, progress, message, extra=None: emit_day_trace(
             stage="baseline_trace",
             progress_window=(10, 34),
@@ -1089,6 +1153,7 @@ async def run_optimization_pipeline_by_day(
         "metrics": baseline_metrics,
         "score": baseline_score,
         "hybrid_metadata": {},
+        "optimizer_diagnostics_by_day": baseline_diagnostics,
     }
     best_acceptable_candidate: Optional[Dict[str, Any]] = (
         best_candidate if is_acceptable(baseline_metrics) else None
@@ -1255,6 +1320,7 @@ async def run_optimization_pipeline_by_day(
             "metrics": candidate_metrics,
             "score": candidate_score,
             "hybrid_metadata": hybrid_meta,
+            "optimizer_diagnostics_by_day": candidate_diagnostics,
         }
 
         if candidate_score < best_candidate["score"]:

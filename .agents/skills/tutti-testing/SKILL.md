@@ -5,6 +5,34 @@ description: Testing y calidad para Tutti Fleet Optimizer. Usar cuando se necesi
 
 # Tutti Testing Skill
 
+## Scope
+
+Esta skill cubre testing y calidad de forma transversal, pero no sustituye el conocimiento especializado del modulo que se esta testando.
+
+Combinala con:
+
+- `tutti-domain-model`
+  - para invariantes y payloads core
+- `tutti-excel-ingestion`
+  - para fixtures y edge cases de Excel
+- `tutti-optimizer-dev`
+  - para regresiones del solver, chaining y feasibility
+- `tutti-workspace-workflow`
+  - para publish/save/archive y readiness
+- `tutti-fleet-operations`
+  - para reconciliacion, conflictos y flota real/virtual
+- `tutti-pdf-exports`
+  - para export PDF y contratos de payload
+- `tutti-routing-maps`
+  - para mocks de OSRM, geometria y fallbacks
+
+## Workflow minimo
+
+1. Identificar el area de negocio afectada.
+2. Cargar la skill especializada correspondiente antes de diseñar tests.
+3. Revisar tests existentes del modulo.
+4. Añadir o ajustar pruebas al nivel correcto: unit, integration, E2E o smoke.
+
 ## Estructura de Tests
 
 ```

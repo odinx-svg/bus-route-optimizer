@@ -1,0 +1,8 @@
+interface:
+  display_name: "Tutti Frontend Dev"
+  short_description: "React, stores y comportamiento UI"
+  brand_color: "#0F766E"
+  default_prompt: "Use $tutti-frontend-dev to trabajar en componentes, stores e integracion frontend de Tutti."
+
+policy:
+  allow_implicit_invocation: true

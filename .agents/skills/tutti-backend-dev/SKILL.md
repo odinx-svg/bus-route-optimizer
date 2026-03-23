@@ -5,6 +5,35 @@ description: Desarrollo backend para Tutti Fleet Optimizer. Usar cuando se neces
 
 # Tutti Backend Development Skill
 
+## Scope
+
+Esta skill cubre backend FastAPI/Python general. Es la skill por defecto para endpoints, servicios, CRUD, schemas y capas de backend.
+
+No debe absorber por defecto cambios de alto riesgo o de dominio especializado. Deriva a estas skills cuando corresponda:
+
+- `tutti-domain-model`
+  - si cambian entidades core, payloads operativos o invariantes de negocio
+- `tutti-excel-ingestion`
+  - si el cambio entra en `backend/parser.py` o en la importacion desde Excel
+- `tutti-optimizer-dev`
+  - si el cambio toca `optimizer_v6.py`, feasibility, load balance o tiempos de conexion
+- `tutti-workspace-workflow`
+  - si el cambio toca save/publish/archive o readiness states
+- `tutti-fleet-operations`
+  - si el cambio toca reconciliacion, flota real/virtual o publication assignments
+- `tutti-pdf-exports`
+  - si el cambio toca `pdf_service.py` o el contrato de `/export_pdf`
+- `tutti-routing-maps`
+  - si el cambio entra en `router_service.py` o en contratos OSRM
+
+## Workflow minimo
+
+1. Identificar si la tarea es backend general o si debe delegarse a una skill especializada.
+2. Revisar modulo API/servicio afectado.
+3. Revisar modelos o schemas relacionados.
+4. Revisar tests del area.
+5. Confirmar si el payload impacta frontend o PDF.
+
 ## Convenciones de Codigo Python
 
 ### Imports (ordenados)
