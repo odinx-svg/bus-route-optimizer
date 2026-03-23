@@ -717,27 +717,23 @@ exit /b 0
 
 def _launch_installer_and_exit(installer_exe: Path, expected_exe: Optional[Path] = None) -> bool:
     try:
-        auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
-        target_exe = (expected_exe or Path(sys.executable)).resolve()
         installer_args = _build_installer_update_args(installer_exe)
         _log_update(
             f"Launching installer update | args={' '.join(installer_args[1:]) or '(interactive)'}"
         )
 
         if os.name == "nt":
-            runner_bat = Path(tempfile.gettempdir()) / "tutti_desktop_installer_update.bat"
-            runner_ps1 = Path(tempfile.gettempdir()) / "tutti_desktop_installer_update.ps1"
-            batch_script, ps_script = _build_windows_installer_runner_scripts(
-                installer_args=installer_args,
-                target_exe=target_exe,
-                auto_restart=auto_restart,
-                runner_ps1=runner_ps1,
-                updater_log_path=_resolve_update_log_path(),
+            args_text = subprocess.list2cmdline(installer_args[1:]) if len(installer_args) > 1 else ""
+            result = ctypes.windll.shell32.ShellExecuteW(  # type: ignore[attr-defined]
+                None,
+                "runas",
+                str(installer_exe),
+                args_text or None,
+                str(installer_exe.parent),
+                1,
             )
-            runner_ps1.write_text(ps_script, encoding="utf-8")
-            runner_bat.write_text(batch_script, encoding="utf-8")
-            creation_flags = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
-            subprocess.Popen(["cmd", "/c", str(runner_bat)], creationflags=creation_flags)
+            if int(result) <= 32:
+                raise RuntimeError(f"ShellExecuteW failed with code {int(result)}")
         else:
             subprocess.Popen(installer_args)
         return True

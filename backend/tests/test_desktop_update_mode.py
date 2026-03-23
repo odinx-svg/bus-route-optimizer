@@ -130,3 +130,35 @@ def test_windows_installer_runner_uses_explicit_elevation():
     assert "Start-Process -FilePath $installerPath -ArgumentList $arguments -Verb RunAs -Wait -PassThru" in ps_script
     assert '-WindowStyle Hidden -File "C:\\Temp\\tutti_desktop_installer_update.ps1"' in batch_script
     assert "INSTALLER_RUNNER_EXIT code=!INSTALLER_EXIT!" in batch_script
+
+
+def test_launch_installer_windows_uses_shell_execute(monkeypatch, tmp_path):
+    launcher = _load_desktop_launcher()
+    installer = tmp_path / "TuttiSetup.exe"
+    installer.write_bytes(b"stub")
+
+    observed: dict[str, object] = {}
+
+    class _FakeShell32:
+        def ShellExecuteW(self, hwnd, verb, file_path, params, directory, show):
+            observed["verb"] = verb
+            observed["file_path"] = file_path
+            observed["params"] = params
+            observed["directory"] = directory
+            observed["show"] = show
+            return 33
+
+    monkeypatch.setattr(
+        launcher.ctypes,
+        "windll",
+        types.SimpleNamespace(shell32=_FakeShell32()),
+        raising=False,
+    )
+
+    launched = launcher._launch_installer_and_exit(installer)
+
+    assert launched is True
+    assert observed["verb"] == "runas"
+    assert observed["file_path"] == str(installer)
+    assert "/VERYSILENT" in str(observed["params"])
+    assert observed["directory"] == str(installer.parent)
