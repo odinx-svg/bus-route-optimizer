@@ -45,7 +45,7 @@ const checkBackendHealth = async (wsBaseUrl) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(`${wsToHttp(wsBaseUrl)}/health`, {
+    const response = await fetch(`${wsToHttp(wsBaseUrl)}/healthz`, {
       method: 'GET',
       signal: controller.signal,
     });

@@ -33,7 +33,7 @@ import webview
 
 
 APP_URL = "http://127.0.0.1:8000"
-APP_HEALTH_URL = f"{APP_URL}/health"
+APP_HEALTH_URL = f"{APP_URL}/healthz"
 GITHUB_API_BASE = "https://api.github.com"
 UPDATE_HTTP_TIMEOUT_SEC = 20
 DESKTOP_OSRM_BASE_URL = "http://187.77.33.218:5000"

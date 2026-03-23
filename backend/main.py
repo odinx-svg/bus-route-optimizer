@@ -788,6 +788,19 @@ def read_root() -> Any:
     return {"message": "Welcome to Tutti API"}
 
 
+@app.get("/healthz")
+def healthz_check() -> Dict[str, Any]:
+    """Lightweight liveness probe for desktop boot and cheap frontend checks."""
+    runtime_mode = "stable"
+    if config and getattr(config, "APP_RUNTIME_MODE", None):
+        runtime_mode = str(config.APP_RUNTIME_MODE)
+    return {
+        "status": "ok",
+        "service": "tutti-backend",
+        "mode": runtime_mode,
+    }
+
+
 @app.get("/health")
 def health_check() -> Dict[str, Any]:
     """Health check endpoint with service status."""

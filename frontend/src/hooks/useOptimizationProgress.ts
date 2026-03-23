@@ -124,7 +124,7 @@ const checkBackendHealth = async (apiBaseUrl: string): Promise<boolean> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(`${apiBaseUrl}/health`, {
+    const response = await fetch(`${apiBaseUrl}/healthz`, {
       method: 'GET',
       signal: controller.signal,
     });
