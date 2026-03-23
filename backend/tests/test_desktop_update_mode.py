@@ -110,3 +110,23 @@ def test_select_portable_asset_prefers_zip_and_ignores_exe_only():
 
     selected_missing_zip = launcher._select_portable_asset(release_exe_only)
     assert selected_missing_zip is None
+
+
+def test_windows_installer_runner_uses_explicit_elevation():
+    launcher = _load_desktop_launcher()
+    batch_script, ps_script = launcher._build_windows_installer_runner_scripts(
+        installer_args=[
+            r"C:\Temp\TuttiSetup.exe",
+            "/SP-",
+            "/VERYSILENT",
+            r"/LOG=C:\Users\Juanjo\AppData\Local\Tutti\logs\installer-update.log",
+        ],
+        target_exe=Path(r"C:\Program Files\TUTTI\Tutti Desktop.exe"),
+        auto_restart=True,
+        runner_ps1=Path(r"C:\Temp\tutti_desktop_installer_update.ps1"),
+        updater_log_path=Path(r"C:\Users\Juanjo\AppData\Local\Tutti\logs\desktop-updater.log"),
+    )
+
+    assert "Start-Process -FilePath $installerPath -ArgumentList $arguments -Verb RunAs -Wait -PassThru" in ps_script
+    assert '-WindowStyle Hidden -File "C:\\Temp\\tutti_desktop_installer_update.ps1"' in batch_script
+    assert "INSTALLER_RUNNER_EXIT code=!INSTALLER_EXIT!" in batch_script

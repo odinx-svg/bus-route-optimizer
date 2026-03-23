@@ -626,27 +626,47 @@ def _build_installer_update_args(installer_exe: Path) -> list[str]:
     return args
 
 
-def _launch_installer_and_exit(installer_exe: Path, expected_exe: Optional[Path] = None) -> bool:
-    try:
-        auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
-        target_exe = (expected_exe or Path(sys.executable)).resolve()
-        installer_args = _build_installer_update_args(installer_exe)
-        _log_update(
-            f"Launching installer update | args={' '.join(installer_args[1:]) or '(interactive)'}"
-        )
+def _escape_powershell_single_quoted(value: str) -> str:
+    """Escape a string for use inside a PowerShell single-quoted literal."""
+    return value.replace("'", "''")
 
-        if os.name == "nt":
-            runner_bat = Path(tempfile.gettempdir()) / "tutti_desktop_installer_update.bat"
-            command_line = subprocess.list2cmdline(installer_args)
-            current_pid = os.getpid()
-            target_exe_dir = target_exe.parent
-            script = f"""@echo off
+
+def _build_windows_installer_runner_scripts(
+    installer_args: list[str],
+    target_exe: Path,
+    auto_restart: bool,
+    runner_ps1: Path,
+    updater_log_path: Path,
+) -> tuple[str, str]:
+    installer_path = _escape_powershell_single_quoted(installer_args[0])
+    ps_arg_lines = ",\n".join(
+        f"  '{_escape_powershell_single_quoted(arg)}'" for arg in installer_args[1:]
+    )
+    ps_arguments_block = f"@(\n{ps_arg_lines}\n)" if ps_arg_lines else "@()"
+    runner_ps1_escaped = _escape_powershell_single_quoted(str(runner_ps1))
+
+    ps_script = f"""$ErrorActionPreference = 'Stop'
+$installerPath = '{installer_path}'
+$arguments = {ps_arguments_block}
+$process = Start-Process -FilePath $installerPath -ArgumentList $arguments -Verb RunAs -Wait -PassThru
+if ($null -eq $process) {{
+    exit 1
+}}
+exit $process.ExitCode
+"""
+
+    target_exe_dir = target_exe.parent
+    batch_script = f"""@echo off
 setlocal EnableDelayedExpansion
-set "TARGET_PID={current_pid}"
+set "TARGET_PID={os.getpid()}"
 set "TARGET_EXE={target_exe}"
 set "TARGET_EXE_DIR={target_exe_dir}"
+set "RUNNER_PS1={runner_ps1}"
+set "UPDATER_LOG={updater_log_path}"
 set "WAIT_SEC=0"
 set "AUTO_RESTART={1 if auto_restart else 0}"
+
+echo [%date% %time%] INSTALLER_RUNNER_STARTED >> "%UPDATER_LOG%"
 
 :wait_for_tutti_exit
 tasklist /FI "PID eq %TARGET_PID%" | findstr /I "%TARGET_PID%" >nul
@@ -666,31 +686,56 @@ taskkill /PID %TARGET_PID% /T /F >nul 2>&1
 taskkill /IM "Tutti Desktop.exe" /T /F >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-start /wait "" {command_line}
-if not errorlevel 1 (
-    if "%AUTO_RESTART%"=="1" (
-        set "TRY=0"
-        :wait_target
-        if exist "%TARGET_EXE%" goto start_target
-        set /a TRY+=1
-        if !TRY! GEQ 12 goto done
-        timeout /t 1 /nobreak >nul
-        goto wait_target
+powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{runner_ps1_escaped}"
+set "INSTALLER_EXIT=!ERRORLEVEL!"
+echo [%date% %time%] INSTALLER_RUNNER_EXIT code=!INSTALLER_EXIT! >> "%UPDATER_LOG%"
+if not "!INSTALLER_EXIT!"=="0" goto done
 
-        :start_target
-        set "TUTTI_AFTER_UPDATE=1"
-        set "TUTTI_DESKTOP_DISABLE_AUTO_UPDATE=1"
-        if not exist "%TARGET_EXE%" goto done
-        for %%A in ("%TARGET_EXE%") do if %%~zA==0 goto done
-        timeout /t 18 /nobreak >nul
-        start "" /D "%TARGET_EXE_DIR%" "%TARGET_EXE%"
-    )
+if "%AUTO_RESTART%"=="1" (
+    set "TRY=0"
+    :wait_target
+    if exist "%TARGET_EXE%" goto start_target
+    set /a TRY+=1
+    if !TRY! GEQ 12 goto done
+    timeout /t 1 /nobreak >nul
+    goto wait_target
+
+    :start_target
+    set "TUTTI_AFTER_UPDATE=1"
+    set "TUTTI_DESKTOP_DISABLE_AUTO_UPDATE=1"
+    if not exist "%TARGET_EXE%" goto done
+    for %%A in ("%TARGET_EXE%") do if %%~zA==0 goto done
+    timeout /t 18 /nobreak >nul
+    start "" /D "%TARGET_EXE_DIR%" "%TARGET_EXE%"
 )
 
 :done
 exit /b 0
 """
-            runner_bat.write_text(script, encoding="utf-8")
+    return batch_script, ps_script
+
+
+def _launch_installer_and_exit(installer_exe: Path, expected_exe: Optional[Path] = None) -> bool:
+    try:
+        auto_restart = _env_flag("TUTTI_DESKTOP_AUTORESTART_AFTER_UPDATE", "1")
+        target_exe = (expected_exe or Path(sys.executable)).resolve()
+        installer_args = _build_installer_update_args(installer_exe)
+        _log_update(
+            f"Launching installer update | args={' '.join(installer_args[1:]) or '(interactive)'}"
+        )
+
+        if os.name == "nt":
+            runner_bat = Path(tempfile.gettempdir()) / "tutti_desktop_installer_update.bat"
+            runner_ps1 = Path(tempfile.gettempdir()) / "tutti_desktop_installer_update.ps1"
+            batch_script, ps_script = _build_windows_installer_runner_scripts(
+                installer_args=installer_args,
+                target_exe=target_exe,
+                auto_restart=auto_restart,
+                runner_ps1=runner_ps1,
+                updater_log_path=_resolve_update_log_path(),
+            )
+            runner_ps1.write_text(ps_script, encoding="utf-8")
+            runner_bat.write_text(batch_script, encoding="utf-8")
             creation_flags = subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
             subprocess.Popen(["cmd", "/c", str(runner_bat)], creationflags=creation_flags)
         else:
@@ -1113,7 +1158,7 @@ def _check_and_apply_update_if_available() -> bool:
             )
             launched = _launch_installer_and_exit(asset_path, expected_exe=current_exe)
             _log_update_event(
-                "UPDATE_APPLY_SUCCESS" if launched else "UPDATE_APPLY_FAILED",
+                "UPDATE_APPLY_HANDOFF" if launched else "UPDATE_APPLY_FAILED",
                 current_version=APP_VERSION,
                 target_version=latest_tag,
                 install_mode=install_mode,
@@ -1153,7 +1198,7 @@ def _check_and_apply_update_if_available() -> bool:
         )
         launched = _launch_updater_and_exit(current_exe=current_exe, new_exe=updated_exe, backup_exe=backup_path)
         _log_update_event(
-            "UPDATE_APPLY_SUCCESS" if launched else "UPDATE_APPLY_FAILED",
+            "UPDATE_APPLY_HANDOFF" if launched else "UPDATE_APPLY_FAILED",
             current_version=APP_VERSION,
             target_version=latest_tag,
             install_mode=install_mode,
