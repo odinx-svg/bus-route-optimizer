@@ -17,6 +17,7 @@ import { clearGeometryCache } from './services/RouteService';
 import { buildRouteCapacityMap, getItemCapacityNeeded } from './utils/capacity';
 import { ALL_DAYS, DAY_LABELS } from './utils/days';
 import {
+  buildDayScheduleData,
   buildScheduleStats,
   createEmptyPinnedBusesByDay,
   createEmptyScheduleByDay,
