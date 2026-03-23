@@ -153,19 +153,35 @@ export default function ControlHubPage({
   };
 
   return (
-    <div className="h-full w-full overflow-auto rounded-[18px] control-panel p-4 md:p-5 space-y-4">
-      <div className="rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 p-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Panel operativo</p>
-            <h2 className="mt-1 text-[24px] font-semibold text-[#ecf4fb]" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
-              Centro de optimizaciones
-            </h2>
-            <p className="mt-1 text-[12px] text-slate-400">
-              Revisa el estado de cada planificacion, detecta bloqueos y entra directo en el siguiente paso.
-            </p>
+    <div className="h-full w-full overflow-auto rounded-[18px] control-panel p-3 md:p-4 space-y-3">
+      <div className="rounded-[16px] border border-[#304a62] bg-[#0c1520]/78 px-4 py-3">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Panel operativo</p>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-300">
+                {workspaceMetrics.total} optimizaciones
+              </span>
+              <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] text-cyan-100">
+                {workspaceMetrics.published} publicadas
+              </span>
+              <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-100">
+                {workspaceMetrics.drafts} borradores
+              </span>
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-100">
+                {fleetSummary?.active ?? 0} flota activa
+              </span>
+            </div>
+            <div className="mt-2 flex flex-col gap-1 xl:flex-row xl:items-center xl:gap-3">
+              <h2 className="text-[20px] font-semibold text-[#ecf4fb]" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+                Centro de optimizaciones
+              </h2>
+              <p className="text-[12px] text-slate-400">
+                Revisa bloqueos, entra al workspace correcto y publica sin perder tiempo arriba.
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={onRefresh}
               className="px-2.5 py-1.5 control-btn rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center gap-1"
@@ -183,46 +199,19 @@ export default function ControlHubPage({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_320px]">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Total</p>
-              <p className="mt-1 text-[24px] font-semibold data-mono text-white">{workspaceMetrics.total}</p>
-            </div>
-            <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Publicadas</p>
-              <p className="mt-1 text-[24px] font-semibold data-mono text-cyan-300">{workspaceMetrics.published}</p>
-            </div>
-            <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Borradores</p>
-              <p className="mt-1 text-[24px] font-semibold data-mono text-amber-300">{workspaceMetrics.drafts}</p>
-            </div>
-            <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Flota activa</p>
-              <p className="mt-1 text-[24px] font-semibold data-mono text-emerald-300">{fleetSummary?.active ?? 0}</p>
-            </div>
-          </div>
-
-          <div className="rounded-[14px] border border-[#304a62] bg-[#0b141f] p-3">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Que falta hoy</p>
-            <div className="mt-3 space-y-2 text-[12px]">
-              <div className="flex items-center justify-between rounded-md border border-white/5 bg-white/[0.03] px-3 py-2">
-                <span className="text-slate-300">Sin publicar</span>
-                <span className="data-mono text-white">{pendingToday.unpublished}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-md border border-white/5 bg-white/[0.03] px-3 py-2">
-                <span className="text-slate-300">Pendientes de reconciliar</span>
-                <span className="data-mono text-amber-200">{pendingToday.provisional}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-md border border-white/5 bg-white/[0.03] px-3 py-2">
-                <span className="text-slate-300">Bloqueadas por conflicto</span>
-                <span className="data-mono text-rose-200">{pendingToday.blocked}</span>
-              </div>
-            </div>
-          </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
+            Sin publicar: <span className="data-mono text-white">{pendingToday.unpublished}</span>
+          </span>
+          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-amber-100">
+            Pendientes de reconciliar: <span className="data-mono">{pendingToday.provisional}</span>
+          </span>
+          <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-rose-100">
+            Bloqueadas por conflicto: <span className="data-mono">{pendingToday.blocked}</span>
+          </span>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap gap-2">
             {FILTERS.map((item) => (
               <button
@@ -239,7 +228,7 @@ export default function ControlHubPage({
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 rounded-xl border border-[#304a62] bg-[#09111b] px-3 py-2 text-[12px] text-slate-300 min-w-[280px]">
+          <label className="flex items-center gap-2 rounded-xl border border-[#304a62] bg-[#09111b] px-3 py-2 text-[12px] text-slate-300 min-w-[280px] xl:max-w-[360px] xl:w-full">
             <Search className="w-4 h-4 text-slate-500" />
             <input
               value={query}

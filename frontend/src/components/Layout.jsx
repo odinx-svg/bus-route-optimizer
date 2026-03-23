@@ -112,14 +112,14 @@ function Header({ viewMode, setViewMode, hasStudioAccess, workspaceContext }) {
   }, [workspaceContext]);
 
   return (
-    <header className="relative z-20 px-4 pt-4">
+    <header className="relative z-20 px-4 pt-3">
       <div className="gt-shell-card overflow-hidden">
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_top_right,rgba(37,99,235,0.14),transparent_28%)]" />
 
-        <div className="relative flex flex-col gap-4 px-5 py-4 xl:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="flex min-w-0 items-start gap-4">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-[18px] border border-cyan-400/20 bg-[#07121f] shadow-[0_18px_48px_rgba(5,18,30,0.38)]">
+        <div className="relative flex flex-col gap-3 px-4 py-3 xl:px-5">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-[16px] border border-cyan-400/20 bg-[#07121f] shadow-[0_16px_40px_rgba(5,18,30,0.34)]">
                 <img src={tuttiSymbol} alt="TUTTI" className="h-full w-full object-cover" />
               </div>
 
@@ -133,19 +133,19 @@ function Header({ viewMode, setViewMode, hasStudioAccess, workspaceContext }) {
                   </span>
                 </div>
 
-                <div className="mt-3 flex flex-col gap-2 xl:flex-row xl:items-center">
+                <div className="mt-2.5 flex flex-col gap-2 xl:flex-row xl:items-center">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-cyan-100">
-                      <PageIcon className="h-5 w-5" />
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-cyan-100">
+                      <PageIcon className="h-4.5 w-4.5" />
                     </div>
                     <div className="min-w-0">
                       <h1
-                        className="truncate text-[22px] font-semibold text-[#eef6fd]"
+                        className="truncate text-[19px] font-semibold text-[#eef6fd] xl:text-[20px]"
                         style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}
                       >
                         {pageMeta.title}
                       </h1>
-                      <p className="mt-1 max-w-3xl text-[12px] text-slate-400">
+                      <p className="mt-0.5 max-w-3xl text-[11px] text-slate-400">
                         {pageMeta.description}
                       </p>
                     </div>
@@ -154,7 +154,7 @@ function Header({ viewMode, setViewMode, hasStudioAccess, workspaceContext }) {
               </div>
             </div>
 
-            <div className="flex flex-col items-start gap-3 xl:items-end">
+            <div className="flex flex-col items-start gap-2.5 xl:items-end">
               <ViewTabs
                 viewMode={viewMode}
                 setViewMode={setViewMode}
@@ -162,7 +162,7 @@ function Header({ viewMode, setViewMode, hasStudioAccess, workspaceContext }) {
               />
 
               {workspaceMeta ? (
-                <div className="rounded-2xl border border-white/10 bg-[#081320]/82 px-4 py-3 shadow-[0_18px_38px_rgba(2,8,23,0.32)] backdrop-blur">
+                <div className="rounded-xl border border-white/10 bg-[#081320]/82 px-3 py-2.5 shadow-[0_16px_32px_rgba(2,8,23,0.28)] backdrop-blur">
                   <div className="flex flex-wrap items-center gap-2">
                     <FolderKanban className="h-4 w-4 text-cyan-200" />
                     <span className="max-w-[240px] truncate text-[13px] font-semibold text-white">
@@ -185,14 +185,14 @@ function Header({ viewMode, setViewMode, hasStudioAccess, workspaceContext }) {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-3 text-[12px] text-slate-400">
+                <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-2.5 text-[11px] text-slate-400">
                   Abre o crea una optimizacion desde Panel para entrar en Planificacion con contexto operativo.
                 </div>
               )}
             </div>
           </div>
 
-          {workspaceMeta ? (
+          {workspaceMeta && viewMode !== 'dashboard' ? (
             <div className="flex flex-wrap gap-2">
               <ContextChip icon={ArrowUpRight} label="Siguiente paso" value={workspaceMeta.nextActionLabel} tone="info" />
               <ContextChip icon={Map} label="Estado" value={workspaceMeta.pendingLabel} tone="default" />
@@ -233,8 +233,8 @@ const Layout = ({
       workspaceContext={workspaceContext}
     />
 
-    <main className="relative z-10 flex flex-1 overflow-hidden px-4 pb-4 pt-3">
-      <div className="flex min-h-0 w-full flex-1 overflow-hidden rounded-[22px] border border-white/6 bg-[#07111d]/44 p-0 shadow-[0_24px_80px_rgba(2,6,23,0.42)] backdrop-blur-[3px]">
+    <main className="relative z-10 flex flex-1 overflow-hidden px-4 pb-4 pt-2">
+      <div className="flex min-h-0 w-full flex-1 overflow-hidden">
         {children}
       </div>
     </main>
