@@ -96,6 +96,12 @@ export default function PlanningOverviewBar({
     && currentCompany
     && Number(currentCompany.active_vehicle_count || 0) === 0
   );
+  const primaryPendingText = blockingText
+    || (fleetVirtual > 0
+      ? 'Todavia quedan buses provisionales. Reconciliar ahora evita problemas al publicar.'
+      : companyScopeWithoutFleet
+        ? 'La empresa principal no tiene buses activos. Ajusta el ambito de flota antes de seguir.'
+        : `Pendiente principal: ${pendingLabel.toLowerCase()}.`);
 
   const nextActionTone = hasConflict
     ? 'danger'
@@ -113,10 +119,10 @@ export default function PlanningOverviewBar({
   }[nextActionTone];
 
   return (
-    <div className="mb-2 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 px-3 py-2.5">
-      <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+    <div className="mb-2 rounded-[18px] border border-[#304a62] bg-[#0d1623]/95 px-3 py-2">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-300/90 data-mono">Planificacion</p>
             <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${readiness.chipClass}`}>
               {readiness.label}
@@ -125,8 +131,8 @@ export default function PlanningOverviewBar({
               {scopeLabel}
             </span>
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px]">
-            <span className="text-[22px] font-semibold leading-none text-white" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="text-[18px] font-semibold leading-none text-white xl:text-[20px]" style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}>
               {workspace.name || 'Optimizacion activa'}
             </span>
             <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-200">
@@ -156,21 +162,31 @@ export default function PlanningOverviewBar({
                 {tightCapacity} justos
               </span>
             ) : null}
-            <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-100">
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+            <span className={`rounded-full border px-2.5 py-1 ${nextActionClass}`}>
               Siguiente: {nextActionLabel}
             </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
+              Solver: {selectedSolverLabel}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
+              Objetivo: {objectiveLabel}
+            </span>
+            {routeRulesCount > 0 ? (
+              <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
+                Ventanas: {routeRulesCount}
+              </span>
+            ) : null}
           </div>
-          <p className="mt-1 truncate text-[11px] text-slate-400">
-            Pendiente principal: {pendingLabel.toLowerCase()}.
-          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+        <div className="flex flex-wrap items-center gap-1.5 xl:max-w-[42rem] xl:justify-end">
           {fleetVirtual > 0 ? (
             <button
               type="button"
               onClick={onOpenReconciliation}
-              className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
+              className="rounded-md border border-amber-500/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-100 hover:bg-amber-500/10"
             >
               Reconciliar flota
             </button>
@@ -178,7 +194,7 @@ export default function PlanningOverviewBar({
           <button
             type="button"
             onClick={onOpenRules}
-            className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
+            className="rounded-md border border-cyan-500/35 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-100 hover:bg-cyan-500/10"
           >
             Abrir reglas
           </button>
@@ -186,54 +202,86 @@ export default function PlanningOverviewBar({
             type="button"
             onClick={onPublishWeek}
             disabled={publishDisabled}
-            className="rounded-md bg-cyan-400 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md bg-cyan-400 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#03131f] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Publicar semana
           </button>
           <button
             type="button"
             onClick={() => setIsExpanded((prev) => !prev)}
-            className="rounded-md border border-white/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-100 hover:bg-white/5"
+            className="rounded-md border border-white/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-100 hover:bg-white/5"
           >
             {isExpanded ? 'Ocultar' : 'Detalle'}
           </button>
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-        <div className={`rounded-xl border px-3 py-2.5 ${nextActionClass}`}>
-          <p className="text-[10px] uppercase tracking-[0.12em] opacity-80">Siguiente accion recomendada</p>
-          <p className="mt-1 text-[13px] font-semibold">{nextActionLabel}</p>
-          <p className="mt-1 text-[11px] opacity-90">
-            {blockingText
-              || (fleetVirtual > 0
-                ? 'Todavia quedan buses provisionales. Reconciliar ahora evita problemas al publicar.'
-                : companyScopeWithoutFleet
-                  ? 'La empresa principal no tiene buses activos. Ajusta el ambito de flota antes de seguir.'
-                  : 'El workspace esta en condiciones de seguir avanzando.')}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {stageItems.map((item) => (
-            <div
-              key={item.key}
-              className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
-                item.done
-                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
-                  : item.active
-                    ? 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100'
-                    : 'border-white/10 bg-white/[0.03] text-slate-400'
-              }`}
-            >
-              {item.label}
-            </div>
-          ))}
-        </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
+        <span className={`rounded-full border px-2.5 py-1 ${nextActionClass}`}>
+          {nextActionLabel}
+        </span>
+        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
+          Pendientes: {pendingLabel}
+        </span>
+        <span className={`rounded-full border px-2.5 py-1 ${fleetVirtual > 0 ? 'border-amber-500/25 bg-amber-500/10 text-amber-100' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'}`}>
+          Provisionales hoy: {fleetVirtual}
+        </span>
+        {weekFleetVirtual > fleetVirtual ? (
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-slate-300">
+            Semana provisional: {weekFleetVirtual}
+          </span>
+        ) : null}
+        {hasConflict ? (
+          <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-100">
+            Conflictos reales: {workspace?.conflict_count ?? 0}
+          </span>
+        ) : null}
+        {overCapacity > 0 ? (
+          <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-100">
+            Cortos: {overCapacity}
+          </span>
+        ) : null}
+        {tightCapacity > 0 ? (
+          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-amber-100">
+            Justos: {tightCapacity}
+          </span>
+        ) : null}
+        {missingVehicle > 0 ? (
+          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-amber-100">
+            Sin vehiculo/cap.: {missingVehicle}
+          </span>
+        ) : null}
       </div>
+
+      <p className="mt-1.5 truncate text-[11px] text-slate-400">
+        {primaryPendingText}
+      </p>
 
       {isExpanded && (
         <div className="mt-3 max-h-[34vh] space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-[#09111b] p-3 pr-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {stageItems.map((item) => (
+              <div
+                key={item.key}
+                className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                  item.done
+                    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+                    : item.active
+                      ? 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100'
+                      : 'border-white/10 bg-white/[0.03] text-slate-400'
+                }`}
+              >
+                {item.label}
+              </div>
+            ))}
+          </div>
+
+          <div className={`rounded-xl border px-3 py-2.5 ${nextActionClass}`}>
+            <p className="text-[10px] uppercase tracking-[0.12em] opacity-80">Siguiente accion recomendada</p>
+            <p className="mt-1 text-[13px] font-semibold">{nextActionLabel}</p>
+            <p className="mt-1 text-[11px] opacity-90">{primaryPendingText}</p>
+          </div>
+
           {blockingText ? (
             <p className="text-[12px] text-amber-100">{blockingText}</p>
           ) : null}
