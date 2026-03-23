@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 
 import { DAY_LABELS } from '../utils/days';
 import {
@@ -96,12 +96,6 @@ export default function PlanningOverviewBar({
     && currentCompany
     && Number(currentCompany.active_vehicle_count || 0) === 0
   );
-
-  useEffect(() => {
-    if (hasConflict || fleetVirtual > 0 || Boolean(blockingText) || companyScopeWithoutFleet) {
-      setIsExpanded(true);
-    }
-  }, [blockingText, companyScopeWithoutFleet, fleetVirtual, hasConflict]);
 
   const nextActionTone = hasConflict
     ? 'danger'
@@ -239,7 +233,7 @@ export default function PlanningOverviewBar({
       </div>
 
       {isExpanded && (
-        <div className="mt-3 space-y-3 rounded-xl border border-white/10 bg-[#09111b] p-3">
+        <div className="mt-3 max-h-[34vh] space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-[#09111b] p-3 pr-2">
           {blockingText ? (
             <p className="text-[12px] text-amber-100">{blockingText}</p>
           ) : null}
