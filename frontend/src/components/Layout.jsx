@@ -1,11 +1,8 @@
 import React, { useMemo } from 'react';
-import { ArrowUpRight, Bus, CalendarRange, FolderKanban, Gauge, LayoutGrid, Map } from 'lucide-react';
+import { Bus, FolderKanban, Gauge, LayoutGrid } from 'lucide-react';
 
 import tuttiSymbol from '../assets/tutti-symbol.svg';
 import {
-  getNextActionLabel,
-  getScopeLabel,
-  getWorkspacePendingLabel,
   getWorkspaceReadinessConfig,
   getWorkspaceStatusLabel,
 } from '../utils/workspaceStatus';
@@ -15,22 +12,16 @@ const VIEW_META = {
     label: 'Panel',
     icon: Gauge,
     eyebrow: 'Centro operativo',
-    title: 'Estado general de optimizaciones',
-    description: 'Controla borradores, publicaciones, conflictos y el siguiente paso recomendado.',
   },
   fleet: {
     label: 'Flota',
     icon: Bus,
     eyebrow: 'Recursos',
-    title: 'Vehiculos, conductores y disponibilidad',
-    description: 'Mantiene la flota real, la documentacion y la preparacion operativa semanal.',
   },
   studio: {
     label: 'Planificacion',
     icon: LayoutGrid,
     eyebrow: 'Produccion',
-    title: 'Timeline, mapa y publicacion',
-    description: 'Ajusta el horario por dia, valida la operacion y deja lista la publicacion.',
   },
 };
 
@@ -42,7 +33,7 @@ function ViewTabs({ viewMode, setViewMode, hasStudioAccess }) {
   ];
 
   return (
-    <nav className="flex flex-wrap items-center gap-2">
+    <nav className="flex flex-wrap items-center gap-1.5 xl:flex-nowrap">
       {tabs.map(({ id, label, icon: Icon, disabled }) => {
         const active = viewMode === id;
         return (
@@ -52,9 +43,9 @@ function ViewTabs({ viewMode, setViewMode, hasStudioAccess }) {
             onClick={() => !disabled && setViewMode(id)}
             disabled={disabled}
             title={disabled ? 'Abre una optimizacion desde Panel para entrar en Planificacion' : label}
-            className={`gt-topbar-tab ${active ? 'gt-topbar-tab-active' : ''}`}
+            className={`gt-strip-tab ${active ? 'gt-strip-tab-active' : ''}`}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="h-3.5 w-3.5" />
             <span>{label}</span>
           </button>
         );
@@ -63,152 +54,76 @@ function ViewTabs({ viewMode, setViewMode, hasStudioAccess }) {
   );
 }
 
-function ContextChip({ icon: Icon, label, value, tone = 'default' }) {
-  if (!value) return null;
-
-  const toneClass = {
-    default: 'border-white/10 bg-white/[0.04] text-slate-200',
-    info: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100',
-    warning: 'border-amber-500/25 bg-amber-500/10 text-amber-100',
-    danger: 'border-rose-500/25 bg-rose-500/10 text-rose-100',
-    success: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
-  }[tone] || 'border-white/10 bg-white/[0.04] text-slate-200';
-
-  return (
-    <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] ${toneClass}`}>
-      {Icon ? <Icon className="h-3.5 w-3.5 opacity-80" /> : null}
-      <span className="text-slate-400">{label}</span>
-      <span className="font-semibold text-current">{value}</span>
-    </div>
-  );
-}
-
 function Header({ viewMode, setViewMode, hasStudioAccess, workspaceContext }) {
   const pageMeta = VIEW_META[viewMode] || VIEW_META.dashboard;
-  const PageIcon = pageMeta.icon;
-  const isStudio = viewMode === 'studio';
 
   const workspaceMeta = useMemo(() => {
     if (!workspaceContext) return null;
     const readiness = getWorkspaceReadinessConfig(workspaceContext.readiness_state);
     const statusLabel = getWorkspaceStatusLabel(workspaceContext);
-    const pendingLabel = getWorkspacePendingLabel(workspaceContext);
-    const nextActionLabel = getNextActionLabel(workspaceContext.next_recommended_action);
-    const scopeLabel = getScopeLabel(workspaceContext.scope_summary);
-    const conflicts = Number(workspaceContext.conflict_count || 0);
-    const pendingVirtual = Number(workspaceContext.pending_virtual_count || 0);
 
     return {
       readiness,
       statusLabel,
-      pendingLabel,
-      nextActionLabel,
-      scopeLabel,
-      conflicts,
-      pendingVirtual,
-      cityLabel: String(workspaceContext.city_label || '').trim(),
       workspaceName: String(workspaceContext.name || '').trim(),
       activeDayLabel: String(workspaceContext.activeDayLabel || '').trim(),
     };
   }, [workspaceContext]);
 
   return (
-    <header className="relative z-20 px-4 pt-2.5">
-      <div className="gt-shell-card overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_top_right,rgba(37,99,235,0.14),transparent_28%)]" />
-
-        <div className={`relative flex flex-col px-4 xl:px-5 ${isStudio ? 'gap-2.5 py-2.5' : 'gap-3 py-3'}`}>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className={`flex flex-shrink-0 items-center justify-center overflow-hidden border border-cyan-400/20 bg-[#07121f] ${isStudio ? 'h-10 w-10 rounded-[14px]' : 'h-12 w-12 rounded-[16px]'} shadow-[0_16px_40px_rgba(5,18,30,0.34)]`}>
-                <img src={tuttiSymbol} alt="TUTTI" className="h-full w-full object-cover" />
-              </div>
-
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-cyan-500/20 bg-cyan-500/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200">
-                    TUTTI
-                  </span>
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                    {pageMeta.eyebrow}
-                  </span>
-                </div>
-
-                <div className={`flex flex-col gap-2 xl:flex-row xl:items-center ${isStudio ? 'mt-1.5' : 'mt-2.5'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-cyan-100 ${isStudio ? 'h-8 w-8' : 'h-9 w-9'}`}>
-                      <PageIcon className="h-4.5 w-4.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <h1
-                        className={`truncate font-semibold text-[#eef6fd] ${isStudio ? 'text-[17px] xl:text-[18px]' : 'text-[19px] xl:text-[20px]'}`}
-                        style={{ fontFamily: 'Sora, IBM Plex Sans, Segoe UI, sans-serif' }}
-                      >
-                        {pageMeta.title}
-                      </h1>
-                      <p className={`max-w-3xl text-slate-400 ${isStudio ? 'mt-0 text-[10px]' : 'mt-0.5 text-[11px]'}`}>
-                        {pageMeta.description}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col items-start gap-2.5 xl:items-end">
-              <ViewTabs
-                viewMode={viewMode}
-                setViewMode={setViewMode}
-                hasStudioAccess={hasStudioAccess}
-              />
-
-              {workspaceMeta ? (
-                <div className={`rounded-xl border border-white/10 bg-[#081320]/82 px-3 ${isStudio ? 'py-2' : 'py-2.5'} shadow-[0_16px_32px_rgba(2,8,23,0.28)] backdrop-blur`}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <FolderKanban className="h-4 w-4 text-cyan-200" />
-                    <span className="max-w-[240px] truncate text-[13px] font-semibold text-white">
-                      {workspaceMeta.workspaceName || 'Optimizacion abierta'}
-                    </span>
-                    <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-200 border-white/10 bg-white/[0.04]">
-                      {workspaceMeta.statusLabel}
-                    </span>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${workspaceMeta.readiness.chipClass}`}>
-                      {workspaceMeta.readiness.label}
-                    </span>
-                  </div>
-
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                    {workspaceMeta.cityLabel ? <span>{workspaceMeta.cityLabel}</span> : null}
-                    {workspaceMeta.cityLabel && workspaceMeta.scopeLabel ? <span className="text-slate-600">•</span> : null}
-                    <span>{workspaceMeta.scopeLabel}</span>
-                    {workspaceMeta.activeDayLabel ? <span className="text-slate-600">•</span> : null}
-                    {workspaceMeta.activeDayLabel ? <span>Dia activo: {workspaceMeta.activeDayLabel}</span> : null}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-2.5 text-[11px] text-slate-400">
-                  Abre o crea una optimizacion desde Panel para entrar en Planificacion con contexto operativo.
-                </div>
-              )}
-            </div>
+    <header className="relative z-20 px-3 pt-2">
+      <div className="gt-app-strip">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan-400/20 bg-[#07121f] shadow-[0_12px_28px_rgba(5,18,30,0.26)]">
+            <img src={tuttiSymbol} alt="TUTTI" className="h-full w-full object-cover" />
           </div>
 
-          {workspaceMeta && viewMode === 'fleet' ? (
-            <div className="flex flex-wrap gap-2">
-              <ContextChip icon={ArrowUpRight} label="Siguiente paso" value={workspaceMeta.nextActionLabel} tone="info" />
-              <ContextChip icon={Map} label="Estado" value={workspaceMeta.pendingLabel} tone="default" />
-              <ContextChip
-                icon={CalendarRange}
-                label="Pendientes"
-                value={String(workspaceMeta.pendingVirtual)}
-                tone={workspaceMeta.pendingVirtual > 0 ? 'warning' : 'success'}
-              />
-              <ContextChip
-                icon={Bus}
-                label="Conflictos"
-                value={String(workspaceMeta.conflicts)}
-                tone={workspaceMeta.conflicts > 0 ? 'danger' : 'success'}
-              />
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="rounded-full border border-cyan-500/18 bg-cyan-500/8 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200">
+              TUTTI
+            </span>
+            <span className="hidden text-[10px] uppercase tracking-[0.16em] text-slate-500 lg:inline">
+              {pageMeta.eyebrow}
+            </span>
+          </div>
+
+          <div className="hidden h-5 w-px bg-white/10 xl:block" />
+
+          <div className="hidden xl:block">
+            <ViewTabs
+              viewMode={viewMode}
+              setViewMode={setViewMode}
+              hasStudioAccess={hasStudioAccess}
+            />
+          </div>
+        </div>
+
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          <div className="xl:hidden">
+            <ViewTabs
+              viewMode={viewMode}
+              setViewMode={setViewMode}
+              hasStudioAccess={hasStudioAccess}
+            />
+          </div>
+
+          {workspaceMeta ? (
+            <div className="hidden min-w-0 items-center gap-2 rounded-2xl border border-white/10 bg-[#081320]/84 px-3 py-1.5 shadow-[0_10px_24px_rgba(2,8,23,0.24)] backdrop-blur md:flex">
+              <FolderKanban className="h-3.5 w-3.5 flex-shrink-0 text-cyan-200" />
+              <span className="max-w-[220px] truncate text-[12px] font-semibold text-white">
+                {workspaceMeta.workspaceName || 'Optimizacion abierta'}
+              </span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-200">
+                {workspaceMeta.statusLabel}
+              </span>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${workspaceMeta.readiness.chipClass}`}>
+                {workspaceMeta.readiness.label}
+              </span>
+              {workspaceMeta.activeDayLabel ? (
+                <span className="text-[11px] text-slate-400">
+                  {workspaceMeta.activeDayLabel}
+                </span>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -234,7 +149,7 @@ const Layout = ({
       workspaceContext={workspaceContext}
     />
 
-    <main className="relative z-10 flex flex-1 overflow-hidden px-4 pb-4 pt-2">
+    <main className="relative z-10 flex flex-1 overflow-hidden px-3 pb-3 pt-2">
       <div className="flex min-h-0 w-full flex-1 overflow-hidden">
         {children}
       </div>
